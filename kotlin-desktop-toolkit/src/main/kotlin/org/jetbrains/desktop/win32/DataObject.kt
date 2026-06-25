@@ -1,10 +1,10 @@
 package org.jetbrains.desktop.win32
 
-import org.jetbrains.desktop.win32.generated.NativeClipboardBoolResult
-import org.jetbrains.desktop.win32.generated.NativeClipboardByteArrayResult
-import org.jetbrains.desktop.win32.generated.NativeClipboardStringArrayResult
-import org.jetbrains.desktop.win32.generated.NativeClipboardStringResult
-import org.jetbrains.desktop.win32.generated.NativeClipboardUInt32ArrayResult
+import org.jetbrains.desktop.win32.generated.NativeTransferBoolResult
+import org.jetbrains.desktop.win32.generated.NativeTransferByteArrayResult
+import org.jetbrains.desktop.win32.generated.NativeTransferStringArrayResult
+import org.jetbrains.desktop.win32.generated.NativeTransferStringResult
+import org.jetbrains.desktop.win32.generated.NativeTransferUInt32ArrayResult
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -22,8 +22,8 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_is_format_available_result(arena, ptr, format.id)
             }
-            checkClipboardOperation(NativeClipboardBoolResult.result(result))
-            NativeClipboardBoolResult.value(result)
+            checkTransferOperation(NativeTransferBoolResult.result(result))
+            NativeTransferBoolResult.value(result)
         }
     }
 
@@ -32,8 +32,8 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_enum_formats_result(arena, ptr)
             }
-            checkClipboardOperation(NativeClipboardUInt32ArrayResult.result(result))
-            val formatsPtr = NativeClipboardUInt32ArrayResult.value(result)
+            checkTransferOperation(NativeTransferUInt32ArrayResult.result(result))
+            val formatsPtr = NativeTransferUInt32ArrayResult.value(result)
             try {
                 intArrayFromNative(formatsPtr)
             } finally {
@@ -50,8 +50,8 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_read_bytes_result(arena, ptr, format.id)
             }
-            checkClipboardOperation(NativeClipboardByteArrayResult.result(result))
-            val dataPtr = NativeClipboardByteArrayResult.value(result)
+            checkTransferOperation(NativeTransferByteArrayResult.result(result))
+            val dataPtr = NativeTransferByteArrayResult.value(result)
             try {
                 byteArrayFromNative(dataPtr)
             } finally {
@@ -67,11 +67,11 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_read_bytes_result(arena, ptr, format.id)
             }
-            val operation = clipboardOperationFromNative(NativeClipboardByteArrayResult.result(result))
+            val operation = transferOperationFromNative(NativeTransferByteArrayResult.result(result))
             if (!operation.requireOkOrUnavailable()) {
                 return@use null
             }
-            val dataPtr = NativeClipboardByteArrayResult.value(result)
+            val dataPtr = NativeTransferByteArrayResult.value(result)
             try {
                 byteArrayFromNative(dataPtr)
             } finally {
@@ -87,8 +87,8 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_read_html_fragment_result(arena, ptr)
             }
-            checkClipboardOperation(NativeClipboardStringResult.result(result))
-            stringFromNative(NativeClipboardStringResult.value(result))
+            checkTransferOperation(NativeTransferStringResult.result(result))
+            stringFromNative(NativeTransferStringResult.value(result))
         }
     }
 
@@ -97,11 +97,11 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_read_html_fragment_result(arena, ptr)
             }
-            val operation = clipboardOperationFromNative(NativeClipboardStringResult.result(result))
+            val operation = transferOperationFromNative(NativeTransferStringResult.result(result))
             if (!operation.requireOkOrUnavailable()) {
                 return@use null
             }
-            stringFromNative(NativeClipboardStringResult.value(result))
+            stringFromNative(NativeTransferStringResult.value(result))
         }
     }
 
@@ -110,8 +110,8 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_read_file_list_result(arena, ptr)
             }
-            checkClipboardOperation(NativeClipboardStringArrayResult.result(result))
-            listOfStringsFromNative(NativeClipboardStringArrayResult.value(result))
+            checkTransferOperation(NativeTransferStringArrayResult.result(result))
+            listOfStringsFromNative(NativeTransferStringArrayResult.value(result))
         }
     }
 
@@ -120,11 +120,11 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_read_file_list_result(arena, ptr)
             }
-            val operation = clipboardOperationFromNative(NativeClipboardStringArrayResult.result(result))
+            val operation = transferOperationFromNative(NativeTransferStringArrayResult.result(result))
             if (!operation.requireOkOrUnavailable()) {
                 return@use null
             }
-            listOfStringsFromNative(NativeClipboardStringArrayResult.value(result))
+            listOfStringsFromNative(NativeTransferStringArrayResult.value(result))
         }
     }
 
@@ -133,8 +133,8 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_read_text_result(arena, ptr)
             }
-            checkClipboardOperation(NativeClipboardStringResult.result(result))
-            stringFromNative(NativeClipboardStringResult.value(result))
+            checkTransferOperation(NativeTransferStringResult.result(result))
+            stringFromNative(NativeTransferStringResult.value(result))
         }
     }
 
@@ -143,11 +143,11 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_read_text_result(arena, ptr)
             }
-            val operation = clipboardOperationFromNative(NativeClipboardStringResult.result(result))
+            val operation = transferOperationFromNative(NativeTransferStringResult.result(result))
             if (!operation.requireOkOrUnavailable()) {
                 return@use null
             }
-            stringFromNative(NativeClipboardStringResult.value(result))
+            stringFromNative(NativeTransferStringResult.value(result))
         }
     }
 
@@ -211,7 +211,7 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
 public class DataObjectBuilder internal constructor(private val dataObjectId: Long) {
     public fun addItemOfType(format: DataFormat, data: ByteArray): Boolean {
         // A zero-length payload would publish a discarded HGLOBAL that consumers cannot GlobalLock.
-        require(data.isNotEmpty()) { "Clipboard payload for format $format must not be empty" }
+        require(data.isNotEmpty()) { "Payload for format $format must not be empty" }
         return Arena.ofConfined().use { arena ->
             val dataPtr = data.toNative(arena)
             ffiDownCall {

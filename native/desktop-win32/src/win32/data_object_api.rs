@@ -12,15 +12,13 @@ use windows::Win32::System::Com::IDataObject;
 use windows_core::ComObject;
 
 use super::{
-    clipboard::{
-        ClipboardBoolResult, ClipboardByteArrayResult, ClipboardStringArrayResult, ClipboardStringResult, ClipboardUInt32ArrayResult,
-    },
     com::ComInterfaceRawPtr,
     data_object::{DataObject, enum_data_object_format_ids, is_data_object_format_available},
     data_reader::DataReader,
     data_transfer::DataFormat,
     global_data::hglobal_writer,
     strings::copy_from_utf8_string,
+    transfer::{TransferBoolResult, TransferByteArrayResult, TransferStringArrayResult, TransferStringResult, TransferUInt32ArrayResult},
 };
 
 pub(crate) type AutoDropByteArray = AutoDropArray<u8>;
@@ -107,9 +105,9 @@ pub extern "C" fn data_object_drop(data_object_id: i64) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn com_data_object_is_format_available_result(data_object_ptr: ComInterfaceRawPtr, data_format: u32) -> ClipboardBoolResult {
+pub extern "C" fn com_data_object_is_format_available_result(data_object_ptr: ComInterfaceRawPtr, data_format: u32) -> TransferBoolResult {
     ffi_boundary("com_data_object_is_format_available_result", || {
-        Ok(ClipboardBoolResult::from_result(com_data_object_is_format_available_impl(
+        Ok(TransferBoolResult::from_result(com_data_object_is_format_available_impl(
             &data_object_ptr,
             data_format,
         )))
@@ -122,9 +120,9 @@ fn com_data_object_is_format_available_impl(data_object_ptr: &ComInterfaceRawPtr
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn com_data_object_enum_formats_result(data_object_ptr: ComInterfaceRawPtr) -> ClipboardUInt32ArrayResult {
+pub extern "C" fn com_data_object_enum_formats_result(data_object_ptr: ComInterfaceRawPtr) -> TransferUInt32ArrayResult {
     ffi_boundary("com_data_object_enum_formats_result", || {
-        Ok(ClipboardUInt32ArrayResult::from_result(com_data_object_enum_formats_impl(
+        Ok(TransferUInt32ArrayResult::from_result(com_data_object_enum_formats_impl(
             &data_object_ptr,
         )))
     })
@@ -137,9 +135,9 @@ fn com_data_object_enum_formats_impl(data_object_ptr: &ComInterfaceRawPtr) -> an
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn com_data_object_read_bytes_result(data_object_ptr: ComInterfaceRawPtr, data_format: u32) -> ClipboardByteArrayResult {
+pub extern "C" fn com_data_object_read_bytes_result(data_object_ptr: ComInterfaceRawPtr, data_format: u32) -> TransferByteArrayResult {
     ffi_boundary("com_data_object_read_bytes_result", || {
-        Ok(ClipboardByteArrayResult::from_result(com_data_object_read_bytes_impl(
+        Ok(TransferByteArrayResult::from_result(com_data_object_read_bytes_impl(
             &data_object_ptr,
             data_format,
         )))
@@ -154,9 +152,9 @@ fn com_data_object_read_bytes_impl(data_object_ptr: &ComInterfaceRawPtr, data_fo
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn com_data_object_read_file_list_result(data_object_ptr: ComInterfaceRawPtr) -> ClipboardStringArrayResult {
+pub extern "C" fn com_data_object_read_file_list_result(data_object_ptr: ComInterfaceRawPtr) -> TransferStringArrayResult {
     ffi_boundary("com_data_object_read_file_list_result", || {
-        Ok(ClipboardStringArrayResult::from_result(com_data_object_read_file_list_impl(
+        Ok(TransferStringArrayResult::from_result(com_data_object_read_file_list_impl(
             &data_object_ptr,
         )))
     })
@@ -171,9 +169,9 @@ fn com_data_object_read_file_list_impl(data_object_ptr: &ComInterfaceRawPtr) -> 
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn com_data_object_read_html_fragment_result(data_object_ptr: ComInterfaceRawPtr) -> ClipboardStringResult {
+pub extern "C" fn com_data_object_read_html_fragment_result(data_object_ptr: ComInterfaceRawPtr) -> TransferStringResult {
     ffi_boundary("com_data_object_read_html_fragment_result", || {
-        Ok(ClipboardStringResult::from_result(com_data_object_read_html_fragment_impl(
+        Ok(TransferStringResult::from_result(com_data_object_read_html_fragment_impl(
             &data_object_ptr,
         )))
     })
@@ -187,9 +185,9 @@ fn com_data_object_read_html_fragment_impl(data_object_ptr: &ComInterfaceRawPtr)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn com_data_object_read_text_result(data_object_ptr: ComInterfaceRawPtr) -> ClipboardStringResult {
+pub extern "C" fn com_data_object_read_text_result(data_object_ptr: ComInterfaceRawPtr) -> TransferStringResult {
     ffi_boundary("com_data_object_read_text_result", || {
-        Ok(ClipboardStringResult::from_result(com_data_object_read_text_impl(&data_object_ptr)))
+        Ok(TransferStringResult::from_result(com_data_object_read_text_impl(&data_object_ptr)))
     })
 }
 

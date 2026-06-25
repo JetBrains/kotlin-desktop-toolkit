@@ -11,9 +11,9 @@ use windows::Win32::{
 use windows_core::{Error as WinError, Interface};
 
 use super::{
-    clipboard::{ClipboardBoolResult, ClipboardDataObjectResult, ClipboardOperationResult, operation_result},
     com::ComInterfaceRawPtr,
     data_transfer::DataFormat,
+    transfer::{TransferBoolResult, TransferDataObjectResult, TransferOperationResult, operation_result},
 };
 
 #[unsafe(no_mangle)]
@@ -30,9 +30,9 @@ pub extern "C" fn clipboard_get_html_format_id() -> u32 {
 ///
 /// The caller owns the returned reference and must release it (`com_data_object_release`).
 #[unsafe(no_mangle)]
-pub extern "C" fn clipboard_read_result() -> ClipboardDataObjectResult {
+pub extern "C" fn clipboard_read_result() -> TransferDataObjectResult {
     ffi_boundary("clipboard_read_result", || {
-        Ok(ClipboardDataObjectResult::from_result(clipboard_read_impl()))
+        Ok(TransferDataObjectResult::from_result(clipboard_read_impl()))
     })
 }
 
@@ -49,7 +49,7 @@ fn clipboard_read_impl() -> anyhow::Result<ComInterfaceRawPtr> {
 /// renders the data, the clipboard is cleared, or another object is set. OLE takes its own
 /// reference, so the caller may release its handle independently after this returns.
 #[unsafe(no_mangle)]
-pub extern "C" fn clipboard_set_data_object_result(data_object_ptr: ComInterfaceRawPtr) -> ClipboardOperationResult {
+pub extern "C" fn clipboard_set_data_object_result(data_object_ptr: ComInterfaceRawPtr) -> TransferOperationResult {
     ffi_boundary("clipboard_set_data_object_result", || {
         Ok(operation_result(clipboard_set_data_object_impl(&data_object_ptr)))
     })
@@ -69,7 +69,7 @@ fn clipboard_set_data_object_impl(data_object_ptr: &ComInterfaceRawPtr) -> anyho
 /// Renders the data of the data object previously published with [`clipboard_set_data_object_result`]
 /// and releases OLE's reference to it, so the data survives after the application exits.
 #[unsafe(no_mangle)]
-pub extern "C" fn clipboard_flush_result() -> ClipboardOperationResult {
+pub extern "C" fn clipboard_flush_result() -> TransferOperationResult {
     ffi_boundary("clipboard_flush_result", || Ok(operation_result(clipboard_flush_impl())))
 }
 
@@ -82,7 +82,7 @@ fn clipboard_flush_impl() -> anyhow::Result<()> {
 
 /// `OleSetClipboard(NULL)`: empties the clipboard, releasing any data object previously set.
 #[unsafe(no_mangle)]
-pub extern "C" fn clipboard_clear_result() -> ClipboardOperationResult {
+pub extern "C" fn clipboard_clear_result() -> TransferOperationResult {
     ffi_boundary("clipboard_clear_result", || Ok(operation_result(clipboard_clear_impl())))
 }
 
@@ -96,9 +96,9 @@ fn clipboard_clear_impl() -> anyhow::Result<()> {
 /// `OleIsCurrentClipboard`: reports whether `data_object_ptr` (a data object previously set
 /// with [`clipboard_set_data_object_result`]) is still the one on the clipboard.
 #[unsafe(no_mangle)]
-pub extern "C" fn clipboard_is_current_data_object_result(data_object_ptr: ComInterfaceRawPtr) -> ClipboardBoolResult {
+pub extern "C" fn clipboard_is_current_data_object_result(data_object_ptr: ComInterfaceRawPtr) -> TransferBoolResult {
     ffi_boundary("clipboard_is_current_data_object_result", || {
-        Ok(ClipboardBoolResult::from_result(clipboard_is_current_data_object_impl(
+        Ok(TransferBoolResult::from_result(clipboard_is_current_data_object_impl(
             &data_object_ptr,
         )))
     })

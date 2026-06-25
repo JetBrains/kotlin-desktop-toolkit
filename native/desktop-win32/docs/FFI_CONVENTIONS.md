@@ -61,9 +61,9 @@ Mixing `BorrowedStrPtr` (NUL-terminated) and `BorrowedUtf8` (length-delimited) s
 
 The FFI surface exposes no generic optional wrapper. For a nullable read, prefer a result-bearing struct (status + value) or an explicit empty/sentinel value.
 
-### Result-bearing clipboard structs
+### Result-bearing transfer structs
 
-`ClipboardOperationResult` carries `{ status, code, message }`, where `message` is a Rust-allocated nullable UTF-8 string. Kotlin's clipboard result decoder copies and drops that string immediately; native code must leave it null on success or allocate it with `RustAllocatedStrPtr` on failure.
+`TransferOperationResult` carries `{ status, code, message }`, where `message` is a Rust-allocated nullable UTF-8 string. Kotlin's transfer-result decoder copies and drops that string immediately; native code must leave it null on success or allocate it with `RustAllocatedStrPtr` on failure.
 
 ### Opaque pointers (Rust-allocated objects)
 

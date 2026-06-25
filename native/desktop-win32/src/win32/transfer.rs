@@ -16,7 +16,7 @@ pub(crate) type AutoDropStringArray = AutoDropArray<RustAllocatedStrPtr>;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ClipboardStatus {
+pub enum TransferStatus {
     Ok,
     Busy,
     FormatUnavailable,
@@ -25,7 +25,7 @@ pub enum ClipboardStatus {
     NativeError,
 }
 
-impl PanicDefault for ClipboardStatus {
+impl PanicDefault for TransferStatus {
     fn default() -> Self {
         Self::NativeError
     }
@@ -33,24 +33,24 @@ impl PanicDefault for ClipboardStatus {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct ClipboardOperationResult {
-    pub status: ClipboardStatus,
+pub struct TransferOperationResult {
+    pub status: TransferStatus,
     pub code: i32,
     pub message: RustAllocatedStrPtr,
 }
 
-impl ClipboardOperationResult {
+impl TransferOperationResult {
     #[must_use]
     pub const fn ok() -> Self {
         Self {
-            status: ClipboardStatus::Ok,
+            status: TransferStatus::Ok,
             code: 0,
             message: RustAllocatedStrPtr::null(),
         }
     }
 
     #[must_use]
-    pub const fn failed(status: ClipboardStatus, code: i32) -> Self {
+    pub const fn failed(status: TransferStatus, code: i32) -> Self {
         Self {
             status,
             code,
@@ -59,7 +59,7 @@ impl ClipboardOperationResult {
     }
 
     #[must_use]
-    pub fn failed_with_message(status: ClipboardStatus, code: i32, message: &impl ToString) -> Self {
+    pub fn failed_with_message(status: TransferStatus, code: i32, message: &impl ToString) -> Self {
         let message = message.to_string().replace('\0', "\\0");
         Self {
             status,
@@ -70,7 +70,7 @@ impl ClipboardOperationResult {
 
     #[must_use]
     pub fn from_error(err: &anyhow::Error) -> Self {
-        if let Some(failure) = find_error::<ClipboardFailure>(err) {
+        if let Some(failure) = find_error::<TransferFailure>(err) {
             return failure.to_operation_result();
         }
 
@@ -78,40 +78,40 @@ impl ClipboardOperationResult {
             return Self::from_win_error(win_error, err);
         }
 
-        Self::failed_with_message(ClipboardStatus::NativeError, 0, err)
+        Self::failed_with_message(TransferStatus::NativeError, 0, err)
     }
 
     #[must_use]
     pub fn from_win_error(err: &WinError, message: &impl ToString) -> Self {
         let code = err.code();
         let status = match code {
-            CLIPBRD_E_CANT_OPEN | CLIPBRD_E_CANT_EMPTY | CLIPBRD_E_CANT_SET | CLIPBRD_E_CANT_CLOSE => ClipboardStatus::Busy,
-            DV_E_FORMATETC | DV_E_TYMED | DV_E_CLIPFORMAT => ClipboardStatus::FormatUnavailable,
-            CLIPBRD_E_BAD_DATA => ClipboardStatus::InvalidData,
-            _ => ClipboardStatus::NativeError,
+            CLIPBRD_E_CANT_OPEN | CLIPBRD_E_CANT_EMPTY | CLIPBRD_E_CANT_SET | CLIPBRD_E_CANT_CLOSE => TransferStatus::Busy,
+            DV_E_FORMATETC | DV_E_TYMED | DV_E_CLIPFORMAT => TransferStatus::FormatUnavailable,
+            CLIPBRD_E_BAD_DATA => TransferStatus::InvalidData,
+            _ => TransferStatus::NativeError,
         };
         Self::failed_with_message(status, code.0, message)
     }
 }
 
-impl PanicDefault for ClipboardOperationResult {
+impl PanicDefault for TransferOperationResult {
     fn default() -> Self {
-        Self::failed(ClipboardStatus::NativeError, 0)
+        Self::failed(TransferStatus::NativeError, 0)
     }
 }
 
 #[derive(Debug)]
-pub struct ClipboardFailure {
-    status: ClipboardStatus,
+pub struct TransferFailure {
+    status: TransferStatus,
     code: i32,
     message: String,
 }
 
-impl ClipboardFailure {
+impl TransferFailure {
     #[must_use]
     pub fn data_too_large(size: usize, max_size: usize) -> Self {
         Self {
-            status: ClipboardStatus::DataTooLarge,
+            status: TransferStatus::DataTooLarge,
             code: 0,
             message: format!("clipboard data is too large: {size} bytes exceeds {max_size} bytes"),
         }
@@ -120,52 +120,52 @@ impl ClipboardFailure {
     #[must_use]
     pub fn invalid_data(message: impl Into<String>) -> Self {
         Self {
-            status: ClipboardStatus::InvalidData,
+            status: TransferStatus::InvalidData,
             code: 0,
             message: message.into(),
         }
     }
 
     #[must_use]
-    pub fn to_operation_result(&self) -> ClipboardOperationResult {
-        ClipboardOperationResult::failed_with_message(self.status, self.code, &self.message)
+    pub fn to_operation_result(&self) -> TransferOperationResult {
+        TransferOperationResult::failed_with_message(self.status, self.code, &self.message)
     }
 
     #[must_use]
-    pub const fn status(&self) -> ClipboardStatus {
+    pub const fn status(&self) -> TransferStatus {
         self.status
     }
 }
 
-impl Display for ClipboardFailure {
+impl Display for TransferFailure {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.message)
     }
 }
 
-impl std::error::Error for ClipboardFailure {}
+impl std::error::Error for TransferFailure {}
 
 /// Generates the `from_result` constructor and [`PanicDefault`] impl shared by every
-/// `Clipboard*Result` FFI struct: on `Ok` the value is wrapped with a successful
-/// [`ClipboardOperationResult`]; on `Err` the error is traced, classified via
-/// [`ClipboardOperationResult::from_error`], and the value falls back to its `Default`.
+/// `Transfer*Result` FFI struct: on `Ok` the value is wrapped with a successful
+/// [`TransferOperationResult`]; on `Err` the error is traced, classified via
+/// [`TransferOperationResult::from_error`], and the value falls back to its `Default`.
 ///
 /// The `#[repr(C)]` struct definitions stay spelled out at each call site so cbindgen still sees
 /// them; only the otherwise-identical impl bodies are generated here.
-macro_rules! clipboard_value_result {
+macro_rules! transfer_value_result {
     ($name:ident, $value:ty) => {
         impl $name {
             #[must_use]
             pub fn from_result(result: anyhow::Result<$value>) -> Self {
                 match result {
                     Ok(value) => Self {
-                        result: ClipboardOperationResult::ok(),
+                        result: TransferOperationResult::ok(),
                         value,
                     },
                     Err(err) => {
-                        trace_clipboard_failure(&err);
+                        trace_transfer_failure(&err);
                         Self {
-                            result: ClipboardOperationResult::from_error(&err),
+                            result: TransferOperationResult::from_error(&err),
                             value: <$value as PanicDefault>::default(),
                         }
                     }
@@ -176,7 +176,7 @@ macro_rules! clipboard_value_result {
         impl PanicDefault for $name {
             fn default() -> Self {
                 Self {
-                    result: ClipboardOperationResult::default(),
+                    result: TransferOperationResult::default(),
                     value: <$value as PanicDefault>::default(),
                 }
             }
@@ -185,58 +185,58 @@ macro_rules! clipboard_value_result {
 }
 
 #[repr(C)]
-pub struct ClipboardBoolResult {
-    pub result: ClipboardOperationResult,
+pub struct TransferBoolResult {
+    pub result: TransferOperationResult,
     pub value: bool,
 }
-clipboard_value_result!(ClipboardBoolResult, bool);
+transfer_value_result!(TransferBoolResult, bool);
 
 #[repr(C)]
-pub struct ClipboardByteArrayResult {
-    pub result: ClipboardOperationResult,
+pub struct TransferByteArrayResult {
+    pub result: TransferOperationResult,
     pub value: AutoDropByteArray,
 }
-clipboard_value_result!(ClipboardByteArrayResult, AutoDropByteArray);
+transfer_value_result!(TransferByteArrayResult, AutoDropByteArray);
 
 #[repr(C)]
-pub struct ClipboardStringResult {
-    pub result: ClipboardOperationResult,
+pub struct TransferStringResult {
+    pub result: TransferOperationResult,
     pub value: RustAllocatedStrPtr,
 }
-clipboard_value_result!(ClipboardStringResult, RustAllocatedStrPtr);
+transfer_value_result!(TransferStringResult, RustAllocatedStrPtr);
 
 #[repr(C)]
-pub struct ClipboardStringArrayResult {
-    pub result: ClipboardOperationResult,
+pub struct TransferStringArrayResult {
+    pub result: TransferOperationResult,
     pub value: AutoDropStringArray,
 }
-clipboard_value_result!(ClipboardStringArrayResult, AutoDropStringArray);
+transfer_value_result!(TransferStringArrayResult, AutoDropStringArray);
 
 #[repr(C)]
-pub struct ClipboardUInt32ArrayResult {
-    pub result: ClipboardOperationResult,
+pub struct TransferUInt32ArrayResult {
+    pub result: TransferOperationResult,
     pub value: AutoDropArray<u32>,
 }
-clipboard_value_result!(ClipboardUInt32ArrayResult, AutoDropArray<u32>);
+transfer_value_result!(TransferUInt32ArrayResult, AutoDropArray<u32>);
 
 #[repr(C)]
-pub struct ClipboardDataObjectResult {
-    pub result: ClipboardOperationResult,
+pub struct TransferDataObjectResult {
+    pub result: TransferOperationResult,
     pub value: ComInterfaceRawPtr,
 }
-clipboard_value_result!(ClipboardDataObjectResult, ComInterfaceRawPtr);
+transfer_value_result!(TransferDataObjectResult, ComInterfaceRawPtr);
 
-pub(crate) fn operation_result(result: anyhow::Result<()>) -> ClipboardOperationResult {
+pub(crate) fn operation_result(result: anyhow::Result<()>) -> TransferOperationResult {
     match result {
-        Ok(()) => ClipboardOperationResult::ok(),
+        Ok(()) => TransferOperationResult::ok(),
         Err(err) => {
-            trace_clipboard_failure(&err);
-            ClipboardOperationResult::from_error(&err)
+            trace_transfer_failure(&err);
+            TransferOperationResult::from_error(&err)
         }
     }
 }
 
-fn trace_clipboard_failure(err: &anyhow::Error) {
+fn trace_transfer_failure(err: &anyhow::Error) {
     log::trace!("clipboard operation failed: {err:?}");
 }
 

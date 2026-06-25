@@ -1,38 +1,27 @@
 package org.jetbrains.desktop.win32
 
-import org.jetbrains.desktop.win32.generated.NativeClipboardBoolResult
-import org.jetbrains.desktop.win32.generated.NativeClipboardDataObjectResult
-import org.jetbrains.desktop.win32.generated.NativeClipboardOperationResult
+import org.jetbrains.desktop.win32.generated.NativeTransferBoolResult
+import org.jetbrains.desktop.win32.generated.NativeTransferDataObjectResult
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
-
-/** Classification of a native clipboard operation outcome. */
-public enum class ClipboardStatus {
-    Ok,
-    Busy,
-    FormatUnavailable,
-    DataTooLarge,
-    InvalidData,
-    NativeError,
-}
 
 /**
  * Outcome of a [Clipboard] operation.
  *
  * The OLE clipboard can momentarily fail — most importantly, another process can hold it open
- * ([ClipboardStatus.Busy]) — and this API leaves retrying to the caller, so every [Clipboard]
+ * ([TransferStatus.Busy]) — and this API leaves retrying to the caller, so every [Clipboard]
  * call returns a result instead of throwing.
  */
 public sealed interface ClipboardResult<out T> {
     public data class Success<out T>(public val value: T) : ClipboardResult<T>
 
     /**
-     * A failed operation. [status] classifies the failure; [ClipboardStatus.Busy] means the
+     * A failed operation. [status] classifies the failure; [TransferStatus.Busy] means the
      * clipboard was locked and the same call can be retried.
      */
     public data class Failure(
-        public val status: ClipboardStatus,
+        public val status: TransferStatus,
         public val nativeCode: Int,
         public val message: String?,
     ) : ClipboardResult<Nothing>
@@ -40,17 +29,7 @@ public sealed interface ClipboardResult<out T> {
 
 /** True when the operation failed because the clipboard was locked and can be retried. */
 public val ClipboardResult<*>.isBusy: Boolean
-    get() = this is ClipboardResult.Failure && status == ClipboardStatus.Busy
-
-/**
- * Thrown by the throwing [DataObject] read accessors (`read*`). The non-throwing [Clipboard]
- * surface returns [ClipboardResult] instead.
- */
-public class ClipboardException(
-    public val status: ClipboardStatus,
-    public val nativeCode: Int,
-    public val nativeMessage: String? = null,
-) : RuntimeException(clipboardExceptionMessage(status, nativeCode, nativeMessage))
+    get() = this is ClipboardResult.Failure && status == TransferStatus.Busy
 
 /**
  * Low-level, synchronous binding to the Windows OLE clipboard
@@ -65,7 +44,7 @@ public class ClipboardException(
  *    [Application.invokeOnDispatcher]. Calling from another thread is undefined.
  *  - **Contention.** Another process can momentarily hold the clipboard open. OLE then fails with
  *    `CLIPBRD_E_CANT_OPEN`, returned here as [ClipboardResult.Failure] with
- *    [ClipboardResult.Failure.status] == [ClipboardStatus.Busy] (see [isBusy]). Whether and how to
+ *    [ClipboardResult.Failure.status] == [TransferStatus.Busy] (see [isBusy]). Whether and how to
  *    retry (for example with a short backoff) is up to you — and you should: see the example below.
  *  - **Concurrent changes.** To detect that the clipboard changed between a read and a later write,
  *    capture [sequenceNumber] and compare.
@@ -126,8 +105,8 @@ public object Clipboard {
         val result = ffiDownCall {
             desktop_win32_h.clipboard_read_result(arena)
         }
-        decodeClipboardResult(NativeClipboardDataObjectResult.result(result)) {
-            DataObject(NativeClipboardDataObjectResult.value(result))
+        decodeClipboardResult(NativeTransferDataObjectResult.result(result)) {
+            DataObject(NativeTransferDataObjectResult.value(result))
         }
     }
 
@@ -173,80 +152,17 @@ public object Clipboard {
         val result = ffiDownCall {
             desktop_win32_h.clipboard_is_current_data_object_result(arena, dataObject.toNative())
         }
-        decodeClipboardResult(NativeClipboardBoolResult.result(result)) {
-            NativeClipboardBoolResult.value(result)
+        decodeClipboardResult(NativeTransferBoolResult.result(result)) {
+            NativeTransferBoolResult.value(result)
         }
     }
 }
 
 private inline fun <T> decodeClipboardResult(operationSegment: MemorySegment, onSuccess: () -> T): ClipboardResult<T> {
-    val operation = clipboardOperationFromNative(operationSegment)
-    return if (operation.status == ClipboardStatus.Ok) {
+    val operation = transferOperationFromNative(operationSegment)
+    return if (operation.status == TransferStatus.Ok) {
         ClipboardResult.Success(onSuccess())
     } else {
         ClipboardResult.Failure(operation.status, operation.nativeCode, operation.nativeMessage)
     }
-}
-
-internal data class ClipboardOperation(
-    val status: ClipboardStatus,
-    val nativeCode: Int,
-    val nativeMessage: String?,
-) {
-    fun throwIfFailed() {
-        if (status != ClipboardStatus.Ok) {
-            throw ClipboardException(status, nativeCode, nativeMessage)
-        }
-    }
-
-    /**
-     * Returns false if the requested format is unavailable, throws [ClipboardException]
-     * for any other failure, and returns true on success.
-     */
-    fun requireOkOrUnavailable(): Boolean {
-        if (status == ClipboardStatus.FormatUnavailable) {
-            return false
-        }
-        throwIfFailed()
-        return true
-    }
-}
-
-internal fun clipboardOperationFromNative(segment: MemorySegment): ClipboardOperation {
-    val status = when (NativeClipboardOperationResult.status(segment)) {
-        desktop_win32_h.NativeClipboardStatus_Ok() -> ClipboardStatus.Ok
-        desktop_win32_h.NativeClipboardStatus_Busy() -> ClipboardStatus.Busy
-        desktop_win32_h.NativeClipboardStatus_FormatUnavailable() -> ClipboardStatus.FormatUnavailable
-        desktop_win32_h.NativeClipboardStatus_DataTooLarge() -> ClipboardStatus.DataTooLarge
-        desktop_win32_h.NativeClipboardStatus_InvalidData() -> ClipboardStatus.InvalidData
-        desktop_win32_h.NativeClipboardStatus_NativeError() -> ClipboardStatus.NativeError
-        else -> ClipboardStatus.NativeError
-    }
-    return ClipboardOperation(
-        status,
-        NativeClipboardOperationResult.code(segment),
-        clipboardOperationMessageFromNative(segment),
-    )
-}
-
-internal fun checkClipboardOperation(segment: MemorySegment) {
-    clipboardOperationFromNative(segment).throwIfFailed()
-}
-
-private fun clipboardExceptionMessage(status: ClipboardStatus, nativeCode: Int, nativeMessage: String?): String {
-    val detail = if (nativeCode == 0) {
-        ""
-    } else {
-        " (HRESULT 0x${nativeCode.toUInt().toString(16).padStart(8, '0')})"
-    }
-    val message = nativeMessage?.takeIf { it.isNotBlank() }?.let { ": $it" } ?: ""
-    return "Clipboard operation failed: $status$detail$message"
-}
-
-private fun clipboardOperationMessageFromNative(segment: MemorySegment): String? {
-    val messagePtr = NativeClipboardOperationResult.message(segment)
-    if (messagePtr == MemorySegment.NULL) {
-        return null
-    }
-    return stringFromNative(messagePtr)
 }

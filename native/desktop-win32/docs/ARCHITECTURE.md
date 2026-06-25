@@ -74,7 +74,6 @@ native/
         screen_api.rs             FFI: screen_list / screen_map_to_client / drop fns
         appearance.rs             UISettings → Dark/Light via foreground-luminance heuristic
         appearance_api.rs         FFI: application_get_appearance
-        clipboard.rs              OLE clipboard result types: ClipboardStatus + *Result structs
         clipboard_api.rs          FFI: OLE-backed clipboard read/write/clear + sequence helpers
         drag_drop.rs              IDropSource / IDropTarget via windows-core implement!
         drag_drop_api.rs          FFI: drag_drop_register_target / start / revoke
@@ -83,6 +82,7 @@ native/
         data_reader.rs            STGMEDIUM RAII; HGLOBAL/IStream-uniform get_*
         data_transfer.rs          DataFormat enum (Text=13, FileList=15, HtmlFragment lazy)
         data_transfer_api.rs      FFI: data_transfer_register_format
+        transfer.rs               Transfer result vocabulary: TransferStatus / Transfer*Result / TransferFailure
         global_data.rs            HGlobalData RAII; hglobal_writer + hglobal_reader submodules
         com.rs                    ComInterfaceRawPtr: refcount-carrying void* wrapper
         file_dialog.rs            IFileOpen/SaveDialog wrappers
@@ -100,7 +100,7 @@ kotlin-desktop-toolkit/src/main/kotlin/org/jetbrains/desktop/
     Converters.kt                 geometry toNative / fromNative
     Application.kt, Window.kt, Renderers.kt, Geometry.kt, Event.kt,
     Keyboard.kt, Pointer.kt, Cursor.kt, Screen.kt, Appearance.kt,
-    Clipboard.kt, DragDrop.kt, DataObject.kt, DataFormat.kt, FileDialog.kt
+    Clipboard.kt, Transfer.kt, DragDrop.kt, DataObject.kt, DataFormat.kt, FileDialog.kt
   common/
     Platform.kt                   internal OS/arch detection (apparently unused from win32)
 ```

@@ -7,32 +7,31 @@ use windows::Win32::{
 };
 use windows_core::{Error as WinError, Result as WinResult};
 
-use super::{clipboard::ClipboardFailure, strings::copy_from_wide_string};
+use super::{strings::copy_from_wide_string, transfer::TransferFailure};
 
-/// Matches Chromium's defensive clipboard payload cap.
+/// Defensive cap on transferred payloads, matching Chromium's clipboard limit.
 /// cbindgen:ignore
-pub(crate) const MAX_CLIPBOARD_DATA_BYTES: usize = 256 * 1024 * 1024;
+pub(crate) const MAX_TRANSFER_BYTES: usize = 256 * 1024 * 1024;
 
-pub(crate) fn ensure_clipboard_data_size(size: usize) -> anyhow::Result<()> {
-    if size > MAX_CLIPBOARD_DATA_BYTES {
-        return Err(ClipboardFailure::data_too_large(size, MAX_CLIPBOARD_DATA_BYTES).into());
+pub(crate) fn ensure_transfer_size(size: usize) -> anyhow::Result<()> {
+    if size > MAX_TRANSFER_BYTES {
+        return Err(TransferFailure::data_too_large(size, MAX_TRANSFER_BYTES).into());
     }
     Ok(())
 }
 
-/// Decodes a little-endian UTF-16 clipboard payload (e.g. `CF_UNICODETEXT`) into a `CString`.
+/// Decodes a little-endian UTF-16 transfer payload (e.g. `CF_UNICODETEXT`) into a `CString`.
 ///
 /// Truncates at the first NUL so the terminator — and any padding after it — does not leave an
 /// interior NUL that `CString::new` would reject. A payload whose length is not a multiple of two
-/// is rejected as invalid clipboard data.
-pub(crate) fn decode_utf16le_clipboard(bytes: &[u8]) -> anyhow::Result<CString> {
+/// is rejected as invalid transfer data.
+pub(crate) fn decode_utf16le_transfer(bytes: &[u8]) -> anyhow::Result<CString> {
     let (chunks, []) = bytes.as_chunks::<2>() else {
-        return Err(ClipboardFailure::invalid_data("UTF-16 clipboard data has odd byte length").into());
+        return Err(TransferFailure::invalid_data("UTF-16 transfer data has odd byte length").into());
     };
     let wide: Vec<u16> = chunks.iter().map(|&pair| u16::from_le_bytes(pair)).collect();
     let len = wide.iter().position(|&c| c == 0).unwrap_or(wide.len());
-    copy_from_wide_string(&wide[..len])
-        .map_err(|err| ClipboardFailure::invalid_data(format!("invalid UTF-16 clipboard data: {err}")).into())
+    copy_from_wide_string(&wide[..len]).map_err(|err| TransferFailure::invalid_data(format!("invalid UTF-16 transfer data: {err}")).into())
 }
 
 pub struct HGlobalData {
@@ -45,7 +44,7 @@ unsafe impl Sync for HGlobalData {}
 
 impl HGlobalData {
     pub fn alloc_and_init<F: FnOnce(*mut core::ffi::c_void)>(content_len: usize, init: F) -> anyhow::Result<Self> {
-        ensure_clipboard_data_size(content_len)?;
+        ensure_transfer_size(content_len)?;
         let mem = unsafe { GlobalAlloc(GMEM_MOVEABLE, content_len)? };
         if content_len != 0 {
             let data = match global_lock(mem) {
@@ -73,7 +72,7 @@ impl HGlobalData {
     pub fn copy_from(mem: windows::Win32::Foundation::HANDLE) -> anyhow::Result<Self> {
         let mem = HGLOBAL(mem.0);
         let size = global_size(mem)?;
-        ensure_clipboard_data_size(size)?;
+        ensure_transfer_size(size)?;
         let mem = global_mem_copy(mem, size)?;
         Ok(Self { mem, is_owned: true })
     }
@@ -114,7 +113,7 @@ fn global_mem_copy(mem: HGLOBAL, size: usize) -> WinResult<HGLOBAL> {
 
     if size == 0 {
         // A zero-length GMEM_MOVEABLE allocation is a discarded, unlockable handle. This path is
-        // only reached when copying an external zero-length clipboard global; in-process readers
+        // only reached when copying an external zero-length transfer global; in-process readers
         // short-circuit on `len == 0` (hglobal_reader::get_bytes) and never lock it, and the
         // builder rejects empty payloads, so a handle handed to consumers is never zero-length.
         return unsafe { GlobalAlloc(GMEM_MOVEABLE, size) };
@@ -223,18 +222,18 @@ pub(crate) mod hglobal_reader {
     use windows::{ApplicationModel::DataTransfer::HtmlFormatHelper, Win32::UI::Shell::HDROP};
 
     use crate::win32::{
-        clipboard::ClipboardFailure,
-        global_data::{HGlobalData, ensure_clipboard_data_size, global_lock, global_size, global_unlock, parse_file_list},
+        global_data::{HGlobalData, ensure_transfer_size, global_lock, global_size, global_unlock, parse_file_list},
         strings::{copy_from_utf8_bytes, copy_from_wide_string},
+        transfer::TransferFailure,
     };
 
     pub fn get_text(data: &HGlobalData) -> anyhow::Result<CString> {
-        super::decode_utf16le_clipboard(&get_bytes(data)?)
+        super::decode_utf16le_transfer(&get_bytes(data)?)
     }
 
     pub fn get_bytes(data: &HGlobalData) -> anyhow::Result<Vec<u8>> {
         let len = global_size(data.mem)?;
-        ensure_clipboard_data_size(len)?;
+        ensure_transfer_size(len)?;
         if len == 0 {
             return Ok(Vec::new());
         }
@@ -261,11 +260,11 @@ pub(crate) mod hglobal_reader {
 
     pub fn get_html(data: &HGlobalData) -> anyhow::Result<CString> {
         let utf8_bytes = get_bytes(data)?;
-        let html_format = copy_from_utf8_bytes(&utf8_bytes)
-            .map_err(|err| ClipboardFailure::invalid_data(format!("invalid HTML clipboard data: {err}")))?;
+        let html_format =
+            copy_from_utf8_bytes(&utf8_bytes).map_err(|err| TransferFailure::invalid_data(format!("invalid HTML transfer data: {err}")))?;
         let fragment = HtmlFormatHelper::GetStaticFragment(&html_format)
-            .map_err(|err| ClipboardFailure::invalid_data(format!("invalid HTML clipboard data: {err:?}")))?;
-        copy_from_wide_string(&fragment).map_err(|err| ClipboardFailure::invalid_data(format!("invalid HTML clipboard data: {err}")).into())
+            .map_err(|err| TransferFailure::invalid_data(format!("invalid HTML transfer data: {err:?}")))?;
+        copy_from_wide_string(&fragment).map_err(|err| TransferFailure::invalid_data(format!("invalid HTML transfer data: {err}")).into())
     }
 }
 
@@ -277,15 +276,15 @@ pub(crate) unsafe fn parse_file_list(hdrop: HDROP) -> anyhow::Result<Vec<CString
     for i in 0..num_files {
         let file_name_len = unsafe { DragQueryFileW(hdrop, i, None) };
         if file_name_len == 0 {
-            return Err(ClipboardFailure::invalid_data(format!("DROPFILES entry {i} has an empty file name")).into());
+            return Err(TransferFailure::invalid_data(format!("DROPFILES entry {i} has an empty file name")).into());
         }
         let mut buffer = vec![0u16; usize::try_from(file_name_len)? + 1];
         let file_name_len = unsafe { DragQueryFileW(hdrop, i, Some(&mut buffer)) };
         if file_name_len == 0 {
-            return Err(ClipboardFailure::invalid_data(format!("failed to read DROPFILES entry {i}")).into());
+            return Err(TransferFailure::invalid_data(format!("failed to read DROPFILES entry {i}")).into());
         }
         files.push(
-            copy_from_wide_string(&buffer).map_err(|err| ClipboardFailure::invalid_data(format!("invalid DROPFILES entry {i}: {err}")))?,
+            copy_from_wide_string(&buffer).map_err(|err| TransferFailure::invalid_data(format!("invalid DROPFILES entry {i}: {err}")))?,
         );
     }
     Ok(files)
@@ -293,9 +292,9 @@ pub(crate) unsafe fn parse_file_list(hdrop: HDROP) -> anyhow::Result<Vec<CString
 
 #[cfg(test)]
 mod tests {
-    use crate::win32::clipboard::{ClipboardFailure, ClipboardStatus};
+    use crate::win32::transfer::{TransferFailure, TransferStatus};
 
-    use super::{HGlobalData, MAX_CLIPBOARD_DATA_BYTES, hglobal_reader, hglobal_writer};
+    use super::{HGlobalData, MAX_TRANSFER_BYTES, hglobal_reader, hglobal_writer};
 
     #[test]
     fn get_text_accepts_missing_trailing_nul() {
@@ -313,8 +312,8 @@ mod tests {
         let err = hglobal_reader::get_text(&data).unwrap_err();
 
         assert!(err.to_string().contains("odd byte length"));
-        let failure = err.downcast_ref::<ClipboardFailure>().expect("expected clipboard failure");
-        assert_eq!(failure.status(), ClipboardStatus::InvalidData);
+        let failure = err.downcast_ref::<TransferFailure>().expect("expected transfer failure");
+        assert_eq!(failure.status(), TransferStatus::InvalidData);
     }
 
     #[test]
@@ -328,7 +327,7 @@ mod tests {
 
     #[test]
     fn oversized_global_allocation_is_rejected_before_allocating() {
-        let result = HGlobalData::alloc_and_init(MAX_CLIPBOARD_DATA_BYTES + 1, |_| {});
+        let result = HGlobalData::alloc_and_init(MAX_TRANSFER_BYTES + 1, |_| {});
         assert!(result.is_err());
         let err = result.err().unwrap();
 

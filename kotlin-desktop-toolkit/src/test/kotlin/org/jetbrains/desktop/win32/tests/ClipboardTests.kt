@@ -2,14 +2,14 @@ package org.jetbrains.desktop.win32.tests
 
 import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.Clipboard
-import org.jetbrains.desktop.win32.ClipboardException
 import org.jetbrains.desktop.win32.ClipboardResult
-import org.jetbrains.desktop.win32.ClipboardStatus
 import org.jetbrains.desktop.win32.DataFormat
 import org.jetbrains.desktop.win32.DataObject
 import org.jetbrains.desktop.win32.DataObjectBuilder
 import org.jetbrains.desktop.win32.EventHandlerResult
 import org.jetbrains.desktop.win32.KotlinDesktopToolkit
+import org.jetbrains.desktop.win32.TransferException
+import org.jetbrains.desktop.win32.TransferStatus
 import org.jetbrains.desktop.win32.WindowParams
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -106,8 +106,8 @@ class ClipboardTests {
         publish { addTextItem("available text") }
         readClipboard {
             assertNull(it.tryReadItemOfType(unavailable))
-            val exception = assertFailsWith<ClipboardException> { it.readItemOfType(unavailable) }
-            assertEquals(ClipboardStatus.FormatUnavailable, exception.status)
+            val exception = assertFailsWith<TransferException> { it.readItemOfType(unavailable) }
+            assertEquals(TransferStatus.FormatUnavailable, exception.status)
         }
     }
 
@@ -188,7 +188,7 @@ class ClipboardTests {
         HeldClipboard.open().use {
             val result = Clipboard.get()
             assertIs<ClipboardResult.Failure>(result)
-            assertEquals(ClipboardStatus.Busy, result.status)
+            assertEquals(TransferStatus.Busy, result.status)
         }
     }
 
@@ -199,7 +199,7 @@ class ClipboardTests {
             HeldClipboard.open().use {
                 val result = Clipboard.set(data)
                 assertIs<ClipboardResult.Failure>(result)
-                assertEquals(ClipboardStatus.Busy, result.status)
+                assertEquals(TransferStatus.Busy, result.status)
             }
         }
     }
@@ -222,7 +222,7 @@ class ClipboardTests {
 }
 
 /**
- * Unwraps a [ClipboardResult], retrying only while it reports [ClipboardStatus.Busy]. This is the
+ * Unwraps a [ClipboardResult], retrying only while it reports [TransferStatus.Busy]. This is the
  * caller-owned retry contract the toolkit deliberately leaves to the application; the success-path
  * tests use it so incidental clipboard contention from other processes does not make them flaky.
  */
@@ -232,7 +232,7 @@ private fun <T> withClipboardRetry(timeoutMs: Long = 5_000, block: () -> Clipboa
         when (val result = block()) {
             is ClipboardResult.Success -> return result.value
             is ClipboardResult.Failure -> {
-                check(result.status == ClipboardStatus.Busy && System.nanoTime() < deadline) {
+                check(result.status == TransferStatus.Busy && System.nanoTime() < deadline) {
                     "clipboard operation failed: ${result.status} (0x${result.nativeCode.toUInt().toString(16)})"
                 }
                 Thread.sleep(10)
