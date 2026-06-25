@@ -103,7 +103,8 @@ pub mod istream_reader {
     };
 
     use crate::win32::{
-        global_data::{ensure_clipboard_data_size, invalid_clipboard_data, parse_file_list},
+        clipboard::ClipboardFailure,
+        global_data::{decode_utf16le_clipboard, ensure_clipboard_data_size, parse_file_list},
         strings::{copy_from_utf8_bytes, copy_from_wide_string},
     };
 
@@ -145,10 +146,10 @@ pub mod istream_reader {
     pub fn get_html(stream: &IStream) -> anyhow::Result<CString> {
         let utf8_bytes = get_bytes(stream)?;
         let html_format =
-            copy_from_utf8_bytes(&utf8_bytes).map_err(|err| invalid_clipboard_data(format!("invalid HTML byte stream: {err}")))?;
+            copy_from_utf8_bytes(&utf8_bytes).map_err(|err| ClipboardFailure::invalid_data(format!("invalid HTML byte stream: {err}")))?;
         let fragment = HtmlFormatHelper::GetStaticFragment(&html_format)
-            .map_err(|err| invalid_clipboard_data(format!("invalid HTML byte stream: {err:?}")))?;
-        copy_from_wide_string(&fragment).map_err(|err| invalid_clipboard_data(format!("invalid HTML byte stream: {err}")))
+            .map_err(|err| ClipboardFailure::invalid_data(format!("invalid HTML byte stream: {err:?}")))?;
+        copy_from_wide_string(&fragment).map_err(|err| ClipboardFailure::invalid_data(format!("invalid HTML byte stream: {err}")).into())
     }
 
     pub fn get_text(stream: &IStream) -> anyhow::Result<CString> {
@@ -157,15 +158,6 @@ pub mod istream_reader {
         // that means raw UTF-16 LE with an optional trailing NUL. This is deliberately not compatible
         // with shlwapi's IStream_ReadStr / IStream_WriteStr length-prefixed wire format, which is
         // used for application-private persistence streams, not for clipboard data.
-        // Malformed input surfaces as an Err via String::from_utf16; it cannot panic.
-        let bytes = get_bytes(stream)?;
-        let (chunks, []) = bytes.as_chunks::<2>() else {
-            return Err(invalid_clipboard_data("UTF-16 byte stream has odd length"));
-        };
-        let wide: Vec<u16> = chunks.iter().map(|&pair| u16::from_le_bytes(pair)).collect();
-        // Mirror hglobal_reader::get_text: truncate at the first NUL so trailing padding after the
-        // terminator does not leave an interior NUL that CString::new would reject.
-        let len = wide.iter().position(|&c| c == 0).unwrap_or(wide.len());
-        copy_from_wide_string(&wide[..len]).map_err(|err| invalid_clipboard_data(format!("invalid UTF-16 byte stream: {err}")))
+        decode_utf16le_clipboard(&get_bytes(stream)?)
     }
 }

@@ -4,28 +4,15 @@ use desktop_common::{
     ffi_utils::{AutoDropArray, RustAllocatedStrPtr},
     logger::PanicDefault,
 };
+use windows::Win32::Foundation::{
+    CLIPBRD_E_BAD_DATA, CLIPBRD_E_CANT_CLOSE, CLIPBRD_E_CANT_EMPTY, CLIPBRD_E_CANT_OPEN, CLIPBRD_E_CANT_SET, DV_E_CLIPFORMAT,
+    DV_E_FORMATETC, DV_E_TYMED,
+};
 use windows_core::Error as WinError;
 
 use super::{com::ComInterfaceRawPtr, data_object_api::AutoDropByteArray};
 
 pub(crate) type AutoDropStringArray = AutoDropArray<RustAllocatedStrPtr>;
-
-/// cbindgen:ignore
-const HRESULT_CLIPBRD_E_CANT_OPEN: i32 = 0x8004_01D0_u32 as i32;
-/// cbindgen:ignore
-const HRESULT_CLIPBRD_E_CANT_EMPTY: i32 = 0x8004_01D1_u32 as i32;
-/// cbindgen:ignore
-const HRESULT_CLIPBRD_E_CANT_SET: i32 = 0x8004_01D2_u32 as i32;
-/// cbindgen:ignore
-const HRESULT_CLIPBRD_E_BAD_DATA: i32 = 0x8004_01D3_u32 as i32;
-/// cbindgen:ignore
-const HRESULT_CLIPBRD_E_CANT_CLOSE: i32 = 0x8004_01D4_u32 as i32;
-/// cbindgen:ignore
-const HRESULT_DV_E_FORMATETC: i32 = 0x8004_0064_u32 as i32;
-/// cbindgen:ignore
-const HRESULT_DV_E_TYMED: i32 = 0x8004_0069_u32 as i32;
-/// cbindgen:ignore
-const HRESULT_DV_E_CLIPFORMAT: i32 = 0x8004_006A_u32 as i32;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,21 +83,14 @@ impl ClipboardOperationResult {
 
     #[must_use]
     pub fn from_win_error(err: &WinError, message: &impl ToString) -> Self {
-        let code = err.code().0;
+        let code = err.code();
         let status = match code {
-            HRESULT_CLIPBRD_E_CANT_OPEN | HRESULT_CLIPBRD_E_CANT_EMPTY | HRESULT_CLIPBRD_E_CANT_SET | HRESULT_CLIPBRD_E_CANT_CLOSE => {
-                ClipboardStatus::Busy
-            }
-            HRESULT_DV_E_FORMATETC | HRESULT_DV_E_TYMED | HRESULT_DV_E_CLIPFORMAT => ClipboardStatus::FormatUnavailable,
-            HRESULT_CLIPBRD_E_BAD_DATA => ClipboardStatus::InvalidData,
+            CLIPBRD_E_CANT_OPEN | CLIPBRD_E_CANT_EMPTY | CLIPBRD_E_CANT_SET | CLIPBRD_E_CANT_CLOSE => ClipboardStatus::Busy,
+            DV_E_FORMATETC | DV_E_TYMED | DV_E_CLIPFORMAT => ClipboardStatus::FormatUnavailable,
+            CLIPBRD_E_BAD_DATA => ClipboardStatus::InvalidData,
             _ => ClipboardStatus::NativeError,
         };
-        Self::failed_with_message(status, code, message)
-    }
-
-    #[must_use]
-    pub const fn is_ok(&self) -> bool {
-        matches!(self.status, ClipboardStatus::Ok)
+        Self::failed_with_message(status, code.0, message)
     }
 }
 
@@ -165,209 +145,86 @@ impl Display for ClipboardFailure {
 
 impl std::error::Error for ClipboardFailure {}
 
+/// Generates the `from_result` constructor and [`PanicDefault`] impl shared by every
+/// `Clipboard*Result` FFI struct: on `Ok` the value is wrapped with a successful
+/// [`ClipboardOperationResult`]; on `Err` the error is traced, classified via
+/// [`ClipboardOperationResult::from_error`], and the value falls back to its `Default`.
+///
+/// The `#[repr(C)]` struct definitions stay spelled out at each call site so cbindgen still sees
+/// them; only the otherwise-identical impl bodies are generated here.
+macro_rules! clipboard_value_result {
+    ($name:ident, $value:ty) => {
+        impl $name {
+            #[must_use]
+            pub fn from_result(result: anyhow::Result<$value>) -> Self {
+                match result {
+                    Ok(value) => Self {
+                        result: ClipboardOperationResult::ok(),
+                        value,
+                    },
+                    Err(err) => {
+                        trace_clipboard_failure(&err);
+                        Self {
+                            result: ClipboardOperationResult::from_error(&err),
+                            value: <$value as PanicDefault>::default(),
+                        }
+                    }
+                }
+            }
+        }
+
+        impl PanicDefault for $name {
+            fn default() -> Self {
+                Self {
+                    result: ClipboardOperationResult::default(),
+                    value: <$value as PanicDefault>::default(),
+                }
+            }
+        }
+    };
+}
+
 #[repr(C)]
 pub struct ClipboardBoolResult {
     pub result: ClipboardOperationResult,
     pub value: bool,
 }
-
-impl ClipboardBoolResult {
-    #[must_use]
-    pub fn from_result(result: anyhow::Result<bool>) -> Self {
-        match result {
-            Ok(value) => Self {
-                result: ClipboardOperationResult::ok(),
-                value,
-            },
-            Err(err) => {
-                trace_clipboard_failure(&err);
-                Self {
-                    result: ClipboardOperationResult::from_error(&err),
-                    value: <bool as Default>::default(),
-                }
-            }
-        }
-    }
-}
-
-impl PanicDefault for ClipboardBoolResult {
-    fn default() -> Self {
-        Self {
-            result: ClipboardOperationResult::default(),
-            value: <bool as Default>::default(),
-        }
-    }
-}
+clipboard_value_result!(ClipboardBoolResult, bool);
 
 #[repr(C)]
 pub struct ClipboardByteArrayResult {
     pub result: ClipboardOperationResult,
     pub value: AutoDropByteArray,
 }
-
-impl ClipboardByteArrayResult {
-    #[must_use]
-    pub fn from_result(result: anyhow::Result<AutoDropByteArray>) -> Self {
-        match result {
-            Ok(value) => Self {
-                result: ClipboardOperationResult::ok(),
-                value,
-            },
-            Err(err) => {
-                trace_clipboard_failure(&err);
-                Self {
-                    result: ClipboardOperationResult::from_error(&err),
-                    value: AutoDropByteArray::default(),
-                }
-            }
-        }
-    }
-}
-
-impl PanicDefault for ClipboardByteArrayResult {
-    fn default() -> Self {
-        Self {
-            result: ClipboardOperationResult::default(),
-            value: AutoDropByteArray::default(),
-        }
-    }
-}
+clipboard_value_result!(ClipboardByteArrayResult, AutoDropByteArray);
 
 #[repr(C)]
 pub struct ClipboardStringResult {
     pub result: ClipboardOperationResult,
     pub value: RustAllocatedStrPtr,
 }
-
-impl ClipboardStringResult {
-    #[must_use]
-    pub fn from_result(result: anyhow::Result<RustAllocatedStrPtr>) -> Self {
-        match result {
-            Ok(value) => Self {
-                result: ClipboardOperationResult::ok(),
-                value,
-            },
-            Err(err) => {
-                trace_clipboard_failure(&err);
-                Self {
-                    result: ClipboardOperationResult::from_error(&err),
-                    value: RustAllocatedStrPtr::default(),
-                }
-            }
-        }
-    }
-}
-
-impl PanicDefault for ClipboardStringResult {
-    fn default() -> Self {
-        Self {
-            result: ClipboardOperationResult::default(),
-            value: RustAllocatedStrPtr::default(),
-        }
-    }
-}
+clipboard_value_result!(ClipboardStringResult, RustAllocatedStrPtr);
 
 #[repr(C)]
 pub struct ClipboardStringArrayResult {
     pub result: ClipboardOperationResult,
     pub value: AutoDropStringArray,
 }
-
-impl ClipboardStringArrayResult {
-    #[must_use]
-    pub fn from_result(result: anyhow::Result<AutoDropStringArray>) -> Self {
-        match result {
-            Ok(value) => Self {
-                result: ClipboardOperationResult::ok(),
-                value,
-            },
-            Err(err) => {
-                trace_clipboard_failure(&err);
-                Self {
-                    result: ClipboardOperationResult::from_error(&err),
-                    value: AutoDropStringArray::default(),
-                }
-            }
-        }
-    }
-}
-
-impl PanicDefault for ClipboardStringArrayResult {
-    fn default() -> Self {
-        Self {
-            result: ClipboardOperationResult::default(),
-            value: AutoDropStringArray::default(),
-        }
-    }
-}
+clipboard_value_result!(ClipboardStringArrayResult, AutoDropStringArray);
 
 #[repr(C)]
 pub struct ClipboardUInt32ArrayResult {
     pub result: ClipboardOperationResult,
     pub value: AutoDropArray<u32>,
 }
-
-impl ClipboardUInt32ArrayResult {
-    #[must_use]
-    pub fn from_result(result: anyhow::Result<AutoDropArray<u32>>) -> Self {
-        match result {
-            Ok(value) => Self {
-                result: ClipboardOperationResult::ok(),
-                value,
-            },
-            Err(err) => {
-                trace_clipboard_failure(&err);
-                Self {
-                    result: ClipboardOperationResult::from_error(&err),
-                    value: AutoDropArray::default(),
-                }
-            }
-        }
-    }
-}
-
-impl PanicDefault for ClipboardUInt32ArrayResult {
-    fn default() -> Self {
-        Self {
-            result: ClipboardOperationResult::default(),
-            value: AutoDropArray::default(),
-        }
-    }
-}
+clipboard_value_result!(ClipboardUInt32ArrayResult, AutoDropArray<u32>);
 
 #[repr(C)]
 pub struct ClipboardDataObjectResult {
     pub result: ClipboardOperationResult,
     pub value: ComInterfaceRawPtr,
 }
-
-impl ClipboardDataObjectResult {
-    #[must_use]
-    pub fn from_result(result: anyhow::Result<ComInterfaceRawPtr>) -> Self {
-        match result {
-            Ok(value) => Self {
-                result: ClipboardOperationResult::ok(),
-                value,
-            },
-            Err(err) => {
-                trace_clipboard_failure(&err);
-                Self {
-                    result: ClipboardOperationResult::from_error(&err),
-                    value: ComInterfaceRawPtr::default(),
-                }
-            }
-        }
-    }
-}
-
-impl PanicDefault for ClipboardDataObjectResult {
-    fn default() -> Self {
-        Self {
-            result: ClipboardOperationResult::default(),
-            value: ComInterfaceRawPtr::default(),
-        }
-    }
-}
+clipboard_value_result!(ClipboardDataObjectResult, ComInterfaceRawPtr);
 
 pub(crate) fn operation_result(result: anyhow::Result<()>) -> ClipboardOperationResult {
     match result {

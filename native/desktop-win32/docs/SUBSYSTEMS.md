@@ -479,7 +479,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 **Cancel sentinels.**
 - Open: returns zero-length `AutoDropArray` (Kotlin `emptyList()`).
-- Save: returns empty `CString` (Kotlin `takeUnless { isEmpty() }` → null). Implicit convention; no typed `FfiOption`.
+- Save: returns empty `CString` (Kotlin `takeUnless { isEmpty() }` → null). Implicit convention; no typed optional wrapper.
 
 **Gotchas.**
 - **No file-type filter support.** `COMDLG_FILTERSPEC` / `SetFileTypes` not used. Capability gap vs. macOS. See TODO.md.

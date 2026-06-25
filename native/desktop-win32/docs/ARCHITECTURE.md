@@ -41,7 +41,7 @@ When a future change tempts you to reach for another WinRT API, ask: "Is there a
 native/
   desktop-common/                 cross-platform plumbing crate
     src/
-      ffi_utils.rs                pointer/array/option wrappers, AutoDrop, FfiOption, PanicDefault
+      ffi_utils.rs                pointer/array wrappers, AutoDrop, PanicDefault
       logger.rs                   log4rs setup, ffi_boundary, panic-to-exception channel
       logger_api.rs               LogLevel, LoggerConfiguration, ExceptionsArray (#[repr(C)])
       lib.rs                      re-exports the three modules above
@@ -166,7 +166,7 @@ Conventions:
 - **Strings out of Rust**: `RustAllocatedStrPtr` (raw `*const c_char` over a `'static` `CString::into_raw`). Kotlin reads with `getUtf8String(0)` and frees via `native_string_drop` in a `finally` block (Strings.kt).
 - **Strings into Rust**: `BorrowedStrPtr<'a>` — Kotlin allocates in a confined `Arena`; Rust borrows for the duration of the call.
 - **Arrays out of Rust**: `AutoDropArray<T>` — `(*const T, usize)`. `Drop` reconstructs `Box<[T]>` and drops it (which recursively drops `T`). Kotlin must call the matching `*_drop` function (no drop-fn stored in the struct itself).
-- **Optional values across FFI**: `FfiOption<T: PanicDefault>` exists in `desktop-common`, but the Win32 backend currently avoids exporting nullable `FfiOption` APIs.
+- **Optional values across FFI**: the crate exposes no generic optional wrapper. Nullable reads use result-bearing structs whose status distinguishes "format unavailable" from a hard failure, or an explicit empty/sentinel value.
 
 The `RustAllocatedRawPtr::borrow` / `borrow_mut` methods are unconventional: each call does `Box::leak(Box::from_raw(ptr))` to obtain `&R` / `&mut R` without consuming the `Box`. Type-level safety relies on (a) the toolkit's single-thread-of-ownership assumption and (b) callers never holding a `&R` across a possible `to_owned`/`drop`. **Marked open for review (see TODO.md).**
 

@@ -59,7 +59,7 @@ Mixing `BorrowedStrPtr` (NUL-terminated) and `BorrowedUtf8` (length-delimited) s
 
 ### Optionals
 
-`FfiOption<T: PanicDefault>` = `{ is_some: bool, value: T }`. The value slot always holds a valid `T` (`T::default()` when `is_some == false`). It exists in `desktop-common`, but the Win32 backend currently avoids exporting nullable `FfiOption` APIs; prefer result-bearing structs or explicit sentinel values for new signatures.
+The FFI surface exposes no generic optional wrapper. For a nullable read, prefer a result-bearing struct (status + value) or an explicit empty/sentinel value.
 
 ### Result-bearing clipboard structs
 
@@ -93,7 +93,7 @@ Asymmetric pair: `RcPtr` has only `to_rc` (consumes) and `borrow` via cloning th
 
 ### `PanicDefault`
 
-Trait at `desktop-common::logger::PanicDefault`. Required for any type that crosses the FFI boundary as a return value. Defines the value returned by `ffi_boundary` when the closure returns an `Err` (or, as a safety net, when it panics unexpectedly). For most types this is just `Self::default()`; for `FfiOption<T>` it is `FfiOption::none()`; for opaque pointers it is the equivalent null/empty value.
+Trait at `desktop-common::logger::PanicDefault`. Required for any type that crosses the FFI boundary as a return value. Defines the value returned by `ffi_boundary` when the closure returns an `Err` (or, as a safety net, when it panics unexpectedly). For most types this is just `Self::default()`; for opaque pointers it is the equivalent null/empty value.
 
 If you add a new FFI return type, you must impl `PanicDefault` for it. cbindgen has no opinion on this — the trait is purely for `ffi_boundary`'s error-fallback path.
 

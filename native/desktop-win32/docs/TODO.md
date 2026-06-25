@@ -6,7 +6,7 @@ This list is point-in-time. Verify against current code before acting.
 
 ## Confirmed bugs (per code-owner review)
 
-None currently tracked here. The previous `tryRead*` blanket-swallow issue is handled by the clipboard result-status path.
+None currently tracked here.
 
 ## Likely bugs / suspect designs (verify before fixing)
 
