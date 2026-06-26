@@ -30,7 +30,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 
 **Purpose.** UI-thread runtime for the whole toolkit. Initialises the OLE STA, creates a WinRT `DispatcherQueue` and a `CompositorDriver`, then runs a `GetMessage`/`DispatchMessage` pump. Translates raw `WM_*` messages to typed `Event` variants and forwards to a single Kotlin-supplied callback.
 
-**Files.** `application.rs`, `application_api.rs`, `event_loop.rs`, `events.rs`, `events_api.rs` + Kotlin `Application.kt`, `Event.kt`.
+**Files.** `application.rs`, `application_api.rs`, `dispatcher.rs`, `event_loop.rs`, `events.rs`, `events_api.rs` + Kotlin `Application.kt`, `Event.kt`.
 
 **FFI surface (`application_api.rs`, `events_api.rs`).**
 `application_init_apartment`, `application_init`, `application_run_event_loop`, `application_stop_event_loop`, `application_dispatcher_invoke`, `application_is_dispatcher_thread`, `application_open_url`, `application_drop`; `keyevent_translate_message`, `keydown_to_unicode`.
@@ -38,7 +38,8 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 **Kotlin surface.** `Application` (`AutoCloseable`) — `runEventLoop`, `stopEventLoop`, `invokeOnDispatcher`, `onStartup`, `isDispatcherThread`, `newWindow`, `createAngleRenderer`. Companion extension `openURL`. `Event` `sealed class` with 22 subclasses 1-to-1 with the Rust enum.
 
 **Key types.**
-- `Application` (Rust) — owns `Rc<EventLoop>`, the `DispatcherQueueController`, `compositor_driver: Arc<CompositorDriver>`. Heap-boxed; opaque to Kotlin as `AppPtr<'a> = RustAllocatedRawPtr<'a>` (alias). The `DispatcherQueue` is accessed via `dispatcher_queue_controller.DispatcherQueue()` rather than stored as a separate field.
+- `Application` (Rust) — owns `Rc<EventLoop>`, the `DispatcherQueueController`, a message-only-window `Dispatcher`, and `compositor_driver: Arc<CompositorDriver>`. Heap-boxed; opaque to Kotlin as `AppPtr<'a> = RustAllocatedRawPtr<'a>` (alias). The WinRT `DispatcherQueue` is accessed via `dispatcher_queue_controller.DispatcherQueue()` rather than stored as a separate field.
+- `Dispatcher` — posts wake messages to a message-only HWND and drains queued FFI callbacks on the UI thread.
 - `EventLoop` — the message pump. `Window` keeps `Weak<EventLoop>` to avoid cycles.
 - `Event` — `#[repr(C)]` enum, 22 variants. Mirrored 1-to-1 in Kotlin. Has `#[allow(dead_code)]` on the whole enum because variants are constructed by Rust but consumed only across FFI.
 - `EventHandler = extern "C" fn(WindowId, &Event) -> bool` (returns "handled?")
@@ -300,24 +301,29 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 ## Clipboard
 
-**Purpose.** Two access paths to the Windows clipboard:
-1. **Legacy Win32** (`clipboard_*`): `Open/Get/Set/EmptyClipboard`. HGLOBAL-only.
-2. **OLE** (`ole_clipboard_*`): `OleGetClipboard` / `OleSetClipboard` returning/accepting an `IDataObject`. Supports any TYMED.
+**Purpose.** A thin, synchronous binding to the OLE clipboard primitives: `OleGetClipboard` returns an `IDataObject`, `OleSetClipboard` publishes one with delayed rendering, `OleFlushClipboard` renders it into the clipboard, `OleSetClipboard(NULL)` empties it, and `OleIsCurrentClipboard` reports ownership. The old direct Win32 `OpenClipboard` / `GetClipboardData` / `SetClipboardData` toolkit API and the `OleClipboard` object have been removed in favour of a single `Clipboard` object.
 
-**Files.** `clipboard.rs`, `clipboard_api.rs` + Kotlin `Clipboard.kt` (object) and `OleClipboard` (object inside `Clipboard.kt`).
+**Files.** `data_transfer.rs` (the shared data-transfer result vocabulary, alongside `DataFormat`), `clipboard_api.rs` (FFI) + Kotlin `Clipboard.kt` (the `Clipboard` object plus `ClipboardResult` / `isBusy`) and `DataTransfer.kt` (`DataTransferStatus` / `DataTransferException`).
 
-**FFI surface.** `clipboard_count_formats`, `clipboard_enum_formats`, `clipboard_is_format_available`, `clipboard_empty`, `clipboard_get_sequence_number`, `clipboard_{get,try_get,set}_{data,file_list,html_fragment,text}`, `clipboard_get_html_format_id`, `ole_clipboard_{empty,get_data,set_data}`, `native_byte_array_drop`, `native_optional_byte_array_drop`.
+**FFI surface.** `clipboard_get_sequence_number`, `clipboard_get_html_format_id`, `clipboard_read_result`, `clipboard_set_data_object_result`, `clipboard_flush_result`, `clipboard_clear_result`, and `clipboard_is_current_data_object_result`. `DataObject` reads go through the result-bearing `com_data_object_*_result` functions in `data_object_api.rs`. Each FFI function performs exactly one OLE call; none sleep, retry, or compare sequence numbers.
 
-**Key types.** `Clipboard` (RAII wrapper around `OpenClipboard`/`CloseClipboard`, asserts `is_open`).
+**Kotlin surface.** `Clipboard` is an object of plain synchronous methods mirroring the OLE primitives: `sequenceNumber()`, `get()`, `set(dataObject)`, `flush()`, `clear()`, and `isCurrent(dataObject)`. They are **not** suspending and take no `Application`. Each performs one OLE call and returns a `ClipboardResult` (`Success(value)` or `Failure(status, …)`); `sequenceNumber()` returns a `UInt` directly and cannot fail.
 
-**Throwing vs `try_*`.** Both variants exist for every read: throwing version returns `R::default()` and surfaces an exception; `try_*` returns `FfiOption<R>` and (currently) swallows all errors to `None`. Per-user note: `try_*` should swallow only "format not found" — see TODO.md.
+**Key types.** `ClipboardResult<T>` (`Success` / `Failure`) and `DataTransferStatus` (failure classification; `Busy` is the retryable contention case — see the `isBusy` extension). `DataObject` is the live COM pointer wrapper handed back by a successful `get`. The throwing `DataTransferException` is retained only for `DataObject`'s `read*` accessors.
+
+**Design: correctness is the caller's responsibility.** The toolkit intentionally does not schedule retries, guard sequence numbers, or marshal threads — that was the whole point of replacing the suspending API. The caller must:
+- Call on a thread with an initialized OLE STA — in practice the `Application` dispatcher thread (from an event handler or via `Application.invokeOnDispatcher`). The native side does not assert this.
+- Handle contention: when another process holds the clipboard, OLE returns `CLIPBRD_E_CANT_OPEN`, returned as `ClipboardResult.Failure` with `status == DataTransferStatus.Busy` (see `isBusy`). Retrying with backoff is up to the caller.
+- Detect concurrent changes with `sequenceNumber()` when a read/modify sequence needs it.
+
+**Publishing model.** `set` uses delayed rendering (the clipboard holds only a pointer to the `DataObject`), so the application must keep pumping its message loop while the object is on the clipboard. `OleSetClipboard` takes its own reference, so the caller may `close()` its `DataObject` immediately afterwards. `flush` renders all formats into the clipboard and releases OLE's reference so the data survives application exit; `clear` empties the clipboard instead. `isCurrent` only answers for a `DataObject` the caller itself `set`. Leaving `flush` to the caller keeps the door open for genuine lazy rendering by a future `IDataObject` implementation.
 
 **Gotchas.**
-- `ole_clipboard_set_data` calls `OleFlushClipboard` immediately (clipboard_api.rs). The original `IDataObject` is no longer the live clipboard object after the call; subsequent mutations to it have no effect.
-- `Clipboard::is_format_available` returns `Ok(false)` for the documented "ok HRESULT means false" Win32 quirk in `IsClipboardFormatAvailable` (clipboard.rs).
-- DataReader path is **not** used here — `GetClipboardData` always returns HGLOBAL, so `hglobal_reader` is called directly.
+- Clipboard payload copies/allocations are capped at 256 MiB; oversized payloads map to `DataTransferStatus::DataTooLarge`.
+- `clipboard_is_current_data_object_result` calls the raw `OleIsCurrentClipboard` link, because the safe `windows` wrapper folds the meaningful `S_OK`/`S_FALSE` return into `Result<()>`.
+- Clipboard/`DataObject` calls are not guarded by native thread-affinity assertions; keeping them on the dispatcher (OLE STA) thread is the caller's responsibility.
 
-**Cross-refs.** `window` (parent HWND for `OpenClipboard`), `data_object` (OLE path target), `data_reader` (used only by `data_object_api`, not here), `global_data` (HGLOBAL helpers), `data_transfer` (`DataFormat`).
+**Cross-refs.** `data_object` (clipboard payload target), `data_reader` (read path), `global_data` (HGLOBAL helpers), `data_transfer` (`DataFormat`).
 
 ---
 
@@ -327,7 +333,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 **Files.** `data_object.rs`, `data_object_api.rs` + Kotlin `DataObject.kt`, `DataFormat.kt`.
 
-**FFI surface.** `data_object_create() -> i64`, `data_object_drop(i64)`, `data_object_add_from_{bytes,file_list,html_fragment,text}`, `data_object_into_com() -> ComInterfaceRawPtr`, `com_data_object_is_format_available`, `com_data_object_enum_formats`, `com_data_object_{read,try_read}_{bytes,file_list,html_fragment,text}`, `com_data_object_release`, `native_u32_array_drop`.
+**FFI surface.** `data_object_create() -> i64`, `data_object_drop(i64)`, `data_object_add_from_{bytes,file_list,html_fragment,text}`, `data_object_into_com() -> ComInterfaceRawPtr`, result-bearing `com_data_object_{is_format_available,enum_formats,read_bytes,read_file_list,read_html_fragment,read_text}_result`, `com_data_object_retain`, `com_data_object_release`, `native_u32_array_drop`, `native_byte_array_drop`.
 
 **Key types.**
 - `DataObject` (Rust) — `#[implement(IDataObject)]`. `papaya::HashMap<u32, HGlobalData>` keyed on cfFormat (cast to u32). Implements `GetData`, `EnumFormatEtc`, `QueryGetData`. `SetData`, `GetDataHere`, `DAdvise*` return `E_NOTIMPL` / `OLE_E_ADVISENOTSUPPORTED`.
@@ -335,11 +341,11 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 - `DataObject` (Kotlin, `AutoCloseable`) — wraps the `ComInterfaceRawPtr`. `requireOpen` guard. `read*` (throwing) and `tryRead*` (nullable) variants.
 - `DataObjectBuilder` (Kotlin) — used inside `DataObject.build { … }` block-scoped builder. Hides the `data_object_create` → populate → `data_object_into_com` lifecycle.
 
-**Lifecycle.** Kotlin: `DataObject.build { addTextItem(…); addListOfFiles(…) }` returns a `DataObject` whose `comInterfacePtr` is the result of `data_object_into_com`. The Rust-side struct lives via the COM refcount inside `ComObject<DataObject>`. `DataObject.close()` calls `com_data_object_release` → `IUnknown::Release`.
+**Lifecycle.** Kotlin: `DataObject.build { addTextItem(…); addListOfFiles(…) }` returns a `DataObject` whose `comInterfacePtr` is the result of `data_object_into_com`. The Rust-side struct lives via the COM refcount inside `ComObject<DataObject>`. `DataObject.close()` calls `com_data_object_release` → `IUnknown::Release`. `DataObject.retain()` calls `com_data_object_retain` (`ComInterfaceRawPtr::retain` → `IUnknown::AddRef`) to hand back an independent owned reference that outlives the original wrapper's `close()`. (`Clipboard.set` hands the same COM pointer to `OleSetClipboard`, which takes its own reference, so closing the Kotlin wrapper afterwards does not invalidate a published data object.)
 
 **Gotchas.**
-- `tryRead*` collapses all errors to `None`; should be format-not-found only. See TODO.md.
-- `DataObject` Kotlin class is **not thread-safe**: `requireOpen` reads `comInterfacePtr` without sync; concurrent `close()` + `read*()` is a data race.
+- `tryRead*` returns `null` only for `DataTransferStatus::FormatUnavailable`; other native failures throw `DataTransferException`.
+- `DataObject` Kotlin class is **dispatcher-thread-bound and not thread-safe**: `requireOpen` reads `comInterfacePtr` without sync; concurrent or cross-thread `close()` + `read*()` is a data race and can also violate COM apartment affinity.
 - Module-blanket `#![allow(clippy::inline_always)]` and `#![allow(clippy::ref_as_ptr)]` (data_object.rs) — inherited from windows-core's `implement!` macro expansion.
 - Format-id casts: `data_format.id() as u16` (data_object.rs) carries `#[allow(clippy::cast_possible_truncation)]`. Registered IDs (0xC000–0xFFFF) and CF_* values fit, but the suppression is undocumented. Could use `try_into()` with an error.
 
@@ -370,14 +376,15 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 ## DataFormat / data_transfer
 
-**Purpose.** Defines the `DataFormat` enum and the `data_transfer_register_format` FFI for registering arbitrary named clipboard formats.
+**Purpose.** Defines the `DataFormat` enum and the `data_transfer_register_format` FFI for registering arbitrary named clipboard formats. `data_transfer.rs` also houses the shared data-transfer **result vocabulary** (`DataTransferStatus`, `DataTransferOperationResult`, the `DataTransfer*Result` FFI structs, `DataTransferFailure`) consumed by `clipboard_api` and `data_object_api`. The Kotlin side of that vocabulary lives in `DataTransfer.kt` (see the Clipboard subsystem).
 
-**Files.** `data_transfer.rs`, `data_transfer_api.rs` + Kotlin `DataFormat.kt`.
+**Files.** `data_transfer.rs`, `data_transfer_api.rs` + Kotlin `DataFormat.kt`, `DataTransfer.kt`.
 
 **FFI surface.** `data_transfer_register_format(name: BorrowedStrPtr) -> u32`.
 
 **Key types.**
 - `DataFormat::Text` (CF_UNICODETEXT = 13), `::FileList` (CF_HDROP = 15), `::HtmlFragment` (`LazyLock<u32>` calling `RegisterClipboardFormatW("HTML Format")` once), `::Other(u32)`.
+- `DataTransferStatus` / `DataTransferOperationResult` / the `DataTransfer*Result` FFI structs / `DataTransferFailure` — the result/status/failure vocabulary shared by the clipboard and `DataObject` read paths (full description under the Clipboard subsystem).
 - Kotlin `DataFormat` is a `@JvmInline value class` over `Int`. `Text = 13` and `FileList = 15` are hardcoded literals. `Html` is a lazy property calling the native helper `clipboard_get_html_format_id()`.
 
 **Gotchas.**
@@ -429,8 +436,8 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 - `hglobal_reader::get_text` / `get_bytes` / `get_file_list` / `get_html` — lock, read, unlock.
 
 **Gotchas.**
-- `new_file_list` takes `&Vec<&str>` (global_data.rs) — should be `&[&str]` (clippy `ptr_arg` smell).
-- `global_mem_copy` doesn't handle zero-length globals — `GlobalAlloc(GMEM_FIXED, 0)` semantics are platform-specific.
+- `global_mem_copy` returns `GMEM_MOVEABLE` handles, never `GMEM_FIXED`: copies are handed to OLE / the system clipboard via `IDataObject::GetData`, where `SetClipboardData` requires moveable handles and a fixed handle is not a valid clipboard handle (`OleFlushClipboard` and standard-format paste targets both rely on this). Don't "optimize" the allocation back to `GMEM_FIXED`. See https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setclipboarddata
+- `MAX_DATA_TRANSFER_BYTES` is 256 MiB and is enforced before HGLOBAL allocation/copy/read. `data_reader::istream_reader` applies the same cap before allocating the IStream buffer.
 - HTML format read/write goes through WinRT `HtmlFormatHelper::CreateHtmlFormat` / `GetStaticFragment` — a rare WinRT call in an otherwise pure-Win32 path.
 
 **Cross-refs.** `data_reader`, `data_object`, `clipboard`, `data_transfer`, `strings` (UTF-16/UTF-8 conversions), Win2D-adjacent WinRT (`Windows.ApplicationModel.DataTransfer.HtmlFormatHelper`).
@@ -444,10 +451,10 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 **Files.** `com.rs`. No `_api.rs`.
 
 **Key types.**
-- `ComInterfaceRawPtr` — `#[repr(transparent)]` over `*mut c_void`. Constructors: `from_object(ComObject)`, `new(IDataObject)`. Methods: `borrow<T>()` (typed reinterpret without changing refcount). `Drop` calls `IUnknown::from_raw(...).Release()`.
+- `ComInterfaceRawPtr` — `#[repr(transparent)]` over `*mut c_void`. Constructors: `from_interface(&T)` and `from_object(&ComObject<T>)`. Methods: `cast<T>()` borrows the stored reference through `QueryInterface`, `retain()` returns another owned reference, and `release(self)` consumes the handle and calls `IUnknown::from_raw(...).Release()`.
 
 **Gotchas.**
-- Distinguished from the `RustAllocated*Ptr` aliases — `ComInterfaceRawPtr` is a real struct with its own Drop. See `FFI_CONVENTIONS.md`.
+- Distinguished from the `RustAllocated*Ptr` aliases — `ComInterfaceRawPtr` is a real struct with explicit COM-reference ownership. It does not release on Rust `Drop`; callers must route owning handles to a consuming release endpoint. See `FFI_CONVENTIONS.md`.
 - All construction is `unsafe`; no safety comments on the unsafe blocks.
 
 **Cross-refs.** Used by `data_object_api`, `drag_drop`, `clipboard_api` (OLE path).
@@ -469,9 +476,11 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 **Mechanism.** `CoCreateInstance(CLSID_FileOpenDialog/SaveDialog, CLSCTX_INPROC_SERVER)` → set options via `GetOptions`/`SetOptions` → `Show(parentHwnd)` → result via `GetResult`/`GetResults` → `IShellItem::GetDisplayName(SIGDN_FILESYSPATH)`.
 
+**Threading.** Dispatcher-thread-only. The dialogs are COM objects created in the application's OLE STA and `Show` is modal/blocking, though it pumps its own nested message loop while visible.
+
 **Cancel sentinels.**
 - Open: returns zero-length `AutoDropArray` (Kotlin `emptyList()`).
-- Save: returns empty `CString` (Kotlin `takeUnless { isEmpty() }` → null). Implicit convention; no typed `FfiOption`.
+- Save: returns empty `CString` (Kotlin `takeUnless { isEmpty() }` → null). Implicit convention; no typed optional wrapper.
 
 **Gotchas.**
 - **No file-type filter support.** `COMDLG_FILTERSPEC` / `SetFileTypes` not used. Capability gap vs. macOS. See TODO.md.
@@ -495,7 +504,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 **FFI surface.**
 - `logger_api` (in `desktop-common`): `logger_init`, `logger_check_exceptions`, `logger_clear_exceptions`.
 - `desktop-win32::logger_api`: thin Win32-side glue (e.g. `logger_output_debug_string`).
-- `strings_api`: `native_string_drop`, `native_optional_string_drop`, `native_string_array_drop`, `native_optional_string_array_drop`.
+- `strings_api`: `native_string_drop`, `native_string_array_drop`.
 
 **Highlights.**
 - `lib.rs` captures `HINSTANCE` in `DllMain` (`DLL_PROCESS_ATTACH`) into a `static AtomicPtr`, exposed via `get_dll_instance()`. Used by ANGLE for resolving `libEGL.dll` next to the DLL.
@@ -518,4 +527,4 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 - `logger.rs`: `// todo store handler and allow to change logger severity` — log levels frozen at init.
 - Universal lack of `// SAFETY:` comments on `unsafe` blocks throughout the crate.
 
-**Cross-refs.** Every other subsystem uses these helpers. `ffi_boundary` wraps every `_api.rs` function. `RustAllocated*Ptr`, `BorrowedStrPtr`, `AutoDropArray`, `FfiOption` are the core FFI vocabulary.
+**Cross-refs.** Every other subsystem uses these helpers. `ffi_boundary` wraps every `_api.rs` function. `RustAllocated*Ptr`, `BorrowedStrPtr`, `BorrowedArray`, and `AutoDropArray` are the core Win32 FFI vocabulary.

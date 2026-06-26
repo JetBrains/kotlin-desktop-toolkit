@@ -6,11 +6,7 @@ This list is point-in-time. Verify against current code before acting.
 
 ## Confirmed bugs (per code-owner review)
 
-### `tryRead*` swallows too many error kinds
-- **Where**: `data_object_api.rs` (`IntoFfiOption` impl).
-- **What**: Every `Err(...)` from a read is converted to `FfiOption::none()` with a `trace!` log. This hides allocation failures, type mismatches, and other genuine errors behind the same `null` that "format not found" produces.
-- **Intended behaviour**: only `DV_E_FORMATETC` and `DV_E_TYMED` (i.e. format-not-available) should swallow to `None`. Everything else should propagate as an exception via `ffi_boundary` → `LAST_EXCEPTION_MSGS` → `NativeError`.
-- **Fix**: replace the blanket `IntoFfiOption` with a guard that inspects the error and only swallows the format-not-found variants. Consider matching on `WinError::code()` for `DV_E_FORMATETC` / `DV_E_TYMED`, plus an `Option`-returning helper in `data_object` that returns `Ok(None)` for those cases natively.
+None currently tracked here.
 
 ## Likely bugs / suspect designs (verify before fixing)
 
@@ -31,8 +27,8 @@ This list is point-in-time. Verify against current code before acting.
 
 ### `DataObject` Kotlin class is not thread-safe
 - **Where**: `DataObject.kt` (`requireOpen`) + `close()`.
-- **What**: `requireOpen` reads `comInterfacePtr` without synchronisation; `close()` mutates it. Concurrent `close()` + `read*()` is a data race that can produce a use-after-free of the COM ref.
-- **Fix**: document single-threaded use and add a single-thread assert in `requireOpen`.
+- **What**: `requireOpen` reads `comInterfacePtr` without synchronisation; `close()` mutates it. Concurrent `close()` + `read*()` is a data race that can produce a use-after-free of the COM ref. Cross-thread use can also violate COM apartment affinity for external `IDataObject` implementations. The Kotlin API now documents dispatcher-thread use, but does not enforce it.
+- **Fix**: add a consistent single-thread / dispatcher-thread assertion strategy for `DataObject` and the rest of the UI-thread-only Windows API surface.
 
 ### `EnumDisplayMonitors` aborts on first per-monitor failure
 - **Where**: `screen.rs` (`monitor_enum_proc` returns `FALSE` on inner-call failure, which terminates enumeration).
@@ -94,6 +90,11 @@ This list is point-in-time. Verify against current code before acting.
 - **Where**: `cursor_api.rs` only exposes `cursor_show` / `cursor_hide`. Image-setting FFIs live in `window_api.rs` (`window_set_cursor_from_file` / `window_set_cursor_from_system`).
 - **Fix**: either move the per-window cursor setters into `cursor_api.rs` (with the window pointer as a parameter) or accept the split and document why.
 
+### No `IStream` (TYMED_ISTREAM) producer for streamed transfers
+- **Where**: `data_object.rs` (`IDataObject_Impl::GetData` / `EnumFormatEtc`) offers `TYMED_HGLOBAL` only; the read side (`data_reader.rs`) already *consumes* `TYMED_HGLOBAL | TYMED_ISTREAM`.
+- **What**: correct for the shipped standard formats (`CF_UNICODETEXT` / `CF_HDROP` / "HTML Format"), which must stay `TYMED_HGLOBAL` — arbitrary paste targets request `TYMED_HGLOBAL`, and `OleFlushClipboard` renders into the HGLOBAL-based static clipboard. But it blocks streamed scenarios where materializing the whole payload in a moveable global is undesirable.
+- **Fix (future)**: for drag-out virtual files (`CFSTR_FILECONTENTS` / `CFSTR_FILEDESCRIPTOR`) or very large payloads, use an OS-provided implementation of `IStream` (to hopefully avoid manual implementation) and offer `TYMED_ISTREAM` *additively* (alongside `TYMED_HGLOBAL` where both apply). Avoids `GlobalAlloc` for those formats; it is a complement, not a replacement for the standard-format HGLOBAL path.
+
 ## Inline TODOs in the code
 
 | File | Comment |
@@ -153,6 +154,16 @@ This list is point-in-time. Verify against current code before acting.
 - **Where**: `DataFormat.kt` — `Text = 13`, `FileList = 15`.
 - **Note**: Win32 constants are stable, but the linkage to Rust `DataFormat::Text` / `::FileList` is by convention only. A future renumbering on either side wouldn't fail any test.
 - **Fix**: query both via FFI helpers (like `clipboard_get_html_format_id()` does), or generate Kotlin constants from the Rust enum.
+
+### Manual `HGLOBAL` management could move to `CreateStreamOnHGlobal`
+- **Where**: `global_data.rs` — `HGlobalData` (`alloc_and_init`, `global_mem_copy`, the `hglobal_writer` / `hglobal_reader` submodules) hand-rolls `GlobalAlloc` / `GlobalLock` / `GlobalUnlock` / `GlobalFree`.
+- **Idea**: build and read payloads through an OLE memory stream — `CreateStreamOnHGlobal(NULL, true, &stm)` + `IStream::Write` (auto-grows via `GlobalReAlloc`; no manual lock/unlock), with the COM refcount (`fDeleteOnRelease`) replacing `HGlobalData`'s manual `Drop`/`GlobalFree`. The handle it allocates is `GMEM_MOVEABLE` / nondiscardable, so it satisfies the clipboard contract.
+- **Plausibility: partial win, not a clean replacement.** Caveats to weigh first:
+  - **Size mismatch (manageable via `Stat`).** The stream's backing `GlobalSize` is the *allocation* size, not the bytes written ("Because of rounding, this is not necessarily the same size … follow … with `IStream::SetSize`"). But `IStream::Stat`'s `cbSize` reports the exact written length, so trimming is a precise, known-size `IStream::SetSize` / `GlobalReAlloc` — not guesswork. The trim is still *required*, though: a `GetData(TYMED_HGLOBAL)` consumer reads length from `GlobalSize` on the bare handle (it has no `IStream` to `Stat`), so for byte-exact formats (raw bytes, `CF_HDROP`) the handle must be sized down before it is handed out.
+  - **Per-`GetData` copy still required** (each consumer frees its own handle) — the stream doesn't remove that.
+  - **Lifetime footguns**: don't `GlobalFree`/`GlobalReAlloc` the handle during the stream's lifetime; multiple streams over one handle need `IStream::Clone`; pre-Win7 didn't zero memory grown via `GlobalReAlloc`.
+  - **Still Win32/COM** (`ole32`), not a pure-Rust path; MS even recommends `SHCreateMemStream` for performance — but that doesn't expose the `HGLOBAL`, so it only fits a `TYMED_ISTREAM`-only future.
+- **Best framing**: pair it with offering `TYMED_ISTREAM` (see the IStream-producer capability gap above) — store payloads as `IStream`, hand out `TYMED_ISTREAM` copy-free, and derive a trimmed `TYMED_HGLOBAL` only for legacy consumers. As a pure drop-in for `HGlobalData` that keeps exact `TYMED_HGLOBAL` semantics it is a modest win at most: the `Stat`-sized trim is cheap, but the lifetime coordination (above) largely offsets the lock/unlock savings.
 
 ## Commented-out features
 

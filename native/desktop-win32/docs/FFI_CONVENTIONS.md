@@ -26,10 +26,10 @@ language = "C"
 
 Consequences:
 - Every exported type appears in the generated header as `Native<RustName>`. Enum variants are doubly prefixed: `NativeLogLevel_Off`.
-- `desktop-common` types (`AutoDropArray<T>`, `BorrowedStrPtr`, `RustAllocatedStrPtr`, `FfiOption<T>`, `BorrowedArray<T>`, `BorrowedUtf8`, etc.) are inlined into the Win32 header — they are **not** re-exported through Rust `pub use`. cbindgen walks the dependency directly via `parse_deps`.
+- `desktop-common` types (`AutoDropArray<T>`, `BorrowedStrPtr`, `RustAllocatedStrPtr`, `BorrowedArray<T>`, `BorrowedUtf8`, etc.) are inlined into the Win32 header — they are **not** re-exported through Rust `pub use`. cbindgen walks the dependency directly via `parse_deps`.
 - Items annotated `/// cbindgen:ignore` are excluded. Used for the `DLL_HINSTANCE` static, `DllMain`, and Rust-side registries (`DATA_OBJECT_REGISTRY`, `DATA_OBJECT_NEXT_ID`).
 
-Generic type instantiations (e.g. `AutoDropArray<RustAllocatedStrPtr>`, `FfiOption<AutoDropByteArray>`) appear in the header as monomorphised types: `NativeAutoDropArray_RustAllocatedStrPtr`, `NativeFfiOption_AutoDropByteArray`. JExtract turns them into matching Java layout classes.
+Generic type instantiations (e.g. `AutoDropArray<RustAllocatedStrPtr>`) appear in the header as monomorphised types such as `NativeAutoDropArray_RustAllocatedStrPtr`. JExtract turns them into matching Java layout classes.
 
 ## The `ffi_utils` zoo
 
@@ -59,9 +59,11 @@ Mixing `BorrowedStrPtr` (NUL-terminated) and `BorrowedUtf8` (length-delimited) s
 
 ### Optionals
 
-`FfiOption<T: PanicDefault>` = `{ is_some: bool, value: T }`. The `value` slot always holds a valid `T` (`T::default()` when `is_some == false`). Used to return nullable strings / arrays / structs without a separate sentinel.
+The FFI surface exposes no generic optional wrapper. For a nullable read, prefer a result-bearing struct (status + value) or an explicit empty/sentinel value.
 
-The `IntoFfiOption` trait (data_object_api.rs) converts `anyhow::Result<T>` → `anyhow::Result<FfiOption<T>>`. **Current scope is too wide** — it swallows every error to `None` (with a `trace!` log only). It should swallow only "format not found" (`DV_E_FORMATETC` / `DV_E_TYMED`); allocation failures and type mismatches should surface as exceptions. See `TODO.md`.
+### Result-bearing transfer structs
+
+`DataTransferOperationResult` carries `{ status, code, message }`, where `message` is a Rust-allocated nullable UTF-8 string. Kotlin's transfer-result decoder copies and drops that string immediately; native code must leave it null on success or allocate it with `RustAllocatedStrPtr` on failure.
 
 ### Opaque pointers (Rust-allocated objects)
 
@@ -71,7 +73,7 @@ The `IntoFfiOption` trait (data_object_api.rs) converts `anyhow::Result<T>` → 
 | `RustAllocatedRcPtr<'a>` | `Rc<T>` | `from_rc(Rc<T>)` → `Rc::into_raw` | `to_rc::<T>()` returns the `Rc`; let it drop |
 | `BorrowedOpaquePtr<'a>` | borrowed `&T` | wrap an existing `&T` | None — caller still owns |
 | `ComObject<T>` (windows-core) | COM refcount on an `implement!`-decorated struct | `ComObject::new(T)` | Refcount → 0 (i.e. last `Release`) |
-| `ComInterfaceRawPtr` (com.rs) | `*mut c_void` carrying an `IUnknown` strong ref | `from_object(ComObject)` → `cast::<IUnknown>().into_raw()` | `Drop` calls `from_raw` → `IUnknown::Release` |
+| `ComInterfaceRawPtr` (com.rs) | `*mut c_void` carrying an `IUnknown` strong ref | `from_interface(&T)` or `from_object(&ComObject<T>)` → `cast::<IUnknown>().into_raw()` | explicit `release(self)` via a consuming endpoint |
 
 The wrappers don't carry the inner Rust type — the type is supplied at the use site via turbofish (`borrow::<Application>()`, `to_rc::<Window>()`, etc.). To make call sites readable, each subsystem defines a thin convenience alias in its `_api.rs`, e.g.:
 
@@ -83,7 +85,7 @@ pub type AppPtr<'a> = RustAllocatedRawPtr<'a>;
 pub type WindowPtr<'a> = RustAllocatedRcPtr<'a>;
 ```
 
-These aliases are purely for naming — they don't bind the inner type, change the ABI, or alter ownership semantics. `AppPtr` and `WindowPtr` are interchangeable with their underlying `RustAllocated*Ptr` everywhere they appear; the alias just signals intent at the FFI-call site. `ComInterfaceRawPtr` is *not* an alias — it's a distinct struct in `com.rs` with its own `Drop` impl that releases the COM ref.
+These aliases are purely for naming — they don't bind the inner type, change the ABI, or alter ownership semantics. `AppPtr` and `WindowPtr` are interchangeable with their underlying `RustAllocated*Ptr` everywhere they appear; the alias just signals intent at the FFI-call site. `ComInterfaceRawPtr` is *not* an alias — it's a distinct struct in `com.rs` with explicit COM-reference ownership. Borrowing endpoints call `cast`; consuming endpoints call `release`.
 
 The `borrow::<R>()` / `borrow_mut::<R>()` methods on `RustAllocatedRawPtr` produce a `&R` / `&mut R` from the raw pointer **without consuming the box**. They do this by `Box::leak(self.to_owned())` (ffi_utils.rs) — i.e. reconstruct the `Box` and immediately leak it. Soundness depends on caller discipline (no concurrent `to_owned`, single thread of ownership). **Marked open for review (see `TODO.md`).**
 
@@ -91,7 +93,7 @@ Asymmetric pair: `RcPtr` has only `to_rc` (consumes) and `borrow` via cloning th
 
 ### `PanicDefault`
 
-Trait at `desktop-common::logger::PanicDefault`. Required for any type that crosses the FFI boundary as a return value. Defines the value returned by `ffi_boundary` when the closure returns an `Err` (or, as a safety net, when it panics unexpectedly). For most types this is just `Self::default()`; for `FfiOption<T>` it is `FfiOption::none()`; for opaque pointers it is the equivalent null/empty value.
+Trait at `desktop-common::logger::PanicDefault`. Required for any type that crosses the FFI boundary as a return value. Defines the value returned by `ffi_boundary` when the closure returns an `Err` (or, as a safety net, when it panics unexpectedly). For most types this is just `Self::default()`; for opaque pointers it is the equivalent null/empty value.
 
 If you add a new FFI return type, you must impl `PanicDefault` for it. cbindgen has no opinion on this — the trait is purely for `ffi_boundary`'s error-fallback path.
 
@@ -166,9 +168,10 @@ The Win32 OLE / drag-drop / clipboard subsystems use `windows-core` to implement
 |---|---|
 | Define a COM impl | `#[implement(IDataObject)] struct DataObject { … }`; impl block uses `impl IDataObject_Impl for DataObject_Impl { … }` |
 | Allocate one | `let obj: ComObject<DataObject> = ComObject::new(DataObject::new());` — refcount = 1 |
-| Hand off to the OS or another COM caller | `let raw = ComInterfaceRawPtr::from_object(obj);` — internally `cast::<IUnknown>().into_raw()`, refcount stays 1 |
-| Release | `Drop for ComInterfaceRawPtr` calls `IUnknown::from_raw(self.0).Release()` — refcount → 0 → struct drops |
-| Borrow back into a typed interface | `let iface: IDataObject = unsafe { raw.borrow() };` — does not change refcount |
+| Hand off to Kotlin / another FFI caller | `let raw = ComInterfaceRawPtr::from_object(&obj);` or `ComInterfaceRawPtr::from_interface(&iface)` — internally `cast::<IUnknown>().into_raw()`, producing one owned reference |
+| Retain | `let extra = raw.retain()?;` — `cast::<IUnknown>().into_raw()` again to hand out an independent owned reference (its own `AddRef`); each reference must later be released |
+| Borrow back into a typed interface | `let iface: IDataObject = raw.cast()?;` — borrows the handle for the call; do not release the original handle |
+| Release | `raw.release()` in a consuming endpoint such as `com_data_object_release` — refcount → 0 can drop the COM object |
 
 Apartment requirement: **STA**. `OleInitialize(None)` is called by `Application::init_apartment` (application.rs). Any drag-drop or OLE clipboard operation must run on the same STA thread.
 
@@ -181,7 +184,7 @@ Apartment requirement: **STA**. `OleInitialize(None)` is called by `Application:
 
 1. **Rust impl** lives in `xxx.rs`, takes plain Rust types, returns `anyhow::Result<T>`.
 2. **`xxx_api.rs`** declares `#[unsafe(no_mangle)] pub extern "C" fn xxx_do_thing(...) -> R` and wraps the body in `ffi_boundary("xxx_do_thing", || { ... })`. `R` must impl `PanicDefault`.
-3. **Parameter types**: pick from the `ffi_utils` zoo. Strings → `BorrowedStrPtr`. Arrays → `BorrowedArray<T>`. Opaque receivers → `WindowPtr` / `AppPtr` / `ComInterfaceRawPtr`. Owned out-params → `RustAllocated*` / `AutoDrop*` / `FfiOption<…>`.
+3. **Parameter types**: pick from the `ffi_utils` zoo. Strings → `BorrowedStrPtr`. Arrays → `BorrowedArray<T>`. Opaque receivers → `WindowPtr` / `AppPtr` / `ComInterfaceRawPtr`. Owned out-params → `RustAllocated*` / `AutoDrop*`.
 4. **Drop pairing**: for any owned-out value, ensure a matching `*_drop` exists. If using `AutoDropArray<T>`, the matching drop must be the typed one (`native_byte_array_drop`, `native_string_array_drop`, etc.).
-5. **Kotlin wrapper** in `Xxx.kt`: call the JExtract-generated function inside `ffiDownCall`. An `Arena` is needed only when the JExtract glue requires one — e.g. when the function returns a struct by value (JExtract takes the arena as the first parameter to allocate the return slot) or when you need to allocate input structs / `Borrowed*` strings. Functions that take and return only primitives, opaque pointers, or pre-existing segments don't need an arena. For nullable returns use `optional*FromNative` helpers in `Strings.kt` / `Arrays.kt`. Drop calls live in `finally`.
+5. **Kotlin wrapper** in `Xxx.kt`: call the JExtract-generated function inside `ffiDownCall`. An `Arena` is needed only when the JExtract glue requires one — e.g. when the function returns a struct by value (JExtract takes the arena as the first parameter to allocate the return slot) or when you need to allocate input structs / `Borrowed*` strings. Functions that take and return only primitives, opaque pointers, or pre-existing segments don't need an arena. Drop calls live in `finally`.
 6. **Callbacks**: every Kotlin lambda crossing into Rust goes through `ffiUpCall` with a sensible default. Allocate the stub in `Arena.ofShared()` whose lifetime matches the holding Rust object.

@@ -2,7 +2,6 @@ pub mod appearance;
 pub mod appearance_api;
 pub mod application;
 pub mod application_api;
-pub mod clipboard;
 pub mod clipboard_api;
 pub mod com;
 pub mod compositor_driver;

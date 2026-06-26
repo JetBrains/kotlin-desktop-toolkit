@@ -3,6 +3,8 @@ package org.jetbrains.desktop.sample.win32
 import org.jetbrains.desktop.win32.AngleRenderer
 import org.jetbrains.desktop.win32.Appearance
 import org.jetbrains.desktop.win32.Application
+import org.jetbrains.desktop.win32.Clipboard
+import org.jetbrains.desktop.win32.ClipboardResult
 import org.jetbrains.desktop.win32.Cursor
 import org.jetbrains.desktop.win32.CursorIcon
 import org.jetbrains.desktop.win32.DataFormat
@@ -20,13 +22,13 @@ import org.jetbrains.desktop.win32.FileDialog
 import org.jetbrains.desktop.win32.Keyboard
 import org.jetbrains.desktop.win32.Logger
 import org.jetbrains.desktop.win32.NCHitTestResult
-import org.jetbrains.desktop.win32.OleClipboard
 import org.jetbrains.desktop.win32.PhysicalPoint
 import org.jetbrains.desktop.win32.PhysicalSize
 import org.jetbrains.desktop.win32.PointerButton
 import org.jetbrains.desktop.win32.Screen
 import org.jetbrains.desktop.win32.SurfaceParams
 import org.jetbrains.desktop.win32.VirtualKey
+import org.jetbrains.desktop.win32.isBusy
 import org.jetbrains.skia.BackendRenderTarget
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
@@ -40,7 +42,7 @@ import org.jetbrains.skia.SurfaceOrigin
 import org.jetbrains.skia.makeGLWithInterface
 import kotlin.time.TimeSource
 
-abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
+abstract class SkikoWindowWin32(private val app: Application) : AutoCloseable {
     private val angleRenderer: AngleRenderer by lazy {
         app.createAngleRenderer(window)
     }
@@ -166,12 +168,7 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
 
                     VirtualKey.C -> {
                         if (Keyboard.getKeyState(VirtualKey.Control).isDown) {
-                            DataObject.build {
-                                addTextItem("Hello OLE clipboard!")
-                                addHtmlFragment("Hello <b>OLE clipboard</b>!")
-                            }.use { clipboardData ->
-                                OleClipboard.writeToClipboard(clipboardData)
-                            }
+                            copyToClipboard()
                         } else {
                             window.setCursor(CursorIcon.Hand)
                         }
@@ -203,11 +200,7 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
 
                     VirtualKey.V -> {
                         if (Keyboard.getKeyState(VirtualKey.Control).isDown) {
-                            val clipboardData = OleClipboard.readClipboard()
-                            val textItem = clipboardData.readTextItem()
-                            val htmlFragment = clipboardData.readHtmlFragment()
-                            Logger.debug { "OLE clipboard text: $textItem" }
-                            Logger.debug { "OLE clipboard HTML fragment: $htmlFragment" }
+                            pasteFromClipboard()
                         }
                     }
 
@@ -424,5 +417,49 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
         }
         window.destroy()
         window.close()
+    }
+}
+
+// Clipboard helpers. The OLE clipboard can be momentarily locked by another process, and the
+// synchronous Clipboard API leaves retrying to the caller — so every access is wrapped in a
+// bounded busy-retry. These run on the dispatcher (OLE STA) thread, where the clipboard must be used.
+
+private fun copyToClipboard() {
+    // set + flush keeps the data available after this process exits.
+    DataObject.build {
+        addTextItem("Hello clipboard!")
+        addHtmlFragment("Hello <b>clipboard</b>!")
+    }.use { data ->
+        when (val setResult = retryWhileClipboardBusy { Clipboard.set(data) }) {
+            is ClipboardResult.Success -> retryWhileClipboardBusy { Clipboard.flush() }.logIfFailed("flush")
+            is ClipboardResult.Failure -> Logger.error { "Clipboard set failed: ${setResult.status}" }
+        }
+    }
+}
+
+private fun pasteFromClipboard() {
+    when (val readResult = retryWhileClipboardBusy { Clipboard.get() }) {
+        is ClipboardResult.Success -> readResult.value.use {
+            Logger.debug { "Clipboard text: ${it.tryReadTextItem()}" }
+            Logger.debug { "Clipboard HTML fragment: ${it.tryReadHtmlFragment()}" }
+        }
+        is ClipboardResult.Failure -> Logger.error { "Clipboard read failed: ${readResult.status}" }
+    }
+}
+
+private fun <T> retryWhileClipboardBusy(attempts: Int = 8, operation: () -> ClipboardResult<T>): ClipboardResult<T> {
+    repeat(attempts - 1) {
+        val result = operation()
+        if (!result.isBusy) {
+            return result
+        }
+        Thread.sleep(10)
+    }
+    return operation()
+}
+
+private fun ClipboardResult<*>.logIfFailed(action: String) {
+    if (this is ClipboardResult.Failure) {
+        Logger.error { "Clipboard $action failed: $status" }
     }
 }
