@@ -103,9 +103,9 @@ pub mod istream_reader {
     };
 
     use crate::win32::{
-        global_data::{decode_utf16le_transfer, ensure_transfer_size, parse_file_list},
+        data_transfer::DataTransferFailure,
+        global_data::{decode_utf16le_data_transfer, ensure_data_transfer_size, parse_file_list},
         strings::{copy_from_utf8_bytes, copy_from_wide_string},
-        transfer::TransferFailure,
     };
 
     pub fn get_bytes(stream: &IStream) -> anyhow::Result<Vec<u8>> {
@@ -115,7 +115,7 @@ pub mod istream_reader {
             stream.Seek(0, STREAM_SEEK_SET, None)?;
         }
         let len = stat.cbSize.try_into()?;
-        ensure_transfer_size(len)?;
+        ensure_data_transfer_size(len)?;
         let mut vec = vec![0u8; len];
         let mut offset = 0_usize;
         while offset < len {
@@ -145,11 +145,11 @@ pub mod istream_reader {
 
     pub fn get_html(stream: &IStream) -> anyhow::Result<CString> {
         let utf8_bytes = get_bytes(stream)?;
-        let html_format =
-            copy_from_utf8_bytes(&utf8_bytes).map_err(|err| TransferFailure::invalid_data(format!("invalid HTML byte stream: {err}")))?;
+        let html_format = copy_from_utf8_bytes(&utf8_bytes)
+            .map_err(|err| DataTransferFailure::invalid_data(format!("invalid HTML byte stream: {err}")))?;
         let fragment = HtmlFormatHelper::GetStaticFragment(&html_format)
-            .map_err(|err| TransferFailure::invalid_data(format!("invalid HTML byte stream: {err:?}")))?;
-        copy_from_wide_string(&fragment).map_err(|err| TransferFailure::invalid_data(format!("invalid HTML byte stream: {err}")).into())
+            .map_err(|err| DataTransferFailure::invalid_data(format!("invalid HTML byte stream: {err:?}")))?;
+        copy_from_wide_string(&fragment).map_err(|err| DataTransferFailure::invalid_data(format!("invalid HTML byte stream: {err}")).into())
     }
 
     pub fn get_text(stream: &IStream) -> anyhow::Result<CString> {
@@ -158,6 +158,6 @@ pub mod istream_reader {
         // that means raw UTF-16 LE with an optional trailing NUL. This is deliberately not compatible
         // with shlwapi's IStream_ReadStr / IStream_WriteStr length-prefixed wire format, which is
         // used for application-private persistence streams, not for clipboard data.
-        decode_utf16le_transfer(&get_bytes(stream)?)
+        decode_utf16le_data_transfer(&get_bytes(stream)?)
     }
 }

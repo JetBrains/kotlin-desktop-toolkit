@@ -29,9 +29,9 @@ If you only read one section before touching code, read this one.
 
 ## Watch out for in code reviews / edits
 
-- Kotlin `tryRead*` wrappers return `null` only for format-unavailable and throw other clipboard/data-object failures. The old raw `FfiOption` exports have been removed; use result-bearing FFI for nullable read semantics.
+- Kotlin `tryRead*` wrappers return `null` only for format-unavailable and throw other clipboard/data-object failures. Use result-bearing FFI for nullable read semantics.
 - COM impls have **no** `// SAFETY:` comments anywhere (and `desktop-common::ffi_utils` has a module-level `#![allow(clippy::missing_safety_doc)]`). Add one when you touch an `unsafe` block.
-- Most clipboard / drag-drop work assumes the OLE STA. There is no thread-affinity assertion at the FFI boundary — the synchronous `Clipboard` API trusts the caller to stay on the dispatcher thread and to handle `TransferStatus.Busy` retries itself.
+- Most clipboard / drag-drop work assumes the OLE STA. There is no thread-affinity assertion at the FFI boundary — the synchronous `Clipboard` API trusts the caller to stay on the dispatcher thread and to handle `DataTransferStatus.Busy` retries itself.
 
 ## Working with the human
 

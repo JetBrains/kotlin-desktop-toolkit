@@ -303,23 +303,23 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 **Purpose.** A thin, synchronous binding to the OLE clipboard primitives: `OleGetClipboard` returns an `IDataObject`, `OleSetClipboard` publishes one with delayed rendering, `OleFlushClipboard` renders it into the clipboard, `OleSetClipboard(NULL)` empties it, and `OleIsCurrentClipboard` reports ownership. The old direct Win32 `OpenClipboard` / `GetClipboardData` / `SetClipboardData` toolkit API and the `OleClipboard` object have been removed in favour of a single `Clipboard` object.
 
-**Files.** `transfer.rs` (shared transfer vocabulary), `clipboard_api.rs` (FFI) + Kotlin `Clipboard.kt` (the `Clipboard` object plus `ClipboardResult` / `isBusy`) and `Transfer.kt` (`TransferStatus` / `TransferException`).
+**Files.** `data_transfer.rs` (the shared data-transfer result vocabulary, alongside `DataFormat`), `clipboard_api.rs` (FFI) + Kotlin `Clipboard.kt` (the `Clipboard` object plus `ClipboardResult` / `isBusy`) and `DataTransfer.kt` (`DataTransferStatus` / `DataTransferException`).
 
 **FFI surface.** `clipboard_get_sequence_number`, `clipboard_get_html_format_id`, `clipboard_read_result`, `clipboard_set_data_object_result`, `clipboard_flush_result`, `clipboard_clear_result`, and `clipboard_is_current_data_object_result`. `DataObject` reads go through the result-bearing `com_data_object_*_result` functions in `data_object_api.rs`. Each FFI function performs exactly one OLE call; none sleep, retry, or compare sequence numbers.
 
 **Kotlin surface.** `Clipboard` is an object of plain synchronous methods mirroring the OLE primitives: `sequenceNumber()`, `get()`, `set(dataObject)`, `flush()`, `clear()`, and `isCurrent(dataObject)`. They are **not** suspending and take no `Application`. Each performs one OLE call and returns a `ClipboardResult` (`Success(value)` or `Failure(status, …)`); `sequenceNumber()` returns a `UInt` directly and cannot fail.
 
-**Key types.** `ClipboardResult<T>` (`Success` / `Failure`) and `TransferStatus` (failure classification; `Busy` is the retryable contention case — see the `isBusy` extension). `DataObject` is the live COM pointer wrapper handed back by a successful `get`. The throwing `TransferException` is retained only for `DataObject`'s `read*` accessors.
+**Key types.** `ClipboardResult<T>` (`Success` / `Failure`) and `DataTransferStatus` (failure classification; `Busy` is the retryable contention case — see the `isBusy` extension). `DataObject` is the live COM pointer wrapper handed back by a successful `get`. The throwing `DataTransferException` is retained only for `DataObject`'s `read*` accessors.
 
 **Design: correctness is the caller's responsibility.** The toolkit intentionally does not schedule retries, guard sequence numbers, or marshal threads — that was the whole point of replacing the suspending API. The caller must:
 - Call on a thread with an initialized OLE STA — in practice the `Application` dispatcher thread (from an event handler or via `Application.invokeOnDispatcher`). The native side does not assert this.
-- Handle contention: when another process holds the clipboard, OLE returns `CLIPBRD_E_CANT_OPEN`, returned as `ClipboardResult.Failure` with `status == TransferStatus.Busy` (see `isBusy`). Retrying with backoff is up to the caller.
+- Handle contention: when another process holds the clipboard, OLE returns `CLIPBRD_E_CANT_OPEN`, returned as `ClipboardResult.Failure` with `status == DataTransferStatus.Busy` (see `isBusy`). Retrying with backoff is up to the caller.
 - Detect concurrent changes with `sequenceNumber()` when a read/modify sequence needs it.
 
 **Publishing model.** `set` uses delayed rendering (the clipboard holds only a pointer to the `DataObject`), so the application must keep pumping its message loop while the object is on the clipboard. `OleSetClipboard` takes its own reference, so the caller may `close()` its `DataObject` immediately afterwards. `flush` renders all formats into the clipboard and releases OLE's reference so the data survives application exit; `clear` empties the clipboard instead. `isCurrent` only answers for a `DataObject` the caller itself `set`. Leaving `flush` to the caller keeps the door open for genuine lazy rendering by a future `IDataObject` implementation.
 
 **Gotchas.**
-- Clipboard payload copies/allocations are capped at 256 MiB; oversized payloads map to `TransferStatus::DataTooLarge`.
+- Clipboard payload copies/allocations are capped at 256 MiB; oversized payloads map to `DataTransferStatus::DataTooLarge`.
 - `clipboard_is_current_data_object_result` calls the raw `OleIsCurrentClipboard` link, because the safe `windows` wrapper folds the meaningful `S_OK`/`S_FALSE` return into `Result<()>`.
 - Clipboard/`DataObject` calls are not guarded by native thread-affinity assertions; keeping them on the dispatcher (OLE STA) thread is the caller's responsibility.
 
@@ -344,7 +344,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 **Lifecycle.** Kotlin: `DataObject.build { addTextItem(…); addListOfFiles(…) }` returns a `DataObject` whose `comInterfacePtr` is the result of `data_object_into_com`. The Rust-side struct lives via the COM refcount inside `ComObject<DataObject>`. `DataObject.close()` calls `com_data_object_release` → `IUnknown::Release`. `DataObject.retain()` calls `com_data_object_retain` (`ComInterfaceRawPtr::retain` → `IUnknown::AddRef`) to hand back an independent owned reference that outlives the original wrapper's `close()`. (`Clipboard.set` hands the same COM pointer to `OleSetClipboard`, which takes its own reference, so closing the Kotlin wrapper afterwards does not invalidate a published data object.)
 
 **Gotchas.**
-- `tryRead*` returns `null` only for `TransferStatus::FormatUnavailable`; other native failures throw `TransferException`.
+- `tryRead*` returns `null` only for `DataTransferStatus::FormatUnavailable`; other native failures throw `DataTransferException`.
 - `DataObject` Kotlin class is **dispatcher-thread-bound and not thread-safe**: `requireOpen` reads `comInterfacePtr` without sync; concurrent or cross-thread `close()` + `read*()` is a data race and can also violate COM apartment affinity.
 - Module-blanket `#![allow(clippy::inline_always)]` and `#![allow(clippy::ref_as_ptr)]` (data_object.rs) — inherited from windows-core's `implement!` macro expansion.
 - Format-id casts: `data_format.id() as u16` (data_object.rs) carries `#[allow(clippy::cast_possible_truncation)]`. Registered IDs (0xC000–0xFFFF) and CF_* values fit, but the suppression is undocumented. Could use `try_into()` with an error.
@@ -376,14 +376,15 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 ## DataFormat / data_transfer
 
-**Purpose.** Defines the `DataFormat` enum and the `data_transfer_register_format` FFI for registering arbitrary named clipboard formats.
+**Purpose.** Defines the `DataFormat` enum and the `data_transfer_register_format` FFI for registering arbitrary named clipboard formats. `data_transfer.rs` also houses the shared data-transfer **result vocabulary** (`DataTransferStatus`, `DataTransferOperationResult`, the `DataTransfer*Result` FFI structs, `DataTransferFailure`) consumed by `clipboard_api` and `data_object_api`. The Kotlin side of that vocabulary lives in `DataTransfer.kt` (see the Clipboard subsystem).
 
-**Files.** `data_transfer.rs`, `data_transfer_api.rs` + Kotlin `DataFormat.kt`.
+**Files.** `data_transfer.rs`, `data_transfer_api.rs` + Kotlin `DataFormat.kt`, `DataTransfer.kt`.
 
 **FFI surface.** `data_transfer_register_format(name: BorrowedStrPtr) -> u32`.
 
 **Key types.**
 - `DataFormat::Text` (CF_UNICODETEXT = 13), `::FileList` (CF_HDROP = 15), `::HtmlFragment` (`LazyLock<u32>` calling `RegisterClipboardFormatW("HTML Format")` once), `::Other(u32)`.
+- `DataTransferStatus` / `DataTransferOperationResult` / the `DataTransfer*Result` FFI structs / `DataTransferFailure` — the result/status/failure vocabulary shared by the clipboard and `DataObject` read paths (full description under the Clipboard subsystem).
 - Kotlin `DataFormat` is a `@JvmInline value class` over `Int`. `Text = 13` and `FileList = 15` are hardcoded literals. `Html` is a lazy property calling the native helper `clipboard_get_html_format_id()`.
 
 **Gotchas.**
@@ -436,7 +437,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 **Gotchas.**
 - `global_mem_copy` returns `GMEM_MOVEABLE` handles, never `GMEM_FIXED`: copies are handed to OLE / the system clipboard via `IDataObject::GetData`, where `SetClipboardData` requires moveable handles and a fixed handle is not a valid clipboard handle (`OleFlushClipboard` and standard-format paste targets both rely on this). Don't "optimize" the allocation back to `GMEM_FIXED`. See https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setclipboarddata
-- `MAX_TRANSFER_BYTES` is 256 MiB and is enforced before HGLOBAL allocation/copy/read. `data_reader::istream_reader` applies the same cap before allocating the IStream buffer.
+- `MAX_DATA_TRANSFER_BYTES` is 256 MiB and is enforced before HGLOBAL allocation/copy/read. `data_reader::istream_reader` applies the same cap before allocating the IStream buffer.
 - HTML format read/write goes through WinRT `HtmlFormatHelper::CreateHtmlFormat` / `GetStaticFragment` — a rare WinRT call in an otherwise pure-Win32 path.
 
 **Cross-refs.** `data_reader`, `data_object`, `clipboard`, `data_transfer`, `strings` (UTF-16/UTF-8 conversions), Win2D-adjacent WinRT (`Windows.ApplicationModel.DataTransfer.HtmlFormatHelper`).

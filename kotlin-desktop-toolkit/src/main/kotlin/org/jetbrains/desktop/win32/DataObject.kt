@@ -1,10 +1,10 @@
 package org.jetbrains.desktop.win32
 
-import org.jetbrains.desktop.win32.generated.NativeTransferBoolResult
-import org.jetbrains.desktop.win32.generated.NativeTransferByteArrayResult
-import org.jetbrains.desktop.win32.generated.NativeTransferStringArrayResult
-import org.jetbrains.desktop.win32.generated.NativeTransferStringResult
-import org.jetbrains.desktop.win32.generated.NativeTransferUInt32ArrayResult
+import org.jetbrains.desktop.win32.generated.NativeDataTransferBoolResult
+import org.jetbrains.desktop.win32.generated.NativeDataTransferByteArrayResult
+import org.jetbrains.desktop.win32.generated.NativeDataTransferStringArrayResult
+import org.jetbrains.desktop.win32.generated.NativeDataTransferStringResult
+import org.jetbrains.desktop.win32.generated.NativeDataTransferUInt32ArrayResult
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -22,8 +22,8 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_is_format_available_result(arena, ptr, format.id)
             }
-            checkTransferOperation(NativeTransferBoolResult.result(result))
-            NativeTransferBoolResult.value(result)
+            checkDataTransferOperation(NativeDataTransferBoolResult.result(result))
+            NativeDataTransferBoolResult.value(result)
         }
     }
 
@@ -32,8 +32,8 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_enum_formats_result(arena, ptr)
             }
-            checkTransferOperation(NativeTransferUInt32ArrayResult.result(result))
-            val formatsPtr = NativeTransferUInt32ArrayResult.value(result)
+            checkDataTransferOperation(NativeDataTransferUInt32ArrayResult.result(result))
+            val formatsPtr = NativeDataTransferUInt32ArrayResult.value(result)
             try {
                 intArrayFromNative(formatsPtr)
             } finally {
@@ -50,8 +50,8 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_read_bytes_result(arena, ptr, format.id)
             }
-            checkTransferOperation(NativeTransferByteArrayResult.result(result))
-            val dataPtr = NativeTransferByteArrayResult.value(result)
+            checkDataTransferOperation(NativeDataTransferByteArrayResult.result(result))
+            val dataPtr = NativeDataTransferByteArrayResult.value(result)
             try {
                 byteArrayFromNative(dataPtr)
             } finally {
@@ -67,11 +67,11 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_read_bytes_result(arena, ptr, format.id)
             }
-            val operation = transferOperationFromNative(NativeTransferByteArrayResult.result(result))
+            val operation = dataTransferOperationFromNative(NativeDataTransferByteArrayResult.result(result))
             if (!operation.requireOkOrUnavailable()) {
                 return@use null
             }
-            val dataPtr = NativeTransferByteArrayResult.value(result)
+            val dataPtr = NativeDataTransferByteArrayResult.value(result)
             try {
                 byteArrayFromNative(dataPtr)
             } finally {
@@ -87,8 +87,8 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_read_html_fragment_result(arena, ptr)
             }
-            checkTransferOperation(NativeTransferStringResult.result(result))
-            stringFromNative(NativeTransferStringResult.value(result))
+            checkDataTransferOperation(NativeDataTransferStringResult.result(result))
+            stringFromNative(NativeDataTransferStringResult.value(result))
         }
     }
 
@@ -97,11 +97,11 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_read_html_fragment_result(arena, ptr)
             }
-            val operation = transferOperationFromNative(NativeTransferStringResult.result(result))
+            val operation = dataTransferOperationFromNative(NativeDataTransferStringResult.result(result))
             if (!operation.requireOkOrUnavailable()) {
                 return@use null
             }
-            stringFromNative(NativeTransferStringResult.value(result))
+            stringFromNative(NativeDataTransferStringResult.value(result))
         }
     }
 
@@ -110,8 +110,8 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_read_file_list_result(arena, ptr)
             }
-            checkTransferOperation(NativeTransferStringArrayResult.result(result))
-            listOfStringsFromNative(NativeTransferStringArrayResult.value(result))
+            checkDataTransferOperation(NativeDataTransferStringArrayResult.result(result))
+            listOfStringsFromNative(NativeDataTransferStringArrayResult.value(result))
         }
     }
 
@@ -120,11 +120,11 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_read_file_list_result(arena, ptr)
             }
-            val operation = transferOperationFromNative(NativeTransferStringArrayResult.result(result))
+            val operation = dataTransferOperationFromNative(NativeDataTransferStringArrayResult.result(result))
             if (!operation.requireOkOrUnavailable()) {
                 return@use null
             }
-            listOfStringsFromNative(NativeTransferStringArrayResult.value(result))
+            listOfStringsFromNative(NativeDataTransferStringArrayResult.value(result))
         }
     }
 
@@ -133,8 +133,8 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_read_text_result(arena, ptr)
             }
-            checkTransferOperation(NativeTransferStringResult.result(result))
-            stringFromNative(NativeTransferStringResult.value(result))
+            checkDataTransferOperation(NativeDataTransferStringResult.result(result))
+            stringFromNative(NativeDataTransferStringResult.value(result))
         }
     }
 
@@ -143,11 +143,11 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
             val result = ffiDownCall {
                 desktop_win32_h.com_data_object_read_text_result(arena, ptr)
             }
-            val operation = transferOperationFromNative(NativeTransferStringResult.result(result))
+            val operation = dataTransferOperationFromNative(NativeDataTransferStringResult.result(result))
             if (!operation.requireOkOrUnavailable()) {
                 return@use null
             }
-            stringFromNative(NativeTransferStringResult.value(result))
+            stringFromNative(NativeDataTransferStringResult.value(result))
         }
     }
 

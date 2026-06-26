@@ -1,7 +1,7 @@
 package org.jetbrains.desktop.win32
 
-import org.jetbrains.desktop.win32.generated.NativeTransferBoolResult
-import org.jetbrains.desktop.win32.generated.NativeTransferDataObjectResult
+import org.jetbrains.desktop.win32.generated.NativeDataTransferBoolResult
+import org.jetbrains.desktop.win32.generated.NativeDataTransferDataObjectResult
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -10,18 +10,18 @@ import java.lang.foreign.MemorySegment
  * Outcome of a [Clipboard] operation.
  *
  * The OLE clipboard can momentarily fail — most importantly, another process can hold it open
- * ([TransferStatus.Busy]) — and this API leaves retrying to the caller, so every [Clipboard]
+ * ([DataTransferStatus.Busy]) — and this API leaves retrying to the caller, so every [Clipboard]
  * call returns a result instead of throwing.
  */
 public sealed interface ClipboardResult<out T> {
     public data class Success<out T>(public val value: T) : ClipboardResult<T>
 
     /**
-     * A failed operation. [status] classifies the failure; [TransferStatus.Busy] means the
+     * A failed operation. [status] classifies the failure; [DataTransferStatus.Busy] means the
      * clipboard was locked and the same call can be retried.
      */
     public data class Failure(
-        public val status: TransferStatus,
+        public val status: DataTransferStatus,
         public val nativeCode: Int,
         public val message: String?,
     ) : ClipboardResult<Nothing>
@@ -29,7 +29,7 @@ public sealed interface ClipboardResult<out T> {
 
 /** True when the operation failed because the clipboard was locked and can be retried. */
 public val ClipboardResult<*>.isBusy: Boolean
-    get() = this is ClipboardResult.Failure && status == TransferStatus.Busy
+    get() = this is ClipboardResult.Failure && status == DataTransferStatus.Busy
 
 /**
  * Low-level, synchronous binding to the Windows OLE clipboard
@@ -44,7 +44,7 @@ public val ClipboardResult<*>.isBusy: Boolean
  *    [Application.invokeOnDispatcher]. Calling from another thread is undefined.
  *  - **Contention.** Another process can momentarily hold the clipboard open. OLE then fails with
  *    `CLIPBRD_E_CANT_OPEN`, returned here as [ClipboardResult.Failure] with
- *    [ClipboardResult.Failure.status] == [TransferStatus.Busy] (see [isBusy]). Whether and how to
+ *    [ClipboardResult.Failure.status] == [DataTransferStatus.Busy] (see [isBusy]). Whether and how to
  *    retry (for example with a short backoff) is up to you — and you should: see the example below.
  *  - **Concurrent changes.** To detect that the clipboard changed between a read and a later write,
  *    capture [sequenceNumber] and compare.
@@ -105,8 +105,8 @@ public object Clipboard {
         val result = ffiDownCall {
             desktop_win32_h.clipboard_read_result(arena)
         }
-        decodeClipboardResult(NativeTransferDataObjectResult.result(result)) {
-            DataObject(NativeTransferDataObjectResult.value(result))
+        decodeClipboardResult(NativeDataTransferDataObjectResult.result(result)) {
+            DataObject(NativeDataTransferDataObjectResult.value(result))
         }
     }
 
@@ -152,15 +152,15 @@ public object Clipboard {
         val result = ffiDownCall {
             desktop_win32_h.clipboard_is_current_data_object_result(arena, dataObject.toNative())
         }
-        decodeClipboardResult(NativeTransferBoolResult.result(result)) {
-            NativeTransferBoolResult.value(result)
+        decodeClipboardResult(NativeDataTransferBoolResult.result(result)) {
+            NativeDataTransferBoolResult.value(result)
         }
     }
 }
 
 private inline fun <T> decodeClipboardResult(operationSegment: MemorySegment, onSuccess: () -> T): ClipboardResult<T> {
-    val operation = transferOperationFromNative(operationSegment)
-    return if (operation.status == TransferStatus.Ok) {
+    val operation = dataTransferOperationFromNative(operationSegment)
+    return if (operation.status == DataTransferStatus.Ok) {
         ClipboardResult.Success(onSuccess())
     } else {
         ClipboardResult.Failure(operation.status, operation.nativeCode, operation.nativeMessage)

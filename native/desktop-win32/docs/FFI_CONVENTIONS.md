@@ -63,7 +63,7 @@ The FFI surface exposes no generic optional wrapper. For a nullable read, prefer
 
 ### Result-bearing transfer structs
 
-`TransferOperationResult` carries `{ status, code, message }`, where `message` is a Rust-allocated nullable UTF-8 string. Kotlin's transfer-result decoder copies and drops that string immediately; native code must leave it null on success or allocate it with `RustAllocatedStrPtr` on failure.
+`DataTransferOperationResult` carries `{ status, code, message }`, where `message` is a Rust-allocated nullable UTF-8 string. Kotlin's transfer-result decoder copies and drops that string immediately; native code must leave it null on success or allocate it with `RustAllocatedStrPtr` on failure.
 
 ### Opaque pointers (Rust-allocated objects)
 

@@ -7,15 +7,15 @@ use windows::Win32::{
 };
 use windows_core::{Error as WinError, Result as WinResult};
 
-use super::{strings::copy_from_wide_string, transfer::TransferFailure};
+use super::{data_transfer::DataTransferFailure, strings::copy_from_wide_string};
 
 /// Defensive cap on transferred payloads, matching Chromium's clipboard limit.
 /// cbindgen:ignore
-pub(crate) const MAX_TRANSFER_BYTES: usize = 256 * 1024 * 1024;
+pub(crate) const MAX_DATA_TRANSFER_BYTES: usize = 256 * 1024 * 1024;
 
-pub(crate) fn ensure_transfer_size(size: usize) -> anyhow::Result<()> {
-    if size > MAX_TRANSFER_BYTES {
-        return Err(TransferFailure::data_too_large(size, MAX_TRANSFER_BYTES).into());
+pub(crate) fn ensure_data_transfer_size(size: usize) -> anyhow::Result<()> {
+    if size > MAX_DATA_TRANSFER_BYTES {
+        return Err(DataTransferFailure::data_too_large(size, MAX_DATA_TRANSFER_BYTES).into());
     }
     Ok(())
 }
@@ -25,13 +25,14 @@ pub(crate) fn ensure_transfer_size(size: usize) -> anyhow::Result<()> {
 /// Truncates at the first NUL so the terminator — and any padding after it — does not leave an
 /// interior NUL that `CString::new` would reject. A payload whose length is not a multiple of two
 /// is rejected as invalid transfer data.
-pub(crate) fn decode_utf16le_transfer(bytes: &[u8]) -> anyhow::Result<CString> {
+pub(crate) fn decode_utf16le_data_transfer(bytes: &[u8]) -> anyhow::Result<CString> {
     let (chunks, []) = bytes.as_chunks::<2>() else {
-        return Err(TransferFailure::invalid_data("UTF-16 transfer data has odd byte length").into());
+        anyhow::bail!(DataTransferFailure::invalid_data("UTF-16 transfer data has odd byte length"));
     };
     let wide: Vec<u16> = chunks.iter().map(|&pair| u16::from_le_bytes(pair)).collect();
     let len = wide.iter().position(|&c| c == 0).unwrap_or(wide.len());
-    copy_from_wide_string(&wide[..len]).map_err(|err| TransferFailure::invalid_data(format!("invalid UTF-16 transfer data: {err}")).into())
+    copy_from_wide_string(&wide[..len])
+        .map_err(|err| DataTransferFailure::invalid_data(format!("invalid UTF-16 transfer data: {err}")).into())
 }
 
 pub struct HGlobalData {
@@ -44,22 +45,25 @@ unsafe impl Sync for HGlobalData {}
 
 impl HGlobalData {
     pub fn alloc_and_init<F: FnOnce(*mut core::ffi::c_void)>(content_len: usize, init: F) -> anyhow::Result<Self> {
-        ensure_transfer_size(content_len)?;
+        ensure_data_transfer_size(content_len)?;
+        if content_len == 0 {
+            // A zero-length moveable global is an unlockable discarded handle; we never publish
+            // empty payloads, so reject empty content (mirrors `copy_from`).
+            return Err(DataTransferFailure::invalid_data("empty transfer payload").into());
+        }
         // GMEM_MOVEABLE (not GMEM_FIXED): clipboard/OLE transfer memory must be moveable — see `global_mem_copy`.
         let mem = unsafe { GlobalAlloc(GMEM_MOVEABLE, content_len)? };
-        if content_len != 0 {
-            let data = match global_lock(mem) {
-                Ok(data) => data,
-                Err(err) => {
-                    let _ = unsafe { GlobalFree(Some(mem)) };
-                    return Err(err.into());
-                }
-            };
-            init(data);
-            if let Err(err) = global_unlock(mem) {
+        let data = match global_lock(mem) {
+            Ok(data) => data,
+            Err(err) => {
                 let _ = unsafe { GlobalFree(Some(mem)) };
                 return Err(err.into());
             }
+        };
+        init(data);
+        if let Err(err) = global_unlock(mem) {
+            let _ = unsafe { GlobalFree(Some(mem)) };
+            return Err(err.into());
         }
         Ok(Self { mem, is_owned: true })
     }
@@ -73,11 +77,11 @@ impl HGlobalData {
     pub fn copy_from(mem: windows::Win32::Foundation::HANDLE) -> anyhow::Result<Self> {
         let mem = HGLOBAL(mem.0);
         let size = global_size(mem)?;
-        ensure_transfer_size(size)?;
+        ensure_data_transfer_size(size)?;
         if size == 0 {
             // A zero-length moveable global is an unlockable discarded handle. We never emit empty
             // payloads (the builder rejects them), so a zero-length source is a malformed transfer.
-            return Err(TransferFailure::invalid_data("zero-length transfer payload").into());
+            return Err(DataTransferFailure::invalid_data("zero-length transfer payload").into());
         }
         let mem = global_mem_copy(mem, size)?;
         Ok(Self { mem, is_owned: true })
@@ -224,18 +228,18 @@ pub(crate) mod hglobal_reader {
     use windows::{ApplicationModel::DataTransfer::HtmlFormatHelper, Win32::UI::Shell::HDROP};
 
     use crate::win32::{
-        global_data::{HGlobalData, ensure_transfer_size, global_lock, global_size, global_unlock, parse_file_list},
+        data_transfer::DataTransferFailure,
+        global_data::{HGlobalData, ensure_data_transfer_size, global_lock, global_size, global_unlock, parse_file_list},
         strings::{copy_from_utf8_bytes, copy_from_wide_string},
-        transfer::TransferFailure,
     };
 
     pub fn get_text(data: &HGlobalData) -> anyhow::Result<CString> {
-        super::decode_utf16le_transfer(&get_bytes(data)?)
+        super::decode_utf16le_data_transfer(&get_bytes(data)?)
     }
 
     pub fn get_bytes(data: &HGlobalData) -> anyhow::Result<Vec<u8>> {
         let len = global_size(data.mem)?;
-        ensure_transfer_size(len)?;
+        ensure_data_transfer_size(len)?;
         if len == 0 {
             return Ok(Vec::new());
         }
@@ -262,11 +266,12 @@ pub(crate) mod hglobal_reader {
 
     pub fn get_html(data: &HGlobalData) -> anyhow::Result<CString> {
         let utf8_bytes = get_bytes(data)?;
-        let html_format =
-            copy_from_utf8_bytes(&utf8_bytes).map_err(|err| TransferFailure::invalid_data(format!("invalid HTML transfer data: {err}")))?;
+        let html_format = copy_from_utf8_bytes(&utf8_bytes)
+            .map_err(|err| DataTransferFailure::invalid_data(format!("invalid HTML transfer data: {err}")))?;
         let fragment = HtmlFormatHelper::GetStaticFragment(&html_format)
-            .map_err(|err| TransferFailure::invalid_data(format!("invalid HTML transfer data: {err:?}")))?;
-        copy_from_wide_string(&fragment).map_err(|err| TransferFailure::invalid_data(format!("invalid HTML transfer data: {err}")).into())
+            .map_err(|err| DataTransferFailure::invalid_data(format!("invalid HTML transfer data: {err:?}")))?;
+        copy_from_wide_string(&fragment)
+            .map_err(|err| DataTransferFailure::invalid_data(format!("invalid HTML transfer data: {err}")).into())
     }
 }
 
@@ -276,17 +281,25 @@ pub(crate) unsafe fn parse_file_list(hdrop: HDROP) -> anyhow::Result<Vec<CString
     let num_files = unsafe { DragQueryFileW(hdrop, u32::MAX, None) };
     let mut files = Vec::with_capacity(num_files.try_into()?);
     for i in 0..num_files {
+        // DragQueryFileW does not document a last-error contract, so capture it best-effort: a code
+        // it does set survives, and it degrades to 0 (no HRESULT shown) when last-error is unset.
         let file_name_len = unsafe { DragQueryFileW(hdrop, i, None) };
-        if file_name_len == 0 {
-            return Err(TransferFailure::invalid_data(format!("DROPFILES entry {i} has an empty file name")).into());
-        }
+        anyhow::ensure!(
+            file_name_len != 0,
+            DataTransferFailure::invalid_data_with_code(
+                WinError::from_thread().code().0,
+                format!("DROPFILES entry {i} has an empty file name"),
+            )
+        );
         let mut buffer = vec![0u16; usize::try_from(file_name_len)? + 1];
         let file_name_len = unsafe { DragQueryFileW(hdrop, i, Some(&mut buffer)) };
-        if file_name_len == 0 {
-            return Err(TransferFailure::invalid_data(format!("failed to read DROPFILES entry {i}")).into());
-        }
+        anyhow::ensure!(
+            file_name_len != 0,
+            DataTransferFailure::invalid_data_with_code(WinError::from_thread().code().0, format!("failed to read DROPFILES entry {i}"),)
+        );
         files.push(
-            copy_from_wide_string(&buffer).map_err(|err| TransferFailure::invalid_data(format!("invalid DROPFILES entry {i}: {err}")))?,
+            copy_from_wide_string(&buffer)
+                .map_err(|err| DataTransferFailure::invalid_data(format!("invalid DROPFILES entry {i}: {err}")))?,
         );
     }
     Ok(files)
@@ -294,13 +307,25 @@ pub(crate) unsafe fn parse_file_list(hdrop: HDROP) -> anyhow::Result<Vec<CString
 
 #[cfg(test)]
 mod tests {
-    use crate::win32::transfer::{TransferFailure, TransferStatus};
+    use crate::win32::data_transfer::{DataTransferFailure, DataTransferStatus};
 
-    use super::{HGlobalData, MAX_TRANSFER_BYTES, hglobal_reader, hglobal_writer};
+    use super::{HGlobalData, MAX_DATA_TRANSFER_BYTES, hglobal_reader, hglobal_writer};
 
     #[test]
     fn get_text_accepts_missing_trailing_nul() {
         let data = HGlobalData::alloc_from(&[u16::from(b'H'), u16::from(b'i')]).unwrap();
+
+        let text = hglobal_reader::get_text(&data).unwrap();
+
+        assert_eq!(text.to_str().unwrap(), "Hi");
+    }
+
+    #[test]
+    fn get_text_truncates_at_nul_terminator_with_padding() {
+        // CF_UNICODETEXT may carry a NUL terminator followed by padding. `copy_from_wide_string`
+        // only strips a single trailing NUL, so `decode_utf16le_data_transfer` must truncate at the
+        // first NUL — otherwise the interior NUL would make `CString::new` reject the payload.
+        let data = HGlobalData::alloc_from(&[u16::from(b'H'), u16::from(b'i'), 0, 0]).unwrap();
 
         let text = hglobal_reader::get_text(&data).unwrap();
 
@@ -314,22 +339,24 @@ mod tests {
         let err = hglobal_reader::get_text(&data).unwrap_err();
 
         assert!(err.to_string().contains("odd byte length"));
-        let failure = err.downcast_ref::<TransferFailure>().expect("expected transfer failure");
-        assert_eq!(failure.status(), TransferStatus::InvalidData);
+        let failure = err.downcast_ref::<DataTransferFailure>().expect("expected transfer failure");
+        assert_eq!(failure.status(), DataTransferStatus::InvalidData);
     }
 
     #[test]
-    fn get_bytes_accepts_empty_global() {
-        let data = hglobal_writer::new_bytes(&[]).unwrap();
+    fn alloc_rejects_empty_content() {
+        let result = hglobal_writer::new_bytes(&[]);
+        assert!(result.is_err());
+        let err = result.err().unwrap();
 
-        let bytes = hglobal_reader::get_bytes(&data).unwrap();
-
-        assert!(bytes.is_empty());
+        assert!(err.to_string().contains("empty transfer payload"));
+        let failure = err.downcast_ref::<DataTransferFailure>().expect("expected transfer failure");
+        assert_eq!(failure.status(), DataTransferStatus::InvalidData);
     }
 
     #[test]
     fn oversized_global_allocation_is_rejected_before_allocating() {
-        let result = HGlobalData::alloc_and_init(MAX_TRANSFER_BYTES + 1, |_| {});
+        let result = HGlobalData::alloc_and_init(MAX_DATA_TRANSFER_BYTES + 1, |_| {});
         assert!(result.is_err());
         let err = result.err().unwrap();
 

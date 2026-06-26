@@ -12,8 +12,9 @@ use windows_core::{Error as WinError, Interface};
 
 use super::{
     com::ComInterfaceRawPtr,
-    data_transfer::DataFormat,
-    transfer::{TransferBoolResult, TransferDataObjectResult, TransferOperationResult, operation_result},
+    data_transfer::{
+        DataFormat, DataTransferBoolResult, DataTransferDataObjectResult, DataTransferOperationResult, data_transfer_boundary,
+    },
 };
 
 #[unsafe(no_mangle)]
@@ -30,17 +31,13 @@ pub extern "C" fn clipboard_get_html_format_id() -> u32 {
 ///
 /// The caller owns the returned reference and must release it (`com_data_object_release`).
 #[unsafe(no_mangle)]
-pub extern "C" fn clipboard_read_result() -> TransferDataObjectResult {
-    ffi_boundary("clipboard_read_result", || {
-        Ok(TransferDataObjectResult::from_result(clipboard_read_impl()))
+pub extern "C" fn clipboard_read_result() -> DataTransferDataObjectResult {
+    data_transfer_boundary("clipboard_read_result", || {
+        // SAFETY: Clipboard FFI is called on the application's UI thread after it has
+        // initialized OLE as an STA, which is required for OLE clipboard access.
+        let data_object = unsafe { OleGetClipboard()? };
+        Ok(ComInterfaceRawPtr::from_interface(&data_object)?)
     })
-}
-
-fn clipboard_read_impl() -> anyhow::Result<ComInterfaceRawPtr> {
-    // SAFETY: Clipboard FFI is called on the application's UI thread after it has
-    // initialized OLE as an STA, which is required for OLE clipboard access.
-    let data_object = unsafe { OleGetClipboard()? };
-    Ok(ComInterfaceRawPtr::from_interface(&data_object)?)
 }
 
 /// `OleSetClipboard`: places `data_object_ptr` on the clipboard using delayed rendering.
@@ -49,19 +46,15 @@ fn clipboard_read_impl() -> anyhow::Result<ComInterfaceRawPtr> {
 /// renders the data, the clipboard is cleared, or another object is set. OLE takes its own
 /// reference, so the caller may release its handle independently after this returns.
 #[unsafe(no_mangle)]
-pub extern "C" fn clipboard_set_data_object_result(data_object_ptr: ComInterfaceRawPtr) -> TransferOperationResult {
-    ffi_boundary("clipboard_set_data_object_result", || {
-        Ok(operation_result(clipboard_set_data_object_impl(&data_object_ptr)))
+pub extern "C" fn clipboard_set_data_object_result(data_object_ptr: ComInterfaceRawPtr) -> DataTransferOperationResult {
+    data_transfer_boundary("clipboard_set_data_object_result", || {
+        let data_object = data_object_ptr.cast::<IDataObject>()?;
+        // SAFETY: Clipboard FFI is called on the application's initialized OLE STA.
+        // `data_object` is a live IDataObject reference reconstructed from the FFI handle
+        // and remains valid for the duration of this call.
+        unsafe { OleSetClipboard(&data_object)? };
+        Ok(())
     })
-}
-
-fn clipboard_set_data_object_impl(data_object_ptr: &ComInterfaceRawPtr) -> anyhow::Result<()> {
-    let data_object = data_object_ptr.cast::<IDataObject>()?;
-    // SAFETY: Clipboard FFI is called on the application's initialized OLE STA.
-    // `data_object` is a live IDataObject reference reconstructed from the FFI handle
-    // and remains valid for the duration of this call.
-    unsafe { OleSetClipboard(&data_object)? };
-    Ok(())
 }
 
 /// `OleFlushClipboard`: renders the set data object into the clipboard.
@@ -69,52 +62,42 @@ fn clipboard_set_data_object_impl(data_object_ptr: &ComInterfaceRawPtr) -> anyho
 /// Renders the data of the data object previously published with [`clipboard_set_data_object_result`]
 /// and releases OLE's reference to it, so the data survives after the application exits.
 #[unsafe(no_mangle)]
-pub extern "C" fn clipboard_flush_result() -> TransferOperationResult {
-    ffi_boundary("clipboard_flush_result", || Ok(operation_result(clipboard_flush_impl())))
-}
-
-fn clipboard_flush_impl() -> anyhow::Result<()> {
-    // SAFETY: Runs on the application's initialized OLE STA. OleFlushClipboard borrows no
-    // caller-owned data.
-    unsafe { OleFlushClipboard()? };
-    Ok(())
+pub extern "C" fn clipboard_flush_result() -> DataTransferOperationResult {
+    data_transfer_boundary("clipboard_flush_result", || {
+        // SAFETY: Runs on the application's initialized OLE STA. OleFlushClipboard borrows no
+        // caller-owned data.
+        unsafe { OleFlushClipboard()? };
+        Ok(())
+    })
 }
 
 /// `OleSetClipboard(NULL)`: empties the clipboard, releasing any data object previously set.
 #[unsafe(no_mangle)]
-pub extern "C" fn clipboard_clear_result() -> TransferOperationResult {
-    ffi_boundary("clipboard_clear_result", || Ok(operation_result(clipboard_clear_impl())))
-}
-
-fn clipboard_clear_impl() -> anyhow::Result<()> {
-    // SAFETY: Clipboard FFI is called on the application's UI thread after it has
-    // initialized OLE as an STA. Passing no data object is the OLE clipboard clear path.
-    unsafe { OleSetClipboard(None)? };
-    Ok(())
+pub extern "C" fn clipboard_clear_result() -> DataTransferOperationResult {
+    data_transfer_boundary("clipboard_clear_result", || {
+        // SAFETY: Clipboard FFI is called on the application's UI thread after it has
+        // initialized OLE as an STA. Passing no data object is the OLE clipboard clear path.
+        unsafe { OleSetClipboard(None)? };
+        Ok(())
+    })
 }
 
 /// `OleIsCurrentClipboard`: reports whether `data_object_ptr` (a data object previously set
 /// with [`clipboard_set_data_object_result`]) is still the one on the clipboard.
 #[unsafe(no_mangle)]
-pub extern "C" fn clipboard_is_current_data_object_result(data_object_ptr: ComInterfaceRawPtr) -> TransferBoolResult {
-    ffi_boundary("clipboard_is_current_data_object_result", || {
-        Ok(TransferBoolResult::from_result(clipboard_is_current_data_object_impl(
-            &data_object_ptr,
-        )))
+pub extern "C" fn clipboard_is_current_data_object_result(data_object_ptr: ComInterfaceRawPtr) -> DataTransferBoolResult {
+    data_transfer_boundary("clipboard_is_current_data_object_result", || {
+        let data_object = data_object_ptr.cast::<IDataObject>()?;
+        // The safe `OleIsCurrentClipboard` wrapper folds the meaningful S_OK/S_FALSE return into
+        // `Result<()>`, so call the raw entry point to keep the distinction.
+        windows_core::link!("ole32.dll" "system" fn OleIsCurrentClipboard(pdataobj: *mut core::ffi::c_void) -> windows_core::HRESULT);
+        // SAFETY: Runs on the application's initialized OLE STA. `data_object` is a live
+        // IDataObject reference; its raw pointer stays valid for the duration of the call.
+        let result = unsafe { OleIsCurrentClipboard(data_object.as_raw()) };
+        match result {
+            S_OK => Ok(true),
+            S_FALSE => Ok(false),
+            error => Err(WinError::from(error).into()),
+        }
     })
-}
-
-fn clipboard_is_current_data_object_impl(data_object_ptr: &ComInterfaceRawPtr) -> anyhow::Result<bool> {
-    let data_object = data_object_ptr.cast::<IDataObject>()?;
-    // The safe `OleIsCurrentClipboard` wrapper folds the meaningful S_OK/S_FALSE return into
-    // `Result<()>`, so call the raw entry point to keep the distinction.
-    windows_core::link!("ole32.dll" "system" fn OleIsCurrentClipboard(pdataobj: *mut core::ffi::c_void) -> windows_core::HRESULT);
-    // SAFETY: Runs on the application's initialized OLE STA. `data_object` is a live
-    // IDataObject reference; its raw pointer stays valid for the duration of the call.
-    let result = unsafe { OleIsCurrentClipboard(data_object.as_raw()) };
-    match result {
-        S_OK => Ok(true),
-        S_FALSE => Ok(false),
-        error => Err(WinError::from(error).into()),
-    }
 }
