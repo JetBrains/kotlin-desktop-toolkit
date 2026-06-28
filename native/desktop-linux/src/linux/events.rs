@@ -1,7 +1,7 @@
 use crate::linux::{
     application_api::{DataSource, DragAndDropAction},
     desktop_settings_api::FfiDesktopSetting,
-    geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize},
+    geometry::{LogicalPixels, LogicalPoint, LogicalSideOffsets, LogicalSize, PhysicalSideOffsets, PhysicalSize},
 };
 use bitflag_attr::bitflag;
 use core::f64;
@@ -450,7 +450,11 @@ impl From<WindowClosedEvent> for Event<'_> {
 #[derive(Debug)]
 pub struct WindowConfigureEvent {
     pub window_id: WindowId,
-    pub size: LogicalSize,
+
+    pub logical_geometry_size: LogicalSize,
+    pub logical_buffer_size: LogicalSize,
+    pub logical_insets: LogicalSideOffsets,
+
     pub active: bool,
     pub maximized: bool,
     pub fullscreen: bool,
@@ -495,6 +499,7 @@ pub struct WindowDrawEvent {
     pub window_id: WindowId,
     pub software_draw_data: SoftwareDrawData,
     pub physical_size: PhysicalSize,
+    pub physical_insets: PhysicalSideOffsets,
     pub scale: f64,
 }
 

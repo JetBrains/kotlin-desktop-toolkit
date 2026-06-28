@@ -52,6 +52,12 @@ impl PointerHandler for ApplicationState {
             };
             let scale = window.current_scale;
             let window_id = window.window_id;
+            let insets = window.get_insets();
+
+            let location_in_window = LogicalPoint {
+                x: LogicalPixels(event.position.0 - f64::from(insets.left)),
+                y: LogicalPixels(event.position.1 - f64::from(insets.top)),
+            };
 
             let res = match event.kind {
                 PointerEventKind::Enter { .. } => {
@@ -59,7 +65,7 @@ impl PointerHandler for ApplicationState {
                     window.set_cursor = true;
                     let res = self.send_event(MouseEnteredEvent {
                         window_id,
-                        location_in_window: LogicalPoint::from(event.position),
+                        location_in_window,
                     });
                     if let Some(themed_pointer) = self.themed_pointer.take() {
                         let pointer_surface = themed_pointer.surface();
@@ -86,12 +92,12 @@ impl PointerHandler for ApplicationState {
                     window.num_pointer_buttons_down = 0;
                     self.send_event(MouseExitedEvent {
                         window_id,
-                        location_in_window: LogicalPoint::from(event.position),
+                        location_in_window,
                     })
                 }
                 PointerEventKind::Motion { time } => self.send_event(MouseMovedEvent {
                     window_id,
-                    location_in_window: LogicalPoint::from(event.position),
+                    location_in_window,
                     timestamp: Timestamp(time),
                 }),
                 PointerEventKind::Press { button, serial, time } => {
@@ -102,7 +108,7 @@ impl PointerHandler for ApplicationState {
                     self.send_event(MouseDownEvent {
                         window_id,
                         button: MouseButton(button),
-                        location_in_window: LogicalPoint::from(event.position),
+                        location_in_window,
                         timestamp: Timestamp(time),
                     })
                 }
@@ -114,7 +120,7 @@ impl PointerHandler for ApplicationState {
                     self.send_event(MouseUpEvent {
                         window_id,
                         button: MouseButton(button),
-                        location_in_window: LogicalPoint::from(event.position),
+                        location_in_window,
                         timestamp: Timestamp(time),
                     })
                 }
@@ -127,7 +133,7 @@ impl PointerHandler for ApplicationState {
                     debug!("wl_pointer vertical={vertical:?}");
                     self.send_event(ScrollWheelEvent {
                         window_id,
-                        location_in_window: LogicalPoint::from(event.position),
+                        location_in_window,
                         timestamp: Timestamp(time),
                         horizontal_scroll: ScrollData::from(horizontal),
                         vertical_scroll: ScrollData::from(vertical),

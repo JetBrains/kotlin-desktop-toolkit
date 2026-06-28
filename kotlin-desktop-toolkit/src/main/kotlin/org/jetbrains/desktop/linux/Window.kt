@@ -41,9 +41,21 @@ public class Window internal constructor(
         return "${javaClass.typeName}(windowId=$windowId, appPtr=0x${appPtr.address().toString(16)})"
     }
 
-    public fun getSize(): LogicalSize {
+    public fun getLogicalGeometrySize(): LogicalSize {
         return Arena.ofConfined().use { arena ->
-            LogicalSize.fromNative(ffiDownCall { desktop_linux_h.window_get_size(arena, appPtr, windowId) })
+            LogicalSize.fromNative(ffiDownCall { desktop_linux_h.window_get_logical_geometry_size(arena, appPtr, windowId) })
+        }
+    }
+
+    public fun getLogicalBufferSize(): LogicalSize {
+        return Arena.ofConfined().use { arena ->
+            LogicalSize.fromNative(ffiDownCall { desktop_linux_h.window_get_logical_buffer_size(arena, appPtr, windowId) })
+        }
+    }
+
+    public fun getPhysicalBufferSize(): PhysicalSize {
+        return Arena.ofConfined().use { arena ->
+            PhysicalSize.fromNative(ffiDownCall { desktop_linux_h.window_get_physical_buffer_size(arena, appPtr, windowId) })
         }
     }
 

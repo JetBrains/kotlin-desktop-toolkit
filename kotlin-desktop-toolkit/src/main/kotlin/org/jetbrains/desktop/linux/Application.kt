@@ -36,6 +36,7 @@ public data class WindowParams(
     val title: String,
     val size: LogicalSize? = null,
     val minSize: LogicalSize? = null,
+    val insets: LogicalSideOffsets = LogicalSideOffsets.Zero,
     val preferClientSideDecoration: Boolean = false,
     val renderingMode: RenderingMode = RenderingMode.Auto,
 ) {
@@ -56,6 +57,7 @@ public data class WindowParams(
         val nativeWindowParams = NativeWindowParams.allocate(arena)
         NativeWindowParams.size(nativeWindowParams, size.toNative(arena))
         NativeWindowParams.min_size(nativeWindowParams, minSize.toNative(arena))
+        NativeWindowParams.insets(nativeWindowParams, insets.toNative(arena))
         NativeWindowParams.title(nativeWindowParams, title.toNativeUtf8(arena))
         NativeWindowParams.app_id(nativeWindowParams, appId.toNativeUtf8(arena))
         NativeWindowParams.prefer_client_side_decoration(nativeWindowParams, preferClientSideDecoration)

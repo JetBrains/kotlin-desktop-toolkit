@@ -6,11 +6,14 @@ use desktop_common::{
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
 use desktop_linux::linux::application_api::{FfiDragAndDropQueryResponse, FfiSupportedActionsForMime, FfiTransferDataResponse};
-use desktop_linux::linux::geometry::PhysicalSize;
+use desktop_linux::linux::geometry::{LogicalSideOffsets, PhysicalPixels, PhysicalSideOffsets, PhysicalSize};
+use desktop_linux::linux::pointer_shapes_api::PointerShape;
 use desktop_linux::linux::screen::screen_list;
 use desktop_linux::linux::window_api::{
-    window_maximize, window_minimize, window_set_fullscreen, window_unmaximize, window_unset_fullscreen,
+    window_maximize, window_minimize, window_set_fullscreen, window_set_pointer_shape, window_start_resize, window_unmaximize,
+    window_unset_fullscreen,
 };
+use desktop_linux::linux::window_resize_edge_api::WindowResizeEdge;
 use desktop_linux::linux::{
     application_api::{
         AppPtr,
@@ -93,6 +96,7 @@ pub struct WindowState {
     pub opengl: Option<OpenglState>,
     last_received_path: Option<String>,
     last_draw_event_size_and_scale: Option<(PhysicalSize, f64)>,
+    last_logical_size: Option<LogicalSize>,
 }
 
 impl WindowState {
@@ -301,6 +305,12 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
                     window_id: new_window_id,
                     size: LogicalSize { width: 300, height: 200 },
                     min_size: LogicalSize { width: 0, height: 0 },
+                    insets: LogicalSideOffsets {
+                        top: 10,
+                        left: 10,
+                        bottom: 10,
+                        right: 10,
+                    },
                     title: BorrowedUtf8::new("Window N"),
                     app_id: BorrowedUtf8::new(APP_ID),
                     prefer_client_side_decoration: true,
@@ -425,6 +435,12 @@ fn on_application_started(state: &mut State) {
             window_id: window_1_id,
             size: LogicalSize { width: 200, height: 300 },
             min_size: LogicalSize { width: 100, height: 200 },
+            insets: LogicalSideOffsets {
+                top: 10,
+                left: 10,
+                bottom: 10,
+                right: 10,
+            },
             title: BorrowedUtf8::new("Window 1"),
             app_id: BorrowedUtf8::new(APP_ID),
             prefer_client_side_decoration: false,
@@ -440,6 +456,12 @@ fn on_application_started(state: &mut State) {
             window_id: window_2_id,
             size: LogicalSize { width: 300, height: 200 },
             min_size: LogicalSize { width: 200, height: 100 },
+            insets: LogicalSideOffsets {
+                top: 10,
+                left: 10,
+                bottom: 10,
+                right: 10,
+            },
             title: BorrowedUtf8::new("Window 2"),
             app_id: BorrowedUtf8::new(APP_ID),
             prefer_client_side_decoration: true,
@@ -489,6 +511,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
             Event::WindowConfigure(data) => {
                 if let Some(window_state) = state.windows.get_mut(&data.window_id) {
                     window_state.active = data.active;
+                    window_state.last_logical_size = Some(data.logical_geometry_size);
                 }
                 true
             }
@@ -506,9 +529,15 @@ extern "C" fn event_handler(event: &Event) -> bool {
                     window_state.animation_tick();
 
                     if data.software_draw_data.canvas.is_null() {
-                        draw_opengl_triangle_with_init(data.physical_size, data.window_id, window_state);
+                        draw_opengl_triangle_with_init(data.physical_size, data.physical_insets, data.window_id, window_state);
                     } else {
-                        draw_software(&data.software_draw_data, data.physical_size, data.scale, window_state);
+                        draw_software(
+                            &data.software_draw_data,
+                            data.physical_size,
+                            data.physical_insets,
+                            data.scale,
+                            window_state,
+                        );
                     }
                     true
                 } else {
@@ -521,7 +550,17 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 window_state.animation_tick();
 
                 if data.software_draw_data.canvas.is_null() {
-                    draw_opengl_triangle_with_init(data.physical_size, window_id, window_state);
+                    draw_opengl_triangle_with_init(
+                        data.physical_size,
+                        PhysicalSideOffsets {
+                            top: PhysicalPixels(0),
+                            left: PhysicalPixels(0),
+                            bottom: PhysicalPixels(0),
+                            right: PhysicalPixels(0),
+                        },
+                        window_id,
+                        window_state,
+                    );
                 } else {
                     draw_software_drag_icon(&data.software_draw_data, data.physical_size, data.scale);
                 }
@@ -542,40 +581,98 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 }
                 true
             }
-            Event::MouseDown(data) => match data.button.0 {
-                MOUSE_BUTTON_LEFT => {
-                    if data.location_in_window.x.0 < DRAG_AND_DROP_LEFT_OF {
-                        let mime_types = if state.key_modifiers == KeyModifiers::Shift {
-                            ALL_MIMES
+            Event::MouseMoved(data) => {
+                if let Some(window) = state.windows.get_mut(&data.window_id) {
+                    let x = data.location_in_window.x.0;
+                    let y = data.location_in_window.y.0;
+
+                    let size = window.last_logical_size.unwrap_or_default();
+
+                    let resize_edge = get_resize_edge(x, y, size);
+                    if resize_edge == WindowResizeEdge::None {
+                        let pointer_shape = if x < DRAG_AND_DROP_LEFT_OF {
+                            PointerShape::Grab
                         } else {
-                            TEXT_MIME_TYPE
+                            PointerShape::Default
                         };
-                        let actions = DragAndDropActions(DragAndDropAction::Copy as u32 | DragAndDropAction::Move as u32);
-                        let drag_icon_size = LogicalSize { width: 300, height: 300 };
-                        window_start_drag_and_drop(
-                            app_ptr,
-                            data.window_id,
-                            BorrowedUtf8::new(mime_types),
-                            actions,
-                            RenderingMode::Auto,
-                            drag_icon_size,
-                        );
-                        if let Some(window_state) = state.windows.get_mut(&data.window_id) {
-                            window_state.drag_and_drop_source = true;
-                        }
+
+                        window_set_pointer_shape(app_ptr, data.window_id, pointer_shape);
+                    } else {
+                        debug!("Starting window resize: edge = {resize_edge:?}");
+
+                        // matching what gtk does:
+                        let pointer_shape = match resize_edge {
+                            WindowResizeEdge::Top => PointerShape::NResize,
+                            WindowResizeEdge::Bottom => PointerShape::SResize,
+                            WindowResizeEdge::Left => PointerShape::WResize,
+                            WindowResizeEdge::Right => PointerShape::EResize,
+                            WindowResizeEdge::TopLeft => PointerShape::NwResize,
+                            WindowResizeEdge::BottomRight => PointerShape::SeResize,
+                            WindowResizeEdge::BottomLeft => PointerShape::SwResize,
+                            WindowResizeEdge::TopRight => PointerShape::NeResize,
+                            WindowResizeEdge::None => unreachable!(),
+                        };
+
+                        window_set_pointer_shape(app_ptr, data.window_id, pointer_shape);
                     }
+
                     true
+                } else {
+                    false
                 }
-                MOUSE_BUTTON_MIDDLE => {
-                    application_primary_selection_paste(
-                        app_ptr,
-                        state.add_data_request_source(data.window_id),
-                        BorrowedUtf8::new(TEXT_MIME_TYPE),
-                    );
-                    true
+            }
+            Event::MouseDown(data) => {
+                if let Some(window) = state.windows.get_mut(&data.window_id) {
+                    let x = data.location_in_window.x.0;
+                    let y = data.location_in_window.y.0;
+
+                    let size = window.last_logical_size.unwrap_or_default();
+
+                    let resize_edge = get_resize_edge(x, y, size);
+                    if resize_edge == WindowResizeEdge::None {
+                        match data.button.0 {
+                            MOUSE_BUTTON_LEFT => {
+                                if x < DRAG_AND_DROP_LEFT_OF {
+                                    let mime_types = if state.key_modifiers == KeyModifiers::Shift {
+                                        ALL_MIMES
+                                    } else {
+                                        TEXT_MIME_TYPE
+                                    };
+                                    let actions = DragAndDropActions(DragAndDropAction::Copy as u32 | DragAndDropAction::Move as u32);
+                                    let drag_icon_size = LogicalSize { width: 300, height: 300 };
+                                    window_start_drag_and_drop(
+                                        app_ptr,
+                                        data.window_id,
+                                        BorrowedUtf8::new(mime_types),
+                                        actions,
+                                        RenderingMode::Auto,
+                                        drag_icon_size,
+                                    );
+                                    window.drag_and_drop_source = true;
+                                }
+                                true
+                            }
+                            MOUSE_BUTTON_MIDDLE => {
+                                application_primary_selection_paste(
+                                    app_ptr,
+                                    state.add_data_request_source(data.window_id),
+                                    BorrowedUtf8::new(TEXT_MIME_TYPE),
+                                );
+                                true
+                            }
+                            _ => false,
+                        }
+                    } else {
+                        debug!("Starting window reisize: edge = {resize_edge:?}");
+
+                        window_start_resize(app_ptr, data.window_id, resize_edge);
+
+                        true
+                    }
+                } else {
+                    false
                 }
-                _ => false,
-            },
+            }
             Event::ModifiersChanged(data) => {
                 state.key_modifiers = data.modifiers;
                 true
@@ -705,6 +802,30 @@ extern "C" fn event_handler(event: &Event) -> bool {
             _ => false,
         }
     })
+}
+
+fn get_resize_edge(x: f64, y: f64, size: LogicalSize) -> WindowResizeEdge {
+    let w = f64::from(size.width);
+    let h = f64::from(size.height);
+
+    let is_top = y < 0.0;
+    let is_bottom = y > h;
+    let is_left = x < 0.0;
+    let is_right = x > w;
+
+    debug!("get resize edge: top = {is_top}, bottom = {is_bottom}, left = {is_left}, right = {is_right}");
+
+    match () {
+        () if is_top && is_left => WindowResizeEdge::TopLeft,
+        () if is_top && is_right => WindowResizeEdge::TopRight,
+        () if is_bottom && is_left => WindowResizeEdge::BottomLeft,
+        () if is_bottom && is_right => WindowResizeEdge::BottomRight,
+        () if is_top => WindowResizeEdge::Top,
+        () if is_bottom => WindowResizeEdge::Bottom,
+        () if is_left => WindowResizeEdge::Left,
+        () if is_right => WindowResizeEdge::Right,
+        () => WindowResizeEdge::None,
+    }
 }
 
 fn on_desktop_settings_change(s: &FfiDesktopSetting, state: &mut State) {

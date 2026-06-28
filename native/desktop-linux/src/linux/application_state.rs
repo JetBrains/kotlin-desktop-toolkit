@@ -487,7 +487,9 @@ impl WindowHandler for ApplicationState {
                 self.callbacks.event_handler,
                 WindowConfigureEvent {
                     window_id: w.window_id,
-                    size: w.size.unwrap(),
+                    logical_geometry_size: w.logical_geometry_size.unwrap(),
+                    logical_buffer_size: w.logical_buffer_size().unwrap(),
+                    logical_insets: w.get_insets(),
                     active: configure.is_activated(),
                     maximized: configure.is_maximized(),
                     fullscreen: configure.is_fullscreen(),

@@ -3,7 +3,7 @@ use std::{collections::HashMap, ffi::CStr};
 use crate::sample_linux::WindowState;
 use desktop_linux::linux::application_api::application_get_egl_proc_func;
 use desktop_linux::linux::events::{SoftwareDrawData, WindowId};
-use desktop_linux::linux::geometry::PhysicalSize;
+use desktop_linux::linux::geometry::{PhysicalSideOffsets, PhysicalSize};
 use gles30::{
     GL_COLOR_BUFFER_BIT, GL_COMPILE_STATUS, GL_DEPTH_BUFFER_BIT, GL_FLOAT, GL_FRAGMENT_SHADER, GL_LINK_STATUS, GL_TRIANGLES,
     GL_VERTEX_SHADER, GLchar, GLenum, GLint, GLuint, GlFns,
@@ -88,12 +88,26 @@ void main()
 }
 
 /// Draw a triangle using the shader pair created in `Init()`
-fn draw_opengl_triangle(gl: &GlFns, program: GLuint, physical_size: PhysicalSize, animation_progress: f32) {
-    //    debug!("draw_opengl_triangle, program = {program}, event = {data:?}");
+fn draw_opengl_triangle(
+    gl: &GlFns,
+    program: GLuint,
+    physical_size: PhysicalSize,
+    physical_insets: PhysicalSideOffsets,
+    animation_progress: f32,
+) {
     let v_vertices: [f32; 6] = [animation_progress, 1.0, -1.0, -1.0, 1.0, -1.0];
+
+    let vp_width = physical_size.width.0 - physical_insets.left.0 - physical_insets.right.0;
+    let vp_height = physical_size.height.0 - physical_insets.top.0 - physical_insets.bottom.0;
+    let y_offset = physical_size.height.0 - vp_height - physical_insets.top.0;
+
     unsafe {
-        gl.Viewport(0, 0, physical_size.width.0, physical_size.height.0);
+        gl.Enable(gles30::GL_SCISSOR_TEST);
+
+        gl.Scissor(physical_insets.left.0, y_offset, vp_width, vp_height);
+        gl.Viewport(physical_insets.left.0, y_offset, vp_width, vp_height);
         gl.Clear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+
         gl.UseProgram(program);
         //let v_position = gl.GetAttribLocation)(program, c"vPosition".as_ptr());
         //assert!(v_position != -1);
@@ -101,10 +115,17 @@ fn draw_opengl_triangle(gl: &GlFns, program: GLuint, physical_size: PhysicalSize
         gl.VertexAttribPointer(V_POSITION, 2, GL_FLOAT, 0, 0, v_vertices.as_ptr().cast());
         gl.EnableVertexAttribArray(V_POSITION);
         gl.DrawArrays(GL_TRIANGLES, 0, 3);
+
+        gl.Disable(gles30::GL_SCISSOR_TEST);
     }
 }
 
-pub fn draw_opengl_triangle_with_init(physical_size: PhysicalSize, window_id: WindowId, window_state: &mut WindowState) {
+pub fn draw_opengl_triangle_with_init(
+    physical_size: PhysicalSize,
+    physical_insets: PhysicalSideOffsets,
+    window_id: WindowId,
+    window_state: &mut WindowState,
+) {
     let opengl_state = window_state.opengl.get_or_insert_with(|| {
         let egl_lib = application_get_egl_proc_func();
         let gl = unsafe { GlFns::load_with(|name| (egl_lib.f)(egl_lib.ctx, name)) };
@@ -124,64 +145,98 @@ pub fn draw_opengl_triangle_with_init(physical_size: PhysicalSize, window_id: Wi
         1.0 - ((window_state.animation_progress - 100.) / 50.)
     };
 
-    draw_opengl_triangle(&opengl_state.gl, *program, physical_size, animation_progress);
+    draw_opengl_triangle(&opengl_state.gl, *program, physical_size, physical_insets, animation_progress);
 }
 
 #[allow(clippy::many_single_char_names)]
-pub fn draw_software(data: &SoftwareDrawData, physical_size: PhysicalSize, scale: f64, window_state: &WindowState) {
+#[allow(clippy::cast_sign_loss)]
+pub fn draw_software(
+    data: &SoftwareDrawData,
+    physical_size: PhysicalSize,
+    physical_insets: PhysicalSideOffsets,
+    scale: f64,
+    window_state: &WindowState,
+) {
     const BYTES_PER_PIXEL: u8 = 4;
     let drag_source_indicator_heigh = 100. * scale;
     let canvas = {
         let len = usize::try_from(physical_size.height.0 * data.stride).unwrap();
         unsafe { std::slice::from_raw_parts_mut(data.canvas, len) }
     };
-    let w = f64::from(physical_size.width.0);
-    let h = f64::from(physical_size.height.0);
+    let outer_w = f64::from(physical_size.width.0);
+    let outer_h = f64::from(physical_size.height.0);
+
+    let p_top = f64::from(physical_insets.top.0);
+    let p_left = f64::from(physical_insets.left.0);
+    let p_bottom = f64::from(physical_insets.bottom.0);
+    let p_right = f64::from(physical_insets.right.0);
+
+    let w = outer_w - p_left - p_right;
+    let h = outer_h - p_top - p_bottom;
+
     let line_thickness = 5.0 * scale;
 
     // Order of bytes in `pixel` is [b, g, r, a] (for the Argb8888 format)
-    for (pixel, i) in canvas.chunks_exact_mut(BYTES_PER_PIXEL.into()).zip(1u32..) {
-        let i = f64::from(i);
-        let x = i % w;
-        let y = (i / f64::from(data.stride)) * f64::from(BYTES_PER_PIXEL);
-        if between(
-            x,
-            DRAG_AND_DROP_LEFT_OF * scale,
-            DRAG_AND_DROP_LEFT_OF.mul_add(scale, line_thickness),
-        ) {
-            pixel[0] = 0;
-            pixel[1] = 0;
-            pixel[2] = 0;
-        } else if between(x, line_thickness,  line_thickness * 2.0)  // left border
-           || between(y, line_thickness,  line_thickness * 2.0)  // top border
-           || between(x, line_thickness.mul_add(-2.0, w), w - line_thickness)  // right border
-           || between(y, line_thickness.mul_add(-2.0, h), h - line_thickness)  // bottom border
-           || between(x, (i / h) - (line_thickness / 2.0), (i / h) + (line_thickness / 2.0))
-        {
-            pixel[0] = 0;
-            pixel[1] = 0;
-            pixel[2] = 255;
-        } else if x < DRAG_AND_DROP_LEFT_OF
-            && window_state.drag_and_drop_source
-            && between(y, drag_source_indicator_heigh, drag_source_indicator_heigh + line_thickness)
-        {
-            pixel[0] = 255;
-            pixel[1] = 0;
-            pixel[2] = 0;
-        } else if x < DRAG_AND_DROP_LEFT_OF && window_state.drag_and_drop_target {
-            pixel[0] = 128;
-            pixel[1] = 0;
-            pixel[2] = 0;
-        } else if window_state.active {
-            pixel[0] = 255;
-            pixel[1] = 255;
-            pixel[2] = 255;
-        } else {
-            pixel[0] = 128;
-            pixel[1] = 128;
-            pixel[2] = 128;
+    for y_idx in 0..physical_size.height.0 {
+        for x_idx in 0..physical_size.width.0 {
+            let offset = (y_idx as usize * data.stride as usize) + (x_idx as usize * BYTES_PER_PIXEL as usize);
+            let pixel = &mut canvas[offset..offset + 4];
+
+            let outer_x = f64::from(x_idx);
+            let outer_y = f64::from(y_idx);
+
+            if outer_x < p_left || outer_x >= outer_w - p_right || outer_y < p_top || outer_y >= outer_h - p_bottom {
+                pixel[0] = 0;
+                pixel[1] = 0;
+                pixel[2] = 0;
+                pixel[3] = 0;
+                continue;
+            }
+
+            let x = outer_x - p_left;
+            let y = outer_y - p_top;
+
+            let i = y.mul_add(w, x);
+
+            if between(
+                x,
+                DRAG_AND_DROP_LEFT_OF * scale,
+                DRAG_AND_DROP_LEFT_OF.mul_add(scale, line_thickness),
+            ) {
+                pixel[0] = 0;
+                pixel[1] = 0;
+                pixel[2] = 0;
+            } else if between(x, line_thickness,  line_thickness * 2.0)  // left border
+                || between(y, line_thickness,  line_thickness * 2.0)  // top border
+                || between(x, line_thickness.mul_add(-2.0, w), w - line_thickness)  // right border
+                || between(y, line_thickness.mul_add(-2.0, h), h - line_thickness)  // bottom border
+                || between(x, (i / h) - (line_thickness / 2.0), (i / h) + (line_thickness / 2.0))
+            {
+                pixel[0] = 0;
+                pixel[1] = 0;
+                pixel[2] = 255;
+            } else if x < DRAG_AND_DROP_LEFT_OF
+                && window_state.drag_and_drop_source
+                && between(y, drag_source_indicator_heigh, drag_source_indicator_heigh + line_thickness)
+            {
+                pixel[0] = 255;
+                pixel[1] = 0;
+                pixel[2] = 0;
+            } else if x < DRAG_AND_DROP_LEFT_OF && window_state.drag_and_drop_target {
+                pixel[0] = 128;
+                pixel[1] = 0;
+                pixel[2] = 0;
+            } else if window_state.active {
+                pixel[0] = 255;
+                pixel[1] = 255;
+                pixel[2] = 255;
+            } else {
+                pixel[0] = 128;
+                pixel[1] = 128;
+                pixel[2] = 128;
+            }
+            pixel[3] = 255;
         }
-        pixel[3] = 255;
     }
 }
 
