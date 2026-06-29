@@ -498,7 +498,8 @@ pub struct SoftwareDrawData {
 pub struct WindowDrawEvent {
     pub window_id: WindowId,
     pub software_draw_data: SoftwareDrawData,
-    pub physical_size: PhysicalSize,
+    pub physical_geometry_size: PhysicalSize,
+    pub physical_buffer_size: PhysicalSize,
     pub physical_insets: PhysicalSideOffsets,
     pub scale: f64,
 }

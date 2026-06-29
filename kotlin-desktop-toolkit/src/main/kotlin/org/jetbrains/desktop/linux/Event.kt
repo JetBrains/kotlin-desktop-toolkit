@@ -350,7 +350,8 @@ public sealed class Event {
     public data class WindowDraw internal constructor(
         val windowId: WindowId,
         val softwareDrawData: SoftwareDrawData?,
-        val physicalSize: PhysicalSize,
+        val physicalGeometrySize: PhysicalSize,
+        val physicalBufferSize: PhysicalSize,
         val physicalInsets: PhysicalSideOffsets,
         val scale: Double,
     ) : Event()

@@ -519,9 +519,9 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 if let Some(window_state) = state.windows.get_mut(&data.window_id) {
                     if window_state
                         .last_draw_event_size_and_scale
-                        .replace((data.physical_size, data.scale))
+                        .replace((data.physical_buffer_size, data.scale))
                         .is_none_or(|(previous_size, previous_scale)| {
-                            previous_size != data.physical_size || (previous_scale - data.scale).abs() > 0.01
+                            previous_size != data.physical_buffer_size || (previous_scale - data.scale).abs() > 0.01
                         })
                     {
                         debug!("different draw data: {event:?}");
@@ -529,11 +529,11 @@ extern "C" fn event_handler(event: &Event) -> bool {
                     window_state.animation_tick();
 
                     if data.software_draw_data.canvas.is_null() {
-                        draw_opengl_triangle_with_init(data.physical_size, data.physical_insets, data.window_id, window_state);
+                        draw_opengl_triangle_with_init(data.physical_buffer_size, data.physical_insets, data.window_id, window_state);
                     } else {
                         draw_software(
                             &data.software_draw_data,
-                            data.physical_size,
+                            data.physical_buffer_size,
                             data.physical_insets,
                             data.scale,
                             window_state,

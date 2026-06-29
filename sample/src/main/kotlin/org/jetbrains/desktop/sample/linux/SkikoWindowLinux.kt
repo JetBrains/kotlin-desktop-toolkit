@@ -74,10 +74,6 @@ abstract class SkikoWindowLinux(
     }
 
     fun performDrawing(event: Event.WindowDraw): Boolean {
-        val contentSize = PhysicalSize(
-            width = event.physicalSize.width - event.physicalInsets.left - event.physicalInsets.right,
-            height = event.physicalSize.height - event.physicalInsets.top - event.physicalInsets.bottom,
-        )
         val draw = { surface: Surface ->
             val canvas = surface.canvas
 
@@ -87,14 +83,14 @@ abstract class SkikoWindowLinux(
                 Rect(
                     event.physicalInsets.left.toFloat(),
                     event.physicalInsets.top.toFloat(),
-                    (event.physicalInsets.left + contentSize.width).toFloat(),
-                    (event.physicalInsets.top + contentSize.height).toFloat(),
+                    (event.physicalInsets.left + event.physicalGeometrySize.width).toFloat(),
+                    (event.physicalInsets.top + event.physicalGeometrySize.height).toFloat(),
                 )
             )
             canvas.translate(event.physicalInsets.left.toFloat(), event.physicalInsets.top.toFloat())
 
             val time = creationTime.elapsedNow().inWholeMilliseconds
-            surface.canvas.draw(contentSize, event.scale, time)
+            surface.canvas.draw(event.physicalGeometrySize, event.scale, time)
 
             canvas.restore()
             surface.flushAndSubmit()
@@ -102,8 +98,8 @@ abstract class SkikoWindowLinux(
             true
         }
         return event.softwareDrawData?.let { softwareDrawData ->
-            performSoftwareDrawing(event.physicalSize, softwareDrawData, draw)
-        } ?: performOpenGlDrawing(event.physicalSize, directContext, draw)
+            performSoftwareDrawing(event.physicalBufferSize, softwareDrawData, draw)
+        } ?: performOpenGlDrawing(event.physicalBufferSize, directContext, draw)
     }
 
     abstract fun Canvas.draw(size: PhysicalSize, scale: Double, time: Long)

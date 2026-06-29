@@ -258,23 +258,25 @@ impl SimpleWindow {
         self.update_pointer(conn, themed_pointer);
         let surface = self.window.wl_surface();
 
-        let geometry_size = self.logical_geometry_size.unwrap();
-        let total_logical_size = self.total_logical_size(geometry_size);
-        let physical_size = total_logical_size.to_physical(self.current_scale);
+        let logical_geometry_size = self.logical_geometry_size.unwrap();
+        let physical_geometry_size = logical_geometry_size.to_physical(self.current_scale);
+        let total_logical_size = self.total_logical_size(logical_geometry_size);
+        let physical_buffer_size = total_logical_size.to_physical(self.current_scale);
         let physical_insets = self.insets.to_physical(self.current_scale);
 
         let do_draw = |software_draw_data: SoftwareDrawData| {
             let did_draw = callback(WindowDrawEvent {
                 window_id: self.window_id,
                 software_draw_data,
-                physical_size,
+                physical_geometry_size,
+                physical_buffer_size,
                 physical_insets,
                 scale: self.current_scale,
             });
 
             if did_draw {
                 // Damage the entire window
-                surface.damage_buffer(0, 0, physical_size.width.0, physical_size.height.0);
+                surface.damage_buffer(0, 0, physical_buffer_size.width.0, physical_buffer_size.height.0);
             }
 
             // Request our next frame
@@ -283,7 +285,7 @@ impl SimpleWindow {
         };
 
         if let Some(r) = &mut self.rendering_data {
-            r.draw(surface, physical_size, do_draw);
+            r.draw(surface, physical_buffer_size, do_draw);
         } else {
             warn!("Rendering data not initialized in draw");
         }

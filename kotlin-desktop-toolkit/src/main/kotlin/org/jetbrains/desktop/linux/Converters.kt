@@ -980,7 +980,8 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             Event.WindowDraw(
                 windowId = NativeWindowDrawEvent.window_id(nativeEvent),
                 softwareDrawData = SoftwareDrawData.fromNative(NativeWindowDrawEvent.software_draw_data(nativeEvent)),
-                physicalSize = PhysicalSize.fromNative(NativeWindowDrawEvent.physical_size(nativeEvent)),
+                physicalGeometrySize = PhysicalSize.fromNative(NativeWindowDrawEvent.physical_geometry_size(nativeEvent)),
+                physicalBufferSize = PhysicalSize.fromNative(NativeWindowDrawEvent.physical_buffer_size(nativeEvent)),
                 physicalInsets = PhysicalSideOffsets.fromNative(NativeWindowDrawEvent.physical_insets(nativeEvent)),
                 scale = NativeWindowDrawEvent.scale(nativeEvent),
             )
