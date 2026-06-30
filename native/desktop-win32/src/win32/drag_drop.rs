@@ -3,7 +3,7 @@
 
 use anyhow::Context;
 use windows::Win32::{
-    Foundation::{COLORREF, E_POINTER, POINT, POINTL, SIZE},
+    Foundation::{COLORREF, E_POINTER, HWND, POINT, POINTL, SIZE},
     Graphics::Gdi::{DeleteObject, HGDIOBJ},
     System::{
         Com::{CLSCTX_INPROC_SERVER, CoCreateInstance, IDataObject},
@@ -15,7 +15,7 @@ use windows::Win32::{
     },
     UI::{
         Controls::CLR_NONE,
-        Shell::{CLSID_DragDropHelper, IDragSourceHelper, SHDRAGIMAGE},
+        Shell::{CLSID_DragDropHelper, IDragSourceHelper, IDropTargetHelper, SHDRAGIMAGE},
     },
 };
 use windows_core::{BOOL, HRESULT, Ref as WinRef, Result as WinResult, implement};
@@ -38,7 +38,17 @@ pub struct DragSourceCallbacks {
 }
 
 pub fn register_drop_target(window: &Window, callbacks: DropTargetCallbacks) -> anyhow::Result<()> {
-    let target: IDropTarget = DropTarget { callbacks }.into();
+    // The drag-image helper lets the Shell render the OS drag image over our window. It is purely
+    // cosmetic, so a creation failure leaves `None` and the drop still works.
+    let helper: Option<IDropTargetHelper> = unsafe { CoCreateInstance(&CLSID_DragDropHelper, None, CLSCTX_INPROC_SERVER) }
+        .inspect_err(|err| log::warn!("drop-target drag-image helper unavailable: {err}"))
+        .ok();
+    let target: IDropTarget = DropTarget {
+        callbacks,
+        helper,
+        hwnd: window.hwnd(),
+    }
+    .into();
     unsafe { RegisterDragDrop(window.hwnd(), &target)? };
     Ok(())
 }
@@ -124,6 +134,8 @@ impl IDropSource_Impl for DragSource_Impl {
 #[implement(IDropTarget)]
 pub struct DropTarget {
     callbacks: DropTargetCallbacks,
+    helper: Option<IDropTargetHelper>,
+    hwnd: HWND,
 }
 
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
@@ -140,6 +152,11 @@ impl IDropTarget_Impl for DropTarget_Impl {
         let data_object = data_obj.as_ref().ok_or(E_POINTER)?;
         let data_obj_ptr = ComInterfaceRawPtr::from_interface(data_object)?;
         let result = (self.callbacks.drag_enter_handler)(data_obj_ptr, key_state.0, PhysicalPoint::new(pt.x, pt.y), effect.0);
+        if let Some(helper) = &self.helper {
+            let point = POINT { x: pt.x, y: pt.y };
+            // Cosmetic only: ignore helper errors so the app's resolved effect is what we return.
+            let _ = unsafe { helper.DragEnter(self.hwnd, data_object, &raw const point, DROPEFFECT(result)) };
+        }
         *effect = DROPEFFECT(result);
         Ok(())
     }
@@ -147,12 +164,21 @@ impl IDropTarget_Impl for DropTarget_Impl {
     fn DragOver(&self, key_state: MODIFIERKEYS_FLAGS, pt: &POINTL, effect: *mut DROPEFFECT) -> WinResult<()> {
         let effect = unsafe { effect.as_mut() }.ok_or(E_POINTER)?;
         let result = (self.callbacks.drag_over_handler)(key_state.0, PhysicalPoint::new(pt.x, pt.y), effect.0);
+        if let Some(helper) = &self.helper {
+            let point = POINT { x: pt.x, y: pt.y };
+            // Cosmetic only: ignore helper errors so the app's resolved effect is what we return.
+            let _ = unsafe { helper.DragOver(&raw const point, DROPEFFECT(result)) };
+        }
         *effect = DROPEFFECT(result);
         Ok(())
     }
 
     fn DragLeave(&self) -> WinResult<()> {
         (self.callbacks.drag_leave_handler)();
+        if let Some(helper) = &self.helper {
+            // Cosmetic only: ignore helper errors.
+            let _ = unsafe { helper.DragLeave() };
+        }
         Ok(())
     }
 
@@ -161,6 +187,11 @@ impl IDropTarget_Impl for DropTarget_Impl {
         let data_object = data_obj.as_ref().ok_or(E_POINTER)?;
         let data_obj_ptr = ComInterfaceRawPtr::from_interface(data_object)?;
         let result = (self.callbacks.drop_handler)(data_obj_ptr, key_state.0, PhysicalPoint::new(pt.x, pt.y), effect.0);
+        if let Some(helper) = &self.helper {
+            let point = POINT { x: pt.x, y: pt.y };
+            // Cosmetic only: ignore helper errors so the app's resolved effect is what we return.
+            let _ = unsafe { helper.Drop(data_object, &raw const point, DROPEFFECT(result)) };
+        }
         *effect = DROPEFFECT(result);
         Ok(())
     }
