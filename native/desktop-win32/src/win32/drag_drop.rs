@@ -2,7 +2,7 @@
 #![allow(clippy::ref_as_ptr)]
 
 use windows::Win32::{
-    Foundation::{E_POINTER, POINTL},
+    Foundation::{COLORREF, E_POINTER, POINT, POINTL, SIZE},
     System::{
         Com::IDataObject,
         Ole::{
@@ -11,10 +11,11 @@ use windows::Win32::{
         },
         SystemServices::MODIFIERKEYS_FLAGS,
     },
+    UI::{Controls::CLR_NONE, Shell::SHDRAGIMAGE},
 };
 use windows_core::{BOOL, HRESULT, Ref as WinRef, Result as WinResult, implement};
 
-use super::{com::ComInterfaceRawPtr, geometry::PhysicalPoint, window::Window};
+use super::{com::ComInterfaceRawPtr, geometry::PhysicalPoint, wic_image::WicBitmap, window::Window};
 
 #[allow(clippy::struct_field_names)]
 #[repr(C)]
@@ -47,6 +48,27 @@ pub fn start_drag_drop(data_object: &IDataObject, allowed_effects: u32, callback
 pub fn revoke_drop_target(window: &Window) -> anyhow::Result<()> {
     unsafe { RevokeDragDrop(window.hwnd())? };
     Ok(())
+}
+
+// Builds the `SHDRAGIMAGE` for a source-initiated drag from an encoded image (PNG, JPEG, …). The
+// caller owns the returned `hbmpDragImage` and must free it once the drag-image helper is done.
+#[expect(dead_code, reason = "entry point for source-initiated drag images; not yet wired into a drag")]
+pub(crate) fn create_drag_image(image_bytes: &[u8], cursor_offset: PhysicalPoint) -> anyhow::Result<SHDRAGIMAGE> {
+    let image = WicBitmap::decode_from_bytes(image_bytes)?;
+    let size = image.size();
+    Ok(SHDRAGIMAGE {
+        sizeDragImage: SIZE {
+            cx: size.width.0,
+            cy: size.height.0,
+        },
+        ptOffset: POINT {
+            x: cursor_offset.x.0,
+            y: cursor_offset.y.0,
+        },
+        hbmpDragImage: image.into_handle(),
+        // No color key; the DIB uses per-pixel alpha.
+        crColorKey: COLORREF(CLR_NONE.cast_unsigned()),
+    })
 }
 
 #[repr(u32)]
