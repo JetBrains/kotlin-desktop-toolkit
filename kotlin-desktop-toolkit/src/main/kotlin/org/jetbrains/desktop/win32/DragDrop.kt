@@ -1,7 +1,9 @@
 package org.jetbrains.desktop.win32
 
+import org.jetbrains.desktop.win32.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.win32.generated.NativeDragSourceCallbacks
 import org.jetbrains.desktop.win32.generated.NativeDropTargetCallbacks
+import org.jetbrains.desktop.win32.generated.NativePhysicalPoint
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -22,10 +24,37 @@ public class DragDropManager(private val window: Window) : AutoCloseable {
         }
     }
 
-    public fun doDragDrop(dataObject: DataObject, allowedEffects: DragDropEffect, dragSource: DragSource): DragDropEffect {
+    /**
+     * Starts a synchronous drag-and-drop operation sourced from this window, returning when it ends.
+     *
+     * @param dataObject the data offered to drop targets during the drag.
+     * @param allowedEffects the drop effects this source permits (e.g. copy, move, link).
+     * @param dragSource callbacks deciding whether to continue, cancel, or complete the drag.
+     * @param dragImage optional custom image shown under the cursor during the drag; when null the
+     * system default drag feedback is used.
+     * @return the drop effect performed by the target.
+     */
+    public fun doDragDrop(
+        dataObject: DataObject,
+        allowedEffects: DragDropEffect,
+        dragSource: DragSource,
+        dragImage: DragImage? = null,
+    ): DragDropEffect {
         val effect = DragSourceCallbacks(dragSource).use { callbacks ->
-            ffiDownCall {
-                desktop_win32_h.drag_drop_start(dataObject.toNative(), allowedEffects.value, callbacks.toNative())
+            Arena.ofConfined().use { arena ->
+                // A zeroed BorrowedArray is a null pointer + 0 length, which the native side reads as
+                // "no image"; the offset is then unused.
+                val imageBytes = dragImage?.image?.toNative(arena) ?: NativeBorrowedArray_u8.allocate(arena)
+                val imageOffset = dragImage?.cursorOffset?.toNative(arena) ?: NativePhysicalPoint.allocate(arena)
+                ffiDownCall {
+                    desktop_win32_h.drag_drop_start(
+                        dataObject.toNative(),
+                        allowedEffects.value,
+                        imageBytes,
+                        imageOffset,
+                        callbacks.toNative(),
+                    )
+                }
             }
         }
         return DragDropEffect(effect)
@@ -43,6 +72,21 @@ public class DragDropManager(private val window: Window) : AutoCloseable {
 
     override fun close() {
         dropTargetCallbacks?.close()
+    }
+}
+
+/**
+ * A custom drag image shown under the cursor during a drag-and-drop operation.
+ *
+ * @property image an encoded image (e.g. PNG) the system decodes for display.
+ * @property cursorOffset the cursor's position within the image, in physical pixels.
+ */
+public class DragImage(
+    public val image: ByteArray,
+    public val cursorOffset: PhysicalPoint,
+) {
+    init {
+        require(image.isNotEmpty()) { "Drag image must not be empty" }
     }
 }
 
