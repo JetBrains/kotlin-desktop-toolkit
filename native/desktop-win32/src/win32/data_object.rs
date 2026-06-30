@@ -10,7 +10,7 @@ use windows::Win32::{
     System::{
         Com::{
             DATADIR, DATADIR_GET, DVASPECT_CONTENT, FORMATETC, IAdviseSink, IDataObject, IDataObject_Impl, IEnumFORMATETC, IEnumSTATDATA,
-            STGMEDIUM, STGMEDIUM_0, TYMED_HGLOBAL, TYMED_ISTREAM,
+            STGMEDIUM, STGMEDIUM_0, TYMED, TYMED_HGLOBAL, TYMED_ISTREAM,
         },
         Ole::ReleaseStgMedium,
     },
@@ -18,7 +18,7 @@ use windows::Win32::{
 };
 use windows_core::{BOOL, Error as WinError, HRESULT, Ref as WinRef, Result as WinResult, implement};
 
-use super::{data_transfer::DataFormat, global_data::HGlobalData};
+use super::{data_reader::istream_reader, data_transfer::DataFormat, global_data::HGlobalData};
 
 #[implement(IDataObject)]
 pub struct DataObject {
@@ -104,12 +104,19 @@ impl IDataObject_Impl for DataObject_Impl {
         // Borrow the medium mutably so one reference both reads its fields and releases it in place
         // on fRelease. The SetData C ABI passes a non-const STGMEDIUM*, modeled here as *const.
         let medium = unsafe { medium_in.cast_mut().as_mut() }.ok_or_else(|| WinError::from(E_POINTER))?;
-        if medium.tymed != TYMED_HGLOBAL.0.cast_unsigned() {
-            return Err(DV_E_TYMED.into());
-        }
-        let hglobal = unsafe { medium.u.hGlobal };
-        // Copy the source bytes into an owned HGLOBAL before any release.
-        let data = HGlobalData::copy_from(HANDLE(hglobal.0)).map_err(|err| {
+        // The drag-image helper stores its private formats as both HGLOBAL and ISTREAM. Normalize
+        // either into an owned HGLOBAL copy so the rest of the data object only handles HGLOBAL; for
+        // an ISTREAM the bytes are read out and copied, never the live stream retained.
+        let medium_data: anyhow::Result<HGlobalData> = match TYMED(medium.tymed.cast_signed()) {
+            TYMED_HGLOBAL => HGlobalData::copy_from(HANDLE(unsafe { medium.u.hGlobal }.0)),
+            TYMED_ISTREAM => match unsafe { (*medium.u.pstm).as_ref() } {
+                Some(stream) => istream_reader::get_bytes(stream).and_then(|bytes| HGlobalData::alloc_from(&bytes)),
+                None => Err(anyhow::anyhow!("data object received a null IStream")),
+            },
+            _ => return Err(DV_E_TYMED.into()),
+        };
+        let data = medium_data.map_err(|err| {
+            log::error!("DataObject::SetData failed: {err:?}");
             // Surface the original Win32 HRESULT when the failure chain carries one.
             err.chain()
                 .find_map(|cause| cause.downcast_ref::<WinError>())
@@ -199,8 +206,10 @@ mod tests {
     use windows::Win32::{
         Foundation::{DATA_S_SAMEFORMATETC, DV_E_FORMATETC, DV_E_TYMED, E_NOTIMPL, E_POINTER, HANDLE, OLE_E_ADVISENOTSUPPORTED, S_OK},
         System::Com::{
-            DATADIR_SET, DVASPECT_DOCPRINT, FORMATETC, IAdviseSink, IDataObject, STGMEDIUM, STGMEDIUM_0, TYMED_HGLOBAL, TYMED_ISTREAM,
+            DATADIR_SET, DVASPECT_DOCPRINT, FORMATETC, IAdviseSink, IDataObject, STGMEDIUM, STGMEDIUM_0, TYMED_GDI, TYMED_HGLOBAL,
+            TYMED_ISTREAM,
         },
+        UI::Shell::SHCreateMemStream,
     };
     use windows_core::ComObject;
 
@@ -264,14 +273,37 @@ mod tests {
     }
 
     #[test]
-    fn set_data_with_non_hglobal_tymed_returns_dv_e_tymed() {
-        let medium = hglobal_medium(TYMED_ISTREAM.0, windows::Win32::Foundation::HGLOBAL::default());
+    fn set_data_with_unsupported_tymed_returns_dv_e_tymed() {
+        // TYMED_GDI is neither HGLOBAL nor ISTREAM, the two the data object accepts.
+        let medium = hglobal_medium(TYMED_GDI.0, windows::Win32::Foundation::HGLOBAL::default());
         let data_object: IDataObject = DataObject::new().into();
         let format_etc = get_format_etc_for_hglobal(DataFormat::Other(CUSTOM_FORMAT));
 
         let err = unsafe { data_object.SetData(&raw const format_etc, &raw const medium, false) }.unwrap_err();
 
         assert_eq!(err.code(), DV_E_TYMED);
+    }
+
+    #[test]
+    fn set_data_with_istream_copies_bytes_to_hglobal() {
+        // The drag-image helper sets a TYMED_ISTREAM private format; the data object must read its
+        // bytes and serve them back as HGLOBAL.
+        let payload: &[u8] = b"istream-drag-context";
+        let stream = unsafe { SHCreateMemStream(Some(payload)) }.expect("SHCreateMemStream returned null");
+        let medium = STGMEDIUM {
+            tymed: TYMED_ISTREAM.0.cast_unsigned(),
+            u: STGMEDIUM_0 {
+                pstm: ManuallyDrop::new(Some(stream)),
+            },
+            pUnkForRelease: ManuallyDrop::new(None),
+        };
+        let data_object: IDataObject = DataObject::new().into();
+        let format_etc = get_format_etc_for_hglobal(DataFormat::Other(CUSTOM_FORMAT));
+
+        // fRelease == TRUE: SetData reads the stream's bytes, then releases the stream.
+        unsafe { data_object.SetData(&raw const format_etc, &raw const medium, true) }.unwrap();
+
+        assert_eq!(read_get_data_bytes(&data_object, CUSTOM_FORMAT), payload.to_vec());
     }
 
     #[test]
