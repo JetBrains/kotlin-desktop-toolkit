@@ -4,7 +4,7 @@ use core::f64;
 
 use anyhow::bail;
 use log::warn;
-use objc2_app_kit::{NSEvent, NSEventType, NSScreen, NSWindow, NSWindowOcclusionState};
+use objc2_app_kit::{NSEvent, NSEventPhase, NSEventType, NSScreen, NSWindow, NSWindowOcclusionState};
 use objc2_foundation::{MainThreadMarker, NSArray, NSURL};
 
 use desktop_common::{
@@ -344,6 +344,46 @@ pub(crate) fn handle_mouse_up(ns_event: &NSEvent) -> bool {
         (state.event_handler)(&event)
     });
     handled
+}
+
+/// Some mice (e.g. Logitech MX Master) deliver the back/forward buttons as swipe
+/// gestures instead of `otherMouse*:` events. Translate them into a mouse click.
+pub(crate) fn handle_swipe(ns_event: &NSEvent) -> bool {
+    if ns_event.phase() != NSEventPhase::Ended {
+        return false;
+    }
+    let delta_x = ns_event.deltaX();
+    let button = if delta_x > 0.0 {
+        MouseButton(3) // back
+    } else if delta_x < 0.0 {
+        MouseButton(4) // forward
+    } else {
+        return false;
+    };
+    AppState::with(|state| {
+        let location_in_window = ns_event.cursor_location_in_window(state.mtm);
+        let timestamp = ns_event.timestamp();
+        let window_id = ns_event.window_id();
+        let down = Event::MouseDown(MouseDownEvent {
+            window_id,
+            button,
+            location_in_window,
+            click_count: 1,
+            timestamp,
+        });
+        let down_handled = (state.event_handler)(&down);
+        // The gesture has no physical release, so pair the down with a synthetic up to emit a
+        // balanced click for consumers that react on release or track pressed-button state.
+        let up = Event::MouseUp(MouseUpEvent {
+            window_id,
+            button,
+            location_in_window,
+            click_count: 1,
+            timestamp,
+        });
+        let up_handled = (state.event_handler)(&up);
+        down_handled || up_handled
+    })
 }
 
 pub(crate) fn handle_scroll_wheel(ns_event: &NSEvent) -> bool {
