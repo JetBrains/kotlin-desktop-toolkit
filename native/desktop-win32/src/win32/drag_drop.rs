@@ -15,7 +15,7 @@ use windows::Win32::{
     },
     UI::{
         Controls::CLR_NONE,
-        Shell::{CLSID_DragDropHelper, IDragSourceHelper, IDropTargetHelper, SHDRAGIMAGE},
+        Shell::{CLSID_DragDropHelper, DSH_ALLOWDROPDESCRIPTIONTEXT, IDragSourceHelper2, IDropTargetHelper, SHDRAGIMAGE},
     },
 };
 use windows_core::{BOOL, HRESULT, Ref as WinRef, Result as WinResult, implement};
@@ -62,8 +62,11 @@ pub fn start_drag_drop(
     if let Some((image_bytes, cursor_offset)) = drag_image {
         // Create the helper before decoding the image: until create_drag_image runs there is no
         // bitmap to clean up, so a helper-creation failure here leaks nothing.
-        let helper: IDragSourceHelper =
+        let helper: IDragSourceHelper2 =
             unsafe { CoCreateInstance(&CLSID_DragDropHelper, None, CLSCTX_INPROC_SERVER) }.context("create drag-drop helper")?;
+        // Let a drop target's drop-description text render over our image. Cosmetic, so a failure must
+        // not abort the drag; must be set before InitializeFromBitmap to take effect.
+        let _ = unsafe { helper.SetFlags(DSH_ALLOWDROPDESCRIPTIONTEXT.0.cast_unsigned()) };
         let shdi = create_drag_image(image_bytes, cursor_offset)?;
         // InitializeFromBitmap takes ownership of shdi.hbmpDragImage on success; on failure the helper
         // does not take it, so free it here. This is the only manual cleanup point for the bitmap.
@@ -236,8 +239,9 @@ mod tests {
     fn initialize_from_bitmap_accepts_our_data_object() {
         ensure_com_initialized();
         let data_object: IDataObject = DataObject::new().into();
-        let helper: IDragSourceHelper =
+        let helper: IDragSourceHelper2 =
             unsafe { CoCreateInstance(&CLSID_DragDropHelper, None, CLSCTX_INPROC_SERVER) }.expect("create drag-drop helper");
+        unsafe { helper.SetFlags(DSH_ALLOWDROPDESCRIPTIONTEXT.0.cast_unsigned()) }.expect("SetFlags");
         let shdi = create_drag_image(&TEST_PNG_3X2, PhysicalPoint::new(0, 0)).expect("create drag image");
         let result = unsafe { helper.InitializeFromBitmap(&raw const shdi, &data_object) };
         assert!(result.is_ok(), "InitializeFromBitmap failed: {result:?}");
