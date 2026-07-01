@@ -52,7 +52,7 @@ native/
       lib.rs                      DllMain → captures HINSTANCE; declares win32 + logger_api
       logger_api.rs               thin Win32 logger glue
       win32/
-        mod.rs                    declares 39 sibling pub mod entries
+        mod.rs                    declares 41 sibling pub mod entries
         application.rs            Application: OLE STA, DispatcherQueue, CompositorDriver
         application_api.rs        FFI: app lifecycle + dispatcher dispatch
         event_loop.rs             window_proc: WM_* → Event dispatch; thread_local key/exception stash
@@ -77,6 +77,7 @@ native/
         clipboard_api.rs          FFI: OLE-backed clipboard read/write/clear + sequence helpers
         drag_drop.rs              IDropSource / IDropTarget via windows-core implement!
         drag_drop_api.rs          FFI: drag_drop_register_target / start / revoke
+        wic_image.rs              WIC decode: encoded image → top-down 32bpp straight-BGRA DIB (WicBitmap)
         data_object.rs            IDataObject impl backed by papaya::HashMap<u32, HGlobalData>
         data_object_api.rs        Global registry (id→ComObject); result-bearing read API
         data_reader.rs            STGMEDIUM RAII; HGLOBAL/IStream-uniform get_*
