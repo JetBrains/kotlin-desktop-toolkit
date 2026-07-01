@@ -14,6 +14,7 @@ import org.jetbrains.desktop.win32.DragDropEffect
 import org.jetbrains.desktop.win32.DragDropManager
 import org.jetbrains.desktop.win32.DragDropModifier
 import org.jetbrains.desktop.win32.DragDropModifiers
+import org.jetbrains.desktop.win32.DragImage
 import org.jetbrains.desktop.win32.DragSource
 import org.jetbrains.desktop.win32.DropTarget
 import org.jetbrains.desktop.win32.Event
@@ -34,12 +35,19 @@ import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
 import org.jetbrains.skia.ColorSpace
 import org.jetbrains.skia.DirectContext
+import org.jetbrains.skia.EncodedImageFormat
+import org.jetbrains.skia.Font
+import org.jetbrains.skia.FontMgr
+import org.jetbrains.skia.FontStyle
 import org.jetbrains.skia.FramebufferFormat
 import org.jetbrains.skia.GLAssembledInterface
+import org.jetbrains.skia.Paint
+import org.jetbrains.skia.RRect
 import org.jetbrains.skia.Surface
 import org.jetbrains.skia.SurfaceColorFormat
 import org.jetbrains.skia.SurfaceOrigin
 import org.jetbrains.skia.makeGLWithInterface
+import kotlin.math.ceil
 import kotlin.time.TimeSource
 
 abstract class SkikoWindowWin32(private val app: Application) : AutoCloseable {
@@ -258,9 +266,10 @@ abstract class SkikoWindowWin32(private val app: Application) : AutoCloseable {
                     !nonClientArea &&
                     state.pressedButtons.hasFlag(PointerButton.Left)
                 ) {
+                    val dragText = "Hello drag and drop!"
                     DataObject.build {
                         addHtmlFragment("<b>HTML</b> <i>fragment</i>")
-                        addTextItem("Hello drag and drop!")
+                        addTextItem(dragText)
                     }.use { dataObject ->
                         val dragSource = object : DragSource {
                             override fun onQueryContinueDrag(escapePressed: Boolean, modifiers: DragDropModifiers): DragDropContinueResult {
@@ -276,7 +285,8 @@ abstract class SkikoWindowWin32(private val app: Application) : AutoCloseable {
                                 }
                             }
                         }
-                        dragDropManager?.doDragDrop(dataObject, DragDropEffect.Copy, dragSource)
+                        val dragImage = renderDragImage(dragText)
+                        dragDropManager?.doDragDrop(dataObject, DragDropEffect.Copy, dragSource, dragImage)
                         Logger.debug { "Drag finished" }
                     }
                 }
@@ -405,6 +415,45 @@ abstract class SkikoWindowWin32(private val app: Application) : AutoCloseable {
                 surface.flushAndSubmit()
                 angleRenderer.swapBuffers()
             }
+        }
+    }
+
+    /**
+     * Renders a rounded-rectangle badge carrying [text] to an offscreen raster surface via Skiko and
+     * encodes it as a PNG for use as the drag image under the cursor, sized to the current DPI. A
+     * raster surface needs no GL context, so this runs on the STA thread the drag starts on (unlike
+     * [performDrawing], which draws through ANGLE).
+     */
+    private fun renderDragImage(text: String): DragImage {
+        val scale = window.getScaleFactor()
+        val paddingX = 14f * scale
+        val paddingY = 10f * scale
+
+        // "Segoe UI" is the Windows UI font; DirectWrite does not resolve the generic "sans-serif" name.
+        val typeface = requireNotNull(FontMgr.default.matchFamilyStyle("Segoe UI", FontStyle.NORMAL)) {
+            "Segoe UI font is unavailable"
+        }
+
+        return Font(typeface, 12f * scale).use { font ->
+            val metrics = font.metrics
+            val width = ceil(font.measureTextWidth(text) + paddingX * 2).toInt().coerceAtLeast(1)
+            val height = ceil((metrics.descent - metrics.ascent) + paddingY * 2).toInt().coerceAtLeast(1)
+
+            val png = Surface.makeRasterN32Premul(width, height).use { surface ->
+                val canvas = surface.canvas
+                canvas.clear(Color.TRANSPARENT)
+                Paint().use { paint ->
+                    paint.isAntiAlias = true
+                    paint.color = 0xE61F1F1F.toInt() // translucent dark backplate
+                    canvas.drawRRect(RRect.makeXYWH(0f, 0f, width.toFloat(), height.toFloat(), 8f * scale), paint)
+                    paint.color = Color.WHITE
+                    canvas.drawString(text, paddingX, paddingY - metrics.ascent, font, paint)
+                }
+                surface.makeImageSnapshot().use { it.encodeToData(EncodedImageFormat.PNG)!!.bytes }
+            }
+
+            // Anchor the cursor near the left edge so the badge trails the pointer like a dragged item.
+            DragImage(png, PhysicalPoint((16f * scale).toInt(), height / 2))
         }
     }
 
