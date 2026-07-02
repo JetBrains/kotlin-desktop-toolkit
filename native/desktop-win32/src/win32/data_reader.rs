@@ -4,13 +4,14 @@ use anyhow::Context;
 use windows::Win32::{
     Foundation::{DV_E_TYMED, E_POINTER, HANDLE},
     System::{
-        Com::{DVASPECT_CONTENT, FORMATETC, IDataObject, IStream, STGMEDIUM, TYMED, TYMED_HGLOBAL, TYMED_ISTREAM},
+        Com::{IDataObject, IStream, STGMEDIUM, TYMED, TYMED_HGLOBAL, TYMED_ISTREAM},
         Ole::ReleaseStgMedium,
     },
 };
 use windows_core::Error as WinError;
 
 use super::{
+    data_object::get_format_etc_for_supported_tymeds,
     data_transfer::DataFormat,
     global_data::{HGlobalData, hglobal_reader},
 };
@@ -38,13 +39,7 @@ pub struct DataReader {
 
 impl DataReader {
     pub fn create(data_object: &IDataObject, data_format: DataFormat) -> anyhow::Result<Self> {
-        let format_desc = FORMATETC {
-            cfFormat: data_format.id().try_into()?,
-            ptd: core::ptr::null_mut(),
-            dwAspect: DVASPECT_CONTENT.0,
-            lindex: -1,
-            tymed: (TYMED_HGLOBAL.0 | TYMED_ISTREAM.0).cast_unsigned(),
-        };
+        let format_desc = get_format_etc_for_supported_tymeds(data_format);
         let medium = unsafe { data_object.GetData(&raw const format_desc)? };
         let guard = StgMediumGuard { medium };
         let source = match TYMED(guard.medium.tymed.cast_signed()) {
