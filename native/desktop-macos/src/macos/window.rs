@@ -19,10 +19,10 @@ use crate::{
             handle_drag_target_updated,
         },
         events::{
-            handle_flags_change, handle_key_up_event, handle_mouse_down, handle_mouse_drag, handle_mouse_enter, handle_mouse_exit,
-            handle_mouse_move, handle_mouse_up, handle_scroll_wheel, handle_swipe, handle_window_changed_occlusion_state,
-            handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move,
-            handle_window_resize, handle_window_screen_change,
+            handle_flags_change, handle_key_up_event, handle_magnify, handle_mouse_down, handle_mouse_drag, handle_mouse_enter,
+            handle_mouse_exit, handle_mouse_move, handle_mouse_up, handle_rotate, handle_scroll_wheel, handle_smart_magnify, handle_swipe,
+            handle_window_changed_occlusion_state, handle_window_close_request, handle_window_focus_change,
+            handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change,
         },
         string::copy_to_ns_string,
         text_input_client::NOT_FOUND_NS_RANGE,
@@ -879,6 +879,30 @@ define_class!(
         fn swipe_with_event(&self, event: &NSEvent) {
             catch_panic(|| {
                 handle_swipe(event);
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(magnifyWithEvent:))]
+        fn magnify_with_event(&self, event: &NSEvent) {
+            catch_panic(|| {
+                handle_magnify(event);
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(rotateWithEvent:))]
+        fn rotate_with_event(&self, event: &NSEvent) {
+            catch_panic(|| {
+                handle_rotate(event);
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(smartMagnifyWithEvent:))]
+        fn smart_magnify_with_event(&self, event: &NSEvent) {
+            catch_panic(|| {
+                handle_smart_magnify(event);
                 Ok(())
             });
         }

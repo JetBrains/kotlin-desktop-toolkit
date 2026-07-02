@@ -538,6 +538,22 @@ class ApplicationState : AutoCloseable {
                 Logger.info { "$event" }
             }
 
+            is Event.Magnify -> {
+                Logger.info { "$event" }
+            }
+
+            is Event.Rotate -> {
+                Logger.info { "$event" }
+            }
+
+            is Event.SmartMagnify -> {
+                Logger.info { "$event" }
+            }
+
+            is Event.Swipe -> {
+                Logger.info { "$event" }
+            }
+
 //            is Event.MouseEntered -> {
 //                Logger.info { "$event" }
 //            }
