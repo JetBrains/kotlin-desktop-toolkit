@@ -8,16 +8,16 @@ use std::sync::{
 };
 
 use anyhow::Context;
-use windows::Win32::System::Com::IDataObject;
+use windows::Win32::{Foundation::S_FALSE, System::Com::IDataObject};
 use windows_core::ComObject;
 
 use super::{
     com::ComInterfaceRawPtr,
-    data_object::{DataObject, enum_data_object_format_ids},
+    data_object::{DataObject, enum_data_object_format_ids, get_format_etc_for_supported_tymeds},
     data_reader::DataReader,
     data_transfer::{
-        DataFormat, DataTransferBoolResult, DataTransferByteArrayResult, DataTransferStringArrayResult, DataTransferStringResult,
-        DataTransferUInt32ArrayResult, data_transfer_boundary,
+        DataFormat, DataTransferBoolResult, DataTransferByteArrayResult, DataTransferFailure, DataTransferOperationResult,
+        DataTransferStringArrayResult, DataTransferStringResult, DataTransferUInt32ArrayResult, data_transfer_boundary,
     },
     global_data::hglobal_writer,
     strings::copy_from_utf8_string,
@@ -124,6 +124,22 @@ pub extern "C" fn com_data_object_enum_formats_result(data_object_ptr: ComInterf
         let data_object = data_object_ptr.cast::<IDataObject>()?;
         let formats = enum_data_object_format_ids(&data_object)?;
         Ok(AutoDropArray::new(formats.into_iter().collect()))
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn com_data_object_query_get_data_result(
+    data_object_ptr: ComInterfaceRawPtr,
+    data_format: u32,
+) -> DataTransferOperationResult {
+    data_transfer_boundary("com_data_object_query_get_data_result", || {
+        let data_object = data_object_ptr.cast::<IDataObject>()?;
+        let format_etc = get_format_etc_for_supported_tymeds(DataFormat::Other(data_format));
+        match unsafe { data_object.QueryGetData(&raw const format_etc) } {
+            S_FALSE => anyhow::bail!(DataTransferFailure::format_unavailable(data_format)),
+            hr => hr.ok()?,
+        }
+        Ok(())
     })
 }
 

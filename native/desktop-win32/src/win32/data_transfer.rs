@@ -155,6 +155,15 @@ impl DataTransferFailure {
     }
 
     #[must_use]
+    pub fn format_unavailable(format_id: u32) -> Self {
+        Self {
+            status: DataTransferStatus::FormatUnavailable,
+            code: 0,
+            message: format!("requested format is unavailable: {format_id}"),
+        }
+    }
+
+    #[must_use]
     pub fn invalid_data(message: impl Into<String>) -> Self {
         Self::invalid_data_with_code(0, message)
     }

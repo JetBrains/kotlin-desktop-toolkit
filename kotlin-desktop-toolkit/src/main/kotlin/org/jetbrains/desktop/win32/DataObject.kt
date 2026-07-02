@@ -45,6 +45,16 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
         formatIds.map(DataFormat::fromNative)
     }
 
+    public fun canReadItemOfType(format: DataFormat): Boolean = requireOpen { ptr ->
+        Arena.ofConfined().use { arena ->
+            val result = ffiDownCall {
+                desktop_win32_h.com_data_object_query_get_data_result(arena, ptr, format.id)
+            }
+            val operation = dataTransferOperationFromNative(result)
+            operation.requireOkOrUnavailable()
+        }
+    }
+
     public fun readItemOfType(format: DataFormat): ByteArray = requireOpen { ptr ->
         Arena.ofConfined().use { arena ->
             val result = ffiDownCall {
