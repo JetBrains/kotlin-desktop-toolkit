@@ -78,7 +78,7 @@ native/
         drag_drop.rs              IDropSource / IDropTarget via windows-core implement!
         drag_drop_api.rs          FFI: drag_drop_register_target / start / revoke
         wic_image.rs              WIC decode: encoded image → top-down 32bpp straight-BGRA DIB (WicBitmap)
-        data_object.rs            IDataObject impl backed by papaya::HashMap<u32, HGlobalData>
+        data_object.rs            IDataObject impl backed by papaya::HashMap<u32, StoredMedium>
         data_object_api.rs        Global registry (id→ComObject); result-bearing read API
         data_reader.rs            STGMEDIUM RAII; HGLOBAL/IStream-uniform get_*
         data_transfer.rs          DataFormat enum + DataTransfer* result vocabulary (DataTransferStatus / DataTransferFailure)
