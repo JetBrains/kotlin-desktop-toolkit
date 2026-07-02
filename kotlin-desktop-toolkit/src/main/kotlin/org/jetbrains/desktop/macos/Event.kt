@@ -5,6 +5,7 @@ import org.jetbrains.desktop.macos.generated.NativeApplicationOpenUrlsEvent
 import org.jetbrains.desktop.macos.generated.NativeEvent
 import org.jetbrains.desktop.macos.generated.NativeKeyDownEvent
 import org.jetbrains.desktop.macos.generated.NativeKeyUpEvent
+import org.jetbrains.desktop.macos.generated.NativeMagnifyEvent
 import org.jetbrains.desktop.macos.generated.NativeModifiersChangedEvent
 import org.jetbrains.desktop.macos.generated.NativeMouseDownEvent
 import org.jetbrains.desktop.macos.generated.NativeMouseDraggedEvent
@@ -12,7 +13,10 @@ import org.jetbrains.desktop.macos.generated.NativeMouseEnteredEvent
 import org.jetbrains.desktop.macos.generated.NativeMouseExitedEvent
 import org.jetbrains.desktop.macos.generated.NativeMouseMovedEvent
 import org.jetbrains.desktop.macos.generated.NativeMouseUpEvent
+import org.jetbrains.desktop.macos.generated.NativeRotateEvent
 import org.jetbrains.desktop.macos.generated.NativeScrollWheelEvent
+import org.jetbrains.desktop.macos.generated.NativeSmartMagnifyEvent
+import org.jetbrains.desktop.macos.generated.NativeSwipeEvent
 import org.jetbrains.desktop.macos.generated.NativeWindowChangedOcclusionStateEvent
 import org.jetbrains.desktop.macos.generated.NativeWindowCloseRequestEvent
 import org.jetbrains.desktop.macos.generated.NativeWindowFocusChangeEvent
@@ -253,6 +257,67 @@ public sealed class Event {
     ) : Event(),
         WindowEvent
 
+    /**
+     * Pinch-to-zoom trackpad gesture (`magnifyWithEvent:`).
+     *
+     * @param magnification the incremental magnification change for this event, to be accumulated over
+     * the gesture. A full pinch sums to roughly ±1.0.
+     * Apple doc: https://developer.apple.com/documentation/appkit/nsevent/magnification?language=objc
+     */
+    public data class Magnify(
+        override val windowId: WindowId,
+        val magnification: Double,
+        val phase: EventPhase,
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp,
+    ) : Event(),
+        WindowEvent
+
+    /**
+     * Two-finger rotation trackpad gesture (`rotateWithEvent:`).
+     *
+     * @param rotation the incremental rotation change in degrees for this event, to be accumulated over
+     * the gesture. Counter-clockwise rotation is positive.
+     * Apple doc: https://developer.apple.com/documentation/appkit/nsevent/rotation?language=objc
+     */
+    public data class Rotate(
+        override val windowId: WindowId,
+        val rotation: Double,
+        val phase: EventPhase,
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp,
+    ) : Event(),
+        WindowEvent
+
+    /**
+     * Two-finger double-tap "smart zoom" trackpad gesture (`smartMagnifyWithEvent:`).
+     * Carries no magnitude; the consumer decides how to toggle zoom.
+     * Apple doc: https://developer.apple.com/documentation/appkit/nsresponder/smartmagnify(with:)?language=objc
+     */
+    public data class SmartMagnify(
+        override val windowId: WindowId,
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp,
+    ) : Event(),
+        WindowEvent
+
+    /**
+     * Trackpad swipe gesture (`swipeWithEvent:`).
+     *
+     * @param deltaX horizontal direction of the swipe, typically -1, 0, or 1 (positive is a swipe to the left).
+     * @param deltaY vertical direction of the swipe, typically -1, 0, or 1 (positive is a swipe up).
+     * Apple doc: https://developer.apple.com/documentation/appkit/nsresponder/swipe(with:)?language=objc
+     */
+    public data class Swipe(
+        override val windowId: WindowId,
+        val deltaX: Double,
+        val deltaY: Double,
+        val phase: EventPhase,
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp,
+    ) : Event(),
+        WindowEvent
+
     public data class WindowScreenChange(
         override val windowId: WindowId,
         val newScreenId: ScreenId,
@@ -408,7 +473,47 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
                 locationInWindow = LogicalPoint.fromNative(NativeScrollWheelEvent.location_in_window(nativeEvent)),
                 timestamp = Timestamp(NativeScrollWheelEvent.timestamp(nativeEvent)),
             )
-        } desktop_macos_h.NativeEvent_WindowScreenChange() -> {
+        }
+        desktop_macos_h.NativeEvent_Magnify() -> {
+            val nativeEvent = NativeEvent.magnify(s)
+            Event.Magnify(
+                windowId = NativeMagnifyEvent.window_id(nativeEvent),
+                magnification = NativeMagnifyEvent.magnification(nativeEvent),
+                phase = EventPhase.fromNative(NativeMagnifyEvent.phase(nativeEvent)),
+                locationInWindow = LogicalPoint.fromNative(NativeMagnifyEvent.location_in_window(nativeEvent)),
+                timestamp = Timestamp(NativeMagnifyEvent.timestamp(nativeEvent)),
+            )
+        }
+        desktop_macos_h.NativeEvent_Rotate() -> {
+            val nativeEvent = NativeEvent.rotate(s)
+            Event.Rotate(
+                windowId = NativeRotateEvent.window_id(nativeEvent),
+                rotation = NativeRotateEvent.rotation(nativeEvent),
+                phase = EventPhase.fromNative(NativeRotateEvent.phase(nativeEvent)),
+                locationInWindow = LogicalPoint.fromNative(NativeRotateEvent.location_in_window(nativeEvent)),
+                timestamp = Timestamp(NativeRotateEvent.timestamp(nativeEvent)),
+            )
+        }
+        desktop_macos_h.NativeEvent_SmartMagnify() -> {
+            val nativeEvent = NativeEvent.smart_magnify(s)
+            Event.SmartMagnify(
+                windowId = NativeSmartMagnifyEvent.window_id(nativeEvent),
+                locationInWindow = LogicalPoint.fromNative(NativeSmartMagnifyEvent.location_in_window(nativeEvent)),
+                timestamp = Timestamp(NativeSmartMagnifyEvent.timestamp(nativeEvent)),
+            )
+        }
+        desktop_macos_h.NativeEvent_Swipe() -> {
+            val nativeEvent = NativeEvent.swipe(s)
+            Event.Swipe(
+                windowId = NativeSwipeEvent.window_id(nativeEvent),
+                deltaX = NativeSwipeEvent.delta_x(nativeEvent),
+                deltaY = NativeSwipeEvent.delta_y(nativeEvent),
+                phase = EventPhase.fromNative(NativeSwipeEvent.phase(nativeEvent)),
+                locationInWindow = LogicalPoint.fromNative(NativeSwipeEvent.location_in_window(nativeEvent)),
+                timestamp = Timestamp(NativeSwipeEvent.timestamp(nativeEvent)),
+            )
+        }
+        desktop_macos_h.NativeEvent_WindowScreenChange() -> {
             val nativeEvent = NativeEvent.window_screen_change(s)
             Event.WindowScreenChange(
                 windowId = NativeWindowScreenChangeEvent.window_id(nativeEvent),

@@ -6,6 +6,8 @@ public value class MouseButton internal constructor(public val value: Int) {
         public val LEFT: MouseButton = MouseButton(0)
         public val RIGHT: MouseButton = MouseButton(1)
         public val MIDDLE: MouseButton = MouseButton(2)
+        public val BACK: MouseButton = MouseButton(3)
+        public val FORWARD: MouseButton = MouseButton(4)
     }
 
     override fun toString(): String {
@@ -13,6 +15,8 @@ public value class MouseButton internal constructor(public val value: Int) {
             LEFT -> "MouseButton.LEFT"
             RIGHT -> "MouseButton.RIGHT"
             MIDDLE -> "MouseButton.MIDDLE"
+            BACK -> "MouseButton.BACK"
+            FORWARD -> "MouseButton.FORWARD"
             else -> "MouseButton.Other($value)"
         }
     }
