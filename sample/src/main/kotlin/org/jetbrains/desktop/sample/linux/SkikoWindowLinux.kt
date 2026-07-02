@@ -15,6 +15,7 @@ import org.jetbrains.skia.DirectContext
 import org.jetbrains.skia.FramebufferFormat
 import org.jetbrains.skia.GLAssembledInterface
 import org.jetbrains.skia.ImageInfo
+import org.jetbrains.skia.Rect
 import org.jetbrains.skia.Surface
 import org.jetbrains.skia.SurfaceColorFormat
 import org.jetbrains.skia.SurfaceOrigin
@@ -27,7 +28,7 @@ internal fun performSoftwareDrawing(size: PhysicalSize, softwareDrawData: Softwa
             width = size.width,
             height = size.height,
             colorType = ColorType.BGRA_8888,
-            alphaType = ColorAlphaType.OPAQUE,
+            alphaType = ColorAlphaType.PREMUL,
             colorSpace = ColorSpace.sRGB,
         ),
         pixelsPtr = softwareDrawData.canvas,
@@ -74,14 +75,31 @@ abstract class SkikoWindowLinux(
 
     fun performDrawing(event: Event.WindowDraw): Boolean {
         val draw = { surface: Surface ->
+            val canvas = surface.canvas
+
+            canvas.clear(0x00000000)
+            canvas.save()
+            canvas.clipRect(
+                Rect(
+                    event.physicalInsets.left.toFloat(),
+                    event.physicalInsets.top.toFloat(),
+                    (event.physicalInsets.left + event.physicalGeometrySize.width).toFloat(),
+                    (event.physicalInsets.top + event.physicalGeometrySize.height).toFloat(),
+                )
+            )
+            canvas.translate(event.physicalInsets.left.toFloat(), event.physicalInsets.top.toFloat())
+
             val time = creationTime.elapsedNow().inWholeMilliseconds
-            surface.canvas.draw(event.size, event.scale, time)
+            surface.canvas.draw(event.physicalGeometrySize, event.scale, time)
+
+            canvas.restore()
             surface.flushAndSubmit()
+
             true
         }
         return event.softwareDrawData?.let { softwareDrawData ->
-            performSoftwareDrawing(event.size, softwareDrawData, draw)
-        } ?: performOpenGlDrawing(event.size, directContext, draw)
+            performSoftwareDrawing(event.physicalBufferSize, softwareDrawData, draw)
+        } ?: performOpenGlDrawing(event.physicalBufferSize, directContext, draw)
     }
 
     abstract fun Canvas.draw(size: PhysicalSize, scale: Double, time: Long)

@@ -5,7 +5,7 @@ use crate::linux::{
     data_transfer::MimeTypes,
     events::{RequestId, WindowDecorationMode, WindowId},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
-    geometry::{LogicalPoint, LogicalSize},
+    geometry::{LogicalPoint, LogicalSideOffsets, LogicalSize, PhysicalSize},
     pointer_shapes_api::PointerShape,
     window_resize_edge_api::WindowResizeEdge,
 };
@@ -54,6 +54,8 @@ pub struct WindowParams<'a> {
 
     pub min_size: LogicalSize,
 
+    pub insets: LogicalSideOffsets,
+
     pub title: BorrowedUtf8<'a>,
 
     /// See <https://wayland.app/protocols/xdg-shell#xdg_toplevel:request:set_app_id>
@@ -91,8 +93,27 @@ pub extern "C" fn window_set_pointer_shape(mut app_ptr: AppPtr, window_id: Windo
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_get_size(app_ptr: AppPtr, window_id: WindowId) -> LogicalSize {
-    with_window(&app_ptr, window_id, "window_get_size", |w| Ok(w.size)).unwrap_or_default()
+pub extern "C" fn window_get_logical_geometry_size(app_ptr: AppPtr, window_id: WindowId) -> LogicalSize {
+    with_window(&app_ptr, window_id, "window_get_logical_geometry_size", |w| {
+        Ok(w.logical_geometry_size)
+    })
+    .unwrap_or_default()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_get_logical_buffer_size(app_ptr: AppPtr, window_id: WindowId) -> LogicalSize {
+    with_window(&app_ptr, window_id, "window_get_logical_buffer_size", |w| {
+        Ok(w.logical_buffer_size())
+    })
+    .unwrap_or_default()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_get_physical_buffer_size(app_ptr: AppPtr, window_id: WindowId) -> PhysicalSize {
+    with_window(&app_ptr, window_id, "window_get_physical_buffer_size", |w| {
+        Ok(w.physical_buffer_size())
+    })
+    .unwrap_or_default()
 }
 
 #[unsafe(no_mangle)]

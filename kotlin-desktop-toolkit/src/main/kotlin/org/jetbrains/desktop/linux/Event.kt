@@ -313,7 +313,9 @@ public sealed class Event {
     @ConsistentCopyVisibility
     public data class WindowConfigure internal constructor(
         val windowId: WindowId,
-        val size: LogicalSize,
+        val logicalGeometrySize: LogicalSize,
+        val logicalBufferSize: LogicalSize,
+        val logicalInsets: LogicalSideOffsets,
         val active: Boolean,
         val maximized: Boolean,
         val fullscreen: Boolean,
@@ -348,7 +350,9 @@ public sealed class Event {
     public data class WindowDraw internal constructor(
         val windowId: WindowId,
         val softwareDrawData: SoftwareDrawData?,
-        val size: PhysicalSize,
+        val physicalGeometrySize: PhysicalSize,
+        val physicalBufferSize: PhysicalSize,
+        val physicalInsets: PhysicalSideOffsets,
         val scale: Double,
     ) : Event()
 

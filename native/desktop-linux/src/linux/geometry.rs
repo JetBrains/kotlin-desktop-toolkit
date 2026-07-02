@@ -1,5 +1,5 @@
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct PhysicalPixels(pub i32);
 
 #[repr(transparent)]
@@ -15,7 +15,7 @@ impl LogicalPixels {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct PhysicalSize {
     pub width: PhysicalPixels,
     pub height: PhysicalPixels,
@@ -67,4 +67,34 @@ pub struct LogicalRect {
     pub y: i32,
     pub width: i32,
     pub height: i32,
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy)]
+pub struct LogicalSideOffsets {
+    pub top: u32,
+    pub left: u32,
+    pub bottom: u32,
+    pub right: u32,
+}
+
+impl LogicalSideOffsets {
+    #[must_use]
+    pub fn to_physical(&self, scale: f64) -> PhysicalSideOffsets {
+        PhysicalSideOffsets {
+            top: to_physical_value(self.top, scale),
+            left: to_physical_value(self.left, scale),
+            bottom: to_physical_value(self.bottom, scale),
+            right: to_physical_value(self.right, scale),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct PhysicalSideOffsets {
+    pub top: PhysicalPixels,
+    pub left: PhysicalPixels,
+    pub bottom: PhysicalPixels,
+    pub right: PhysicalPixels,
 }

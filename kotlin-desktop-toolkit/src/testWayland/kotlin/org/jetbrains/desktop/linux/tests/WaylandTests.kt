@@ -26,6 +26,7 @@ import org.jetbrains.desktop.linux.KotlinDesktopToolkit
 import org.jetbrains.desktop.linux.LogLevel
 import org.jetbrains.desktop.linux.LogicalPoint
 import org.jetbrains.desktop.linux.LogicalRect
+import org.jetbrains.desktop.linux.LogicalSideOffsets
 import org.jetbrains.desktop.linux.LogicalSize
 import org.jetbrains.desktop.linux.MouseButton
 import org.jetbrains.desktop.linux.PhysicalSize
@@ -933,7 +934,9 @@ internal data class InitialSettings(
 internal data class ExpectedWindowConfigure(
     val checkWindowCapabilities: (WindowCapabilities) -> Unit,
     val windowId: WindowId,
-    val size: LogicalSize,
+    val logicalGeometrySize: LogicalSize,
+    val logicalBufferSize: LogicalSize,
+    val logicalInsets: LogicalSideOffsets,
     val active: Boolean,
     val maximized: Boolean,
     val fullscreen: Boolean,
@@ -950,8 +953,14 @@ internal data class ExpectedWindowConfigure(
         if (windowId != event.windowId) {
             failures.add("\nWindowConfigure.windowId(expected=$windowId, actual=${event.windowId})$msg")
         }
-        if (size != event.size) {
-            failures.add("\nWindowConfigure.size(expected=$size, actual=${event.size})$msg")
+        if (logicalGeometrySize != event.logicalGeometrySize) {
+            failures.add("\nWindowConfigure.logicalGeometrySize(expected=$logicalGeometrySize, actual=${event.logicalGeometrySize})$msg")
+        }
+        if (logicalBufferSize != event.logicalBufferSize) {
+            failures.add("\nWindowConfigure.logicalBufferSize(expected=$logicalBufferSize, actual=${event.logicalBufferSize})$msg")
+        }
+        if (logicalInsets != event.logicalInsets) {
+            failures.add("\nWindowConfigure.logicalInsets(expected=$logicalInsets, actual=${event.logicalInsets})$msg")
         }
         if (active != event.active) {
             failures.add("\nWindowConfigure.active(expected=$active, actual=${event.active})$msg")
@@ -1093,7 +1102,7 @@ abstract class WaylandTestsBase {
     ): ApplicationConfig {
         return ApplicationConfig(
             eventHandler = { event ->
-                val shouldDraw = event is Event.WindowDraw && lastDrawEvents[event.windowId]?.size != event.size
+                val shouldDraw = event is Event.WindowDraw && lastDrawEvents[event.windowId]?.physicalBufferSize != event.physicalBufferSize
                 if (shouldDraw) {
                     lastDrawEvents[event.windowId] = event
                 }
@@ -1101,11 +1110,11 @@ abstract class WaylandTestsBase {
                     // Need to draw window content in order for Sway to activate it
                     if (shouldDraw) {
                         event.softwareDrawData?.let { softwareDrawData ->
-                            performSoftwareDrawing(event.size, softwareDrawData) { canvas ->
+                            performSoftwareDrawing(event.physicalBufferSize, softwareDrawData) { canvas ->
                                 canvas.clear(SkColor.WHITE)
                                 SkPaint().use { paint ->
                                     paint.color = SkColor.RED
-                                    canvas.drawRect(SkRect.makeXYWH(event.size.width - 10f, event.size.height - 10f, 10f, 10f), paint)
+                                    canvas.drawRect(SkRect.makeXYWH(event.physicalBufferSize.width - 10f, event.physicalBufferSize.height - 10f, 10f, 10f), paint)
                                 }
                             }
                             EventHandlerResult.Stop
@@ -1954,21 +1963,23 @@ class WaylandTests : WaylandTestsBase() {
 //        log("$screens")
         val screen = screens.firstOrNull()
         assertNotNull(screen)
-        val fullscreenWindowSize = screen.size
+        val fullscreenGeometrySize = screen.size
         assertEquals(LogicalPoint(0.0, 0.0), screen.origin)
         if (screen.name != "WL-1") {
             assertEquals("HEADLESS-1", screen.name)
         }
         assertNotEquals(0, screen.screenId)
 
-        val windowParams = defaultWindowParams().copy(minSize = LogicalSize(width = 100, height = 70))
-        val requestedSize = assertNotNull(windowParams.size)
+        val windowParams = defaultWindowParams().copy(minSize = LogicalSize(width = 100, height = 70), insets = LogicalSideOffsets.Zero)
+        val requestedGeometrySize = assertNotNull(windowParams.size)
         val window = ui { app.createWindow(windowParams) }
 
         var expectedConfigureEvent = ExpectedWindowConfigure(
             checkWindowCapabilities,
             windowId = windowParams.windowId,
-            size = requestedSize,
+            logicalGeometrySize = requestedGeometrySize,
+            logicalBufferSize = requestedGeometrySize,
+            logicalInsets = LogicalSideOffsets.Zero,
             active = false,
             maximized = false,
             fullscreen = false,
@@ -1991,7 +2002,8 @@ class WaylandTests : WaylandTestsBase() {
             assertEquals(windowParams.windowId, event.windowId)
             scale = event.scale
 //            assertEquals(1.0, event.scale) // https://github.com/swaywm/sway/issues/7668
-            assertEquals(requestedSize.toPhysical(event.scale), event.size)
+            assertEquals(requestedGeometrySize.toPhysical(event.scale), event.physicalGeometrySize)
+            assertEquals(requestedGeometrySize.toPhysical(event.scale), event.physicalBufferSize)
         }
 
         withNextEvent { event ->
@@ -2031,7 +2043,8 @@ class WaylandTests : WaylandTestsBase() {
                 } else {
                     scale = event.scale
                 }
-                assertEquals(requestedSize.toPhysical(event.scale), event.size)
+                assertEquals(requestedGeometrySize.toPhysical(event.scale), event.physicalGeometrySize)
+                assertEquals(requestedGeometrySize.toPhysical(event.scale), event.physicalBufferSize)
                 getNextEvent()
             } else {
                 event
@@ -2090,7 +2103,8 @@ class WaylandTests : WaylandTestsBase() {
             val mouseMovedEvent = if (event is Event.WindowDraw) {
                 assertEquals(windowParams.windowId, event.windowId)
                 assertEquals(scale, event.scale)
-                assertEquals(requestedSize.toPhysical(event.scale), event.size)
+                assertEquals(requestedGeometrySize.toPhysical(event.scale), event.physicalGeometrySize)
+                assertEquals(requestedGeometrySize.toPhysical(event.scale), event.physicalBufferSize)
                 getNextEvent()
             } else {
                 event
@@ -2123,7 +2137,8 @@ class WaylandTests : WaylandTestsBase() {
             val mouseExitedEvent = if (event is Event.WindowDraw) {
                 assertEquals(windowParams.windowId, event.windowId)
                 assertEquals(scale, event.scale)
-                assertEquals(requestedSize.toPhysical(event.scale), event.size)
+                assertEquals(requestedGeometrySize.toPhysical(event.scale), event.physicalGeometrySize)
+                assertEquals(requestedGeometrySize.toPhysical(event.scale), event.physicalBufferSize)
                 getNextEvent()
             } else {
                 event
@@ -2148,7 +2163,7 @@ class WaylandTests : WaylandTestsBase() {
                 ui { window.setFullScreen() }
             }
 
-            expectedConfigureEvent = expectedConfigureEvent.copy(fullscreen = true, size = fullscreenWindowSize)
+            expectedConfigureEvent = expectedConfigureEvent.copy(fullscreen = true, logicalGeometrySize = fullscreenGeometrySize, logicalBufferSize = fullscreenGeometrySize)
             withNextEvent { event ->
                 expectedConfigureEvent.assertEquals(event, "fullscreen configure, useWm=$useWm")
             }
@@ -2158,7 +2173,8 @@ class WaylandTests : WaylandTestsBase() {
                 assertInstanceOf<Event.WindowDraw>(event)
                 assertEquals(windowParams.windowId, event.windowId)
                 assertEquals(scale, event.scale)
-                assertEquals(lastScreenSize?.toPhysical(event.scale), event.size)
+                assertEquals(lastScreenSize?.toPhysical(event.scale), event.physicalGeometrySize)
+                assertEquals(lastScreenSize?.toPhysical(event.scale), event.physicalBufferSize)
             }
 
             withNextEvent { event ->
@@ -2187,7 +2203,7 @@ class WaylandTests : WaylandTestsBase() {
                 ui { window.unsetFullScreen() }
             }
 
-            expectedConfigureEvent = expectedConfigureEvent.copy(fullscreen = false, size = requestedSize)
+            expectedConfigureEvent = expectedConfigureEvent.copy(fullscreen = false, logicalGeometrySize = requestedGeometrySize, logicalBufferSize = requestedGeometrySize)
 
             withNextEvent { event ->
                 expectedConfigureEvent.assertEquals(event, "fullscreen exit configure, useWm=$useWm")
@@ -2198,7 +2214,8 @@ class WaylandTests : WaylandTestsBase() {
                 assertInstanceOf<Event.WindowDraw>(event)
                 assertEquals(windowParams.windowId, event.windowId)
                 assertEquals(scale, event.scale)
-                assertEquals(requestedSize.toPhysical(event.scale), event.size)
+                assertEquals(requestedGeometrySize.toPhysical(event.scale), event.physicalGeometrySize)
+                assertEquals(requestedGeometrySize.toPhysical(event.scale), event.physicalBufferSize)
             }
 
             withNextEvent { event ->
@@ -2416,8 +2433,13 @@ class WaylandTests : WaylandTestsBase() {
     fun testMultipleWindowCreation() {
         run(defaultApplicationConfig())
 
-        val window1Params = defaultWindowParams()
-        val requestedWindow1Size = assertNotNull(window1Params.size)
+        val requestedWindow1Insets = LogicalSideOffsets(10)
+        val window1Params = defaultWindowParams().copy(insets = requestedWindow1Insets)
+        val requestedWindow1GeometrySize = assertNotNull(window1Params.size)
+        val requestedWindow1BufferSize = LogicalSize(
+            width = requestedWindow1GeometrySize.width + requestedWindow1Insets.left + requestedWindow1Insets.right,
+            height = requestedWindow1GeometrySize.height + requestedWindow1Insets.top + requestedWindow1Insets.bottom,
+        )
         val window1 = ui { app.createWindow(window1Params) }
 
         awaitEventOfType<Event.WindowDraw>(msg = "Draw first window") { event ->
@@ -2428,7 +2450,9 @@ class WaylandTests : WaylandTestsBase() {
         var expectedWindow1ConfigureEvent = ExpectedWindowConfigure(
             checkWindowCapabilities,
             windowId = window1Params.windowId,
-            size = requestedWindow1Size,
+            logicalGeometrySize = requestedWindow1GeometrySize,
+            logicalBufferSize = requestedWindow1BufferSize,
+            logicalInsets = requestedWindow1Insets,
             active = true,
             maximized = false,
             fullscreen = false,
@@ -2451,11 +2475,11 @@ class WaylandTests : WaylandTestsBase() {
 
         val window1WmId = wm.getFocusedWindowState()!!.getWindowId()
 
-        val requestedWindow2Size = LogicalSize(width = 300, height = 200)
+        val requestedWindow2GeometrySize = LogicalSize(width = 300, height = 200)
         val window2Params = WindowParams(
             windowId = 1,
             title = "Test Window 2",
-            size = requestedWindow2Size,
+            size = requestedWindow2GeometrySize,
             minSize = null,
             preferClientSideDecoration = true,
             renderingMode = RenderingMode.Software,
@@ -2470,7 +2494,9 @@ class WaylandTests : WaylandTestsBase() {
         var expectedWindow2ConfigureEvent = ExpectedWindowConfigure(
             checkWindowCapabilities,
             windowId = window2Params.windowId,
-            size = requestedWindow2Size,
+            logicalGeometrySize = requestedWindow2GeometrySize,
+            logicalBufferSize = requestedWindow2GeometrySize,
+            logicalInsets = LogicalSideOffsets.Zero,
             active = true,
             maximized = false,
             fullscreen = false,
@@ -2576,10 +2602,15 @@ class WaylandTests : WaylandTestsBase() {
 
         wm.tileWindows(listOf(window2WmId, window1WmId))
 
-        val tiledWindowSize = wm.getMaximizedWindowSize(screen.name!!).let { LogicalSize(width = it.width / 2, height = it.height) }
+        val tiledWindowGeometrySize = wm.getMaximizedWindowSize(screen.name!!).let { LogicalSize(width = it.width / 2, height = it.height) }
+        val tiledWindow1BufferSize = LogicalSize(
+            width = tiledWindowGeometrySize.width + requestedWindow1Insets.left + requestedWindow1Insets.right,
+            height = tiledWindowGeometrySize.height + requestedWindow1Insets.top + requestedWindow1Insets.bottom,
+        )
         expectedWindow1ConfigureEvent =
             expectedWindow1ConfigureEvent.copy(
-                size = tiledWindowSize,
+                logicalGeometrySize = tiledWindowGeometrySize,
+                logicalBufferSize = tiledWindow1BufferSize,
                 tiledLeft = true,
                 tiledRight = true,
                 tiledTop = true,
@@ -2589,7 +2620,8 @@ class WaylandTests : WaylandTestsBase() {
         expectedWindow2ConfigureEvent =
             expectedWindow2ConfigureEvent.copy(
                 decorationMode = WindowDecorationMode.Server,
-                size = tiledWindowSize,
+                logicalGeometrySize = tiledWindowGeometrySize,
+                logicalBufferSize = tiledWindowGeometrySize,
                 tiledLeft = true,
                 tiledRight = true,
                 tiledTop = true,
@@ -2599,7 +2631,7 @@ class WaylandTests : WaylandTestsBase() {
         checkNextEvents(
             checks = mapOf(
                 "Window 1 tiled" to { event, _ ->
-                    if (event is Event.WindowConfigure && event.windowId == window1Params.windowId && event.size == tiledWindowSize) {
+                    if (event is Event.WindowConfigure && event.windowId == window1Params.windowId && event.logicalGeometrySize == tiledWindowGeometrySize) {
                         expectedWindow1ConfigureEvent.assertEquals(event)
                         true
                     } else {
@@ -2607,7 +2639,7 @@ class WaylandTests : WaylandTestsBase() {
                     }
                 },
                 "Window 2 tiled" to { event, _ ->
-                    if (event is Event.WindowConfigure && event.windowId == window2Params.windowId && event.size == tiledWindowSize) {
+                    if (event is Event.WindowConfigure && event.windowId == window2Params.windowId && event.logicalGeometrySize == tiledWindowGeometrySize) {
                         expectedWindow2ConfigureEvent.assertEquals(event)
                         true
                     } else {
@@ -3926,11 +3958,11 @@ text/plain;charset=utf-8
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
         val window = initialWindowData.window
 
-        val requestedWindowSize = assertNotNull(windowParams.size)
-        assertEquals(requestedWindowSize, initialWindowData.configure.size)
+        val requestedWindowGeometrySize = assertNotNull(windowParams.size)
+        assertEquals(requestedWindowGeometrySize, initialWindowData.configure.logicalGeometrySize)
 
         val stateBefore = assertNotNull(wm.getFocusedWindowState())
-        assertEquals(requestedWindowSize, stateBefore.getClientAreaSize())
+        assertEquals(requestedWindowGeometrySize, stateBefore.getClientAreaSize())
 
         withMouseButtonDown(button) {
             awaitEventOfType<Event.MouseDown> { true }
@@ -3975,15 +4007,15 @@ text/plain;charset=utf-8
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
         val window = initialWindowData.window
 
-        val requestedWindowSize = assertNotNull(windowParams.size)
-        assertEquals(requestedWindowSize, initialWindowData.configure.size)
+        val requestedWindowGeometrySize = assertNotNull(windowParams.size)
+        assertEquals(requestedWindowGeometrySize, initialWindowData.configure.logicalGeometrySize)
 
         val stateBefore = assertNotNull(wm.getFocusedWindowState())
-        assertEquals(requestedWindowSize, stateBefore.getClientAreaSize())
+        assertEquals(requestedWindowGeometrySize, stateBefore.getClientAreaSize())
 
         val expectedSize = LogicalSize(
-            width = (requestedWindowSize.width - expectedDecreaseX),
-            height = (requestedWindowSize.height - expectedDecreaseY),
+            width = (requestedWindowGeometrySize.width - expectedDecreaseX),
+            height = (requestedWindowGeometrySize.height - expectedDecreaseY),
         )
 
         // Move the mouse to the top-left part of the window
@@ -3996,7 +4028,7 @@ text/plain;charset=utf-8
             awaitEventOfType<Event.MouseExited> { true }
             moveMouseTo(mousePos.shifted(moveX, moveY))
             awaitEventOfType<Event.WindowConfigure> { event ->
-                event.active && event.size == expectedSize
+                event.active && event.logicalGeometrySize == expectedSize
             }
         }
         val stateAfter = assertNotNull(wm.getFocusedWindowState())
@@ -4279,7 +4311,7 @@ text/plain;charset=utf-8
             assertTrue(app.isEventLoopThread())
             when (event) {
                 is Event.WindowDraw -> {
-                    performSoftwareDrawing(event.size, event.softwareDrawData!!) { canvas ->
+                    performSoftwareDrawing(event.physicalBufferSize, event.softwareDrawData!!) { canvas ->
                         canvas.clear(SkColor.BLUE)
                     }
                     EventHandlerResult.Stop
@@ -4654,7 +4686,7 @@ text/plain;charset=utf-8
         val draw: (Event.WindowDraw) -> Unit = { event ->
             val softwareDrawData = event.softwareDrawData
             assertNotNull(softwareDrawData)
-            performSoftwareDrawing(event.size, softwareDrawData) { canvas ->
+            performSoftwareDrawing(event.physicalBufferSize, softwareDrawData) { canvas ->
                 canvas.clear(backgroundColor)
                 SkPaint().use { paint ->
                     paint.color = rectColor
@@ -4700,7 +4732,7 @@ text/plain;charset=utf-8
 
         ui { window.setFullScreen() }
         awaitEventOfType<Event.WindowDraw> {
-            it.size == lastScreenSize.toPhysical(it.scale)
+            it.physicalGeometrySize == lastScreenSize.toPhysical(it.scale)
         }
         ui {}
 

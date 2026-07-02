@@ -23,6 +23,7 @@ import org.jetbrains.desktop.linux.LogLevel
 import org.jetbrains.desktop.linux.Logger
 import org.jetbrains.desktop.linux.LogicalPoint
 import org.jetbrains.desktop.linux.LogicalRect
+import org.jetbrains.desktop.linux.LogicalSideOffsets
 import org.jetbrains.desktop.linux.LogicalSize
 import org.jetbrains.desktop.linux.MouseButton
 import org.jetbrains.desktop.linux.PhysicalPoint
@@ -778,12 +779,14 @@ internal class WindowState {
     var fullscreen: Boolean = false
     var capabilities: WindowCapabilities? = null
     var pointerShape: PointerShape = PointerShape.Default
+    var insets: LogicalSideOffsets = LogicalSideOffsets.Zero
 
     fun configure(event: Event.WindowConfigure) {
         active = event.active
         maximized = event.maximized
         fullscreen = event.fullscreen
         capabilities = event.capabilities
+        insets = event.logicalInsets
     }
 }
 
@@ -967,7 +970,7 @@ private class ContentArea(
 
 private class CustomBorders {
     companion object {
-        const val BORDER_SIZE = 5
+        const val BORDER_SIZE = 10
 
         fun edgeToPointerShape(edge: WindowResizeEdge): PointerShape {
             return when (edge) {
@@ -986,46 +989,21 @@ private class CustomBorders {
     private var rectangles = ArrayList<Pair<LogicalRect, WindowResizeEdge>>()
 
     fun configure(event: Event.WindowConfigure) {
-        rectangles.clear()
-        rectangles.add(Pair(LogicalRect(x = 0, y = 0, width = BORDER_SIZE, height = BORDER_SIZE), WindowResizeEdge.TopLeft))
-        rectangles.add(
-            Pair(
-                LogicalRect(x = event.size.width - BORDER_SIZE, y = 0, width = BORDER_SIZE, height = BORDER_SIZE),
-                WindowResizeEdge.TopRight,
-            ),
-        )
-        rectangles.add(
-            Pair(
-                LogicalRect(x = 0, y = event.size.height - BORDER_SIZE, width = BORDER_SIZE, height = BORDER_SIZE),
-                WindowResizeEdge.BottomLeft,
-            ),
-        )
-        rectangles.add(
-            Pair(
-                LogicalRect(
-                    x = event.size.width - BORDER_SIZE,
-                    y = event.size.height - BORDER_SIZE,
-                    width = BORDER_SIZE,
-                    height = BORDER_SIZE,
-                ),
-                WindowResizeEdge.BottomRight,
-            ),
-        )
+        val insets = event.logicalInsets
+        val geometryWidth = event.logicalGeometrySize.width
+        val geometryHeight = event.logicalGeometrySize.height
 
-        rectangles.add(Pair(LogicalRect(x = 0, y = 0, width = BORDER_SIZE, height = event.size.height), WindowResizeEdge.Left))
-        rectangles.add(
-            Pair(
-                LogicalRect(x = event.size.width - BORDER_SIZE, y = 0, width = BORDER_SIZE, height = event.size.height),
-                WindowResizeEdge.Right,
-            ),
-        )
-        rectangles.add(Pair(LogicalRect(x = 0, y = 0, width = event.size.width, height = BORDER_SIZE), WindowResizeEdge.Top))
-        rectangles.add(
-            Pair(
-                LogicalRect(x = 0, y = event.size.height - BORDER_SIZE, width = event.size.width, height = BORDER_SIZE),
-                WindowResizeEdge.Bottom,
-            ),
-        )
+        rectangles.clear()
+
+        rectangles.add(Pair(LogicalRect(-insets.left, -insets.top, insets.left, insets.top), WindowResizeEdge.TopLeft))
+        rectangles.add(Pair(LogicalRect(geometryWidth, -insets.top, insets.right, insets.top), WindowResizeEdge.TopRight))
+        rectangles.add(Pair(LogicalRect(-insets.left, geometryHeight, insets.left, insets.bottom), WindowResizeEdge.BottomLeft))
+        rectangles.add(Pair(LogicalRect(geometryWidth, geometryHeight, insets.right, insets.bottom), WindowResizeEdge.BottomRight))
+
+        rectangles.add(Pair(LogicalRect(-insets.left, 0, insets.left, geometryHeight), WindowResizeEdge.Left))
+        rectangles.add(Pair(LogicalRect(geometryWidth, 0, insets.right, geometryHeight), WindowResizeEdge.Right))
+        rectangles.add(Pair(LogicalRect(0, -insets.top, geometryWidth, insets.top), WindowResizeEdge.Top))
+        rectangles.add(Pair(LogicalRect(0, geometryHeight, geometryWidth, insets.bottom), WindowResizeEdge.Bottom))
     }
 
     fun toEdge(locationInWindow: LogicalPoint): WindowResizeEdge? {
@@ -1100,7 +1078,7 @@ private class WindowContainer(
                 layoutLeft = filterUnsupportedButtons(xdgDesktopSettings.titlebarLayout.layoutLeft, event.capabilities),
                 layoutRight = filterUnsupportedButtons(xdgDesktopSettings.titlebarLayout.layoutRight, event.capabilities),
             )
-            val titlebarSize = LogicalSize(width = event.size.width, height = SkikoCustomTitlebarLinux.CUSTOM_TITLEBAR_HEIGHT)
+            val titlebarSize = LogicalSize(width = event.logicalGeometrySize.width, height = SkikoCustomTitlebarLinux.CUSTOM_TITLEBAR_HEIGHT)
             val titlebar = customTitlebar ?: SkikoCustomTitlebarLinux(
                 size = titlebarSize,
                 titlebarLayout,
@@ -1113,11 +1091,11 @@ private class WindowContainer(
             customBorders.configure(event)
             contentArea.origin = LogicalPoint(x = 0.0, y = titlebar.size.height.toDouble())
             contentArea.size =
-                LogicalSize(width = event.size.width, height = event.size.height - titlebar.size.height)
+                LogicalSize(width = event.logicalGeometrySize.width, height = event.logicalGeometrySize.height - titlebar.size.height)
         } else {
             customTitlebar = null
             contentArea.origin = LogicalPoint(x = 0.0, y = 0.0)
-            contentArea.size = event.size
+            contentArea.size = event.logicalGeometrySize
         }
     }
 
@@ -1431,6 +1409,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
             windowId = windowId,
             size = LogicalSize(width = 640, height = 480),
             minSize = LogicalSize(320, 240),
+            insets = LogicalSideOffsets(CustomBorders.BORDER_SIZE),
             title = "Window $windowId",
             appId = "org.jetbrains.desktop.linux.skikoSample1",
             preferClientSideDecoration = useCustomTitlebar,

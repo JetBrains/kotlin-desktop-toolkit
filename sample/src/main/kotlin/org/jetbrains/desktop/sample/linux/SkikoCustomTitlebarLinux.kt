@@ -57,7 +57,7 @@ internal class SkikoCustomTitlebarLinux(
     }
 
     fun configure(event: Event.WindowConfigure, layout: TitlebarLayout) {
-        size = LogicalSize(width = event.size.width, height = CUSTOM_TITLEBAR_HEIGHT)
+        size = LogicalSize(width = event.logicalGeometrySize.width, height = CUSTOM_TITLEBAR_HEIGHT)
         setLayout(layout)
     }
 

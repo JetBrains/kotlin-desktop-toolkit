@@ -10,7 +10,10 @@ use smithay_client_toolkit::{
     seat::pointer::{CursorIcon, ThemedPointer},
     shell::{
         WaylandSurface,
-        xdg::window::{DecorationMode, Window, WindowConfigure, WindowDecorations},
+        xdg::{
+            XdgSurface,
+            window::{DecorationMode, Window, WindowConfigure, WindowDecorations},
+        },
     },
     shm::Shm,
 };
@@ -19,7 +22,7 @@ use crate::linux::{
     application_api::RenderingMode,
     application_state::{ApplicationState, EglInstance},
     events::{SoftwareDrawData, WindowDecorationMode, WindowDrawEvent, WindowId},
-    geometry::{LogicalPoint, LogicalSize, PhysicalSize},
+    geometry::{LogicalPixels, LogicalPoint, LogicalSideOffsets, LogicalSize, PhysicalSize},
     pointer_shapes_api::PointerShape,
     rendering_egl::EglRendering,
     rendering_software::SoftwareRendering,
@@ -58,8 +61,9 @@ pub struct SimpleWindow {
     pub window_id: WindowId,
     pub app_id: String,
     pub close: bool,
-    pub size: Option<LogicalSize>,
+    pub logical_geometry_size: Option<LogicalSize>,
     viewport: Option<WpViewport>,
+    insets: LogicalSideOffsets,
     pub window: Window,
     pub set_cursor: bool,
     decorations_cursor: Option<CursorIcon>,
@@ -126,8 +130,9 @@ impl SimpleWindow {
             window_id,
             app_id,
             close: false,
-            size,
+            logical_geometry_size: size,
             viewport,
+            insets: params.insets,
             window,
             set_cursor: false,
             decorations_cursor: Some(CursorIcon::Default),
@@ -161,29 +166,36 @@ impl SimpleWindow {
             .new_size
             .0
             .map(std::num::NonZero::get)
-            .or_else(|| self.size.map(|s| s.width))
+            .or_else(|| self.logical_geometry_size.map(|s| s.width))
             .or_else(|| configure.suggested_bounds.map(|(w, _h)| w))
             .unwrap_or(DEFAULT_WIDTH);
         let height = configure
             .new_size
             .1
             .map(std::num::NonZero::get)
-            .or_else(|| self.size.map(|s| s.height))
+            .or_else(|| self.logical_geometry_size.map(|s| s.height))
             .or_else(|| configure.suggested_bounds.map(|(_w, h)| h))
             .unwrap_or(DEFAULT_HEIGHT);
-        let size = LogicalSize { width, height };
-        self.size = Some(size);
 
-        // window.set_window_geometry(0, 0, width, height);
+        let geometry_size = LogicalSize { width, height };
+        self.logical_geometry_size = Some(geometry_size);
+
+        self.window.xdg_surface().set_window_geometry(
+            self.insets.left as i32,
+            self.insets.top as i32,
+            geometry_size.width as i32,
+            geometry_size.height as i32,
+        );
         // TODO: wl_surface::set_opaque_region?
 
-        let physical_size = size.to_physical(self.current_scale);
+        let total_logical_size = self.total_logical_size(geometry_size);
+        let physical_size = total_logical_size.to_physical(self.current_scale);
         debug!(
-            "SimpleWindow::configure for {:?}: size={size:?}, physical_size={physical_size:?}",
+            "SimpleWindow::configure for {:?}: geometry_size={geometry_size:?}, total_logical_size={total_logical_size:?}, physical_size={physical_size:?}",
             self.window_id
         );
 
-        self.on_resize(size, physical_size, shm);
+        self.on_resize(total_logical_size, physical_size, shm);
 
         let is_first_configure = self.rendering_data.is_none();
         if is_first_configure {
@@ -246,19 +258,25 @@ impl SimpleWindow {
         self.update_pointer(conn, themed_pointer);
         let surface = self.window.wl_surface();
 
-        let physical_size = self.size.unwrap().to_physical(self.current_scale);
+        let logical_geometry_size = self.logical_geometry_size.unwrap();
+        let physical_geometry_size = logical_geometry_size.to_physical(self.current_scale);
+        let total_logical_size = self.total_logical_size(logical_geometry_size);
+        let physical_buffer_size = total_logical_size.to_physical(self.current_scale);
+        let physical_insets = self.insets.to_physical(self.current_scale);
 
         let do_draw = |software_draw_data: SoftwareDrawData| {
             let did_draw = callback(WindowDrawEvent {
                 window_id: self.window_id,
                 software_draw_data,
-                physical_size,
+                physical_geometry_size,
+                physical_buffer_size,
+                physical_insets,
                 scale: self.current_scale,
             });
 
             if did_draw {
                 // Damage the entire window
-                surface.damage_buffer(0, 0, physical_size.width.0, physical_size.height.0);
+                surface.damage_buffer(0, 0, physical_buffer_size.width.0, physical_buffer_size.height.0);
             }
 
             // Request our next frame
@@ -267,7 +285,7 @@ impl SimpleWindow {
         };
 
         if let Some(r) = &mut self.rendering_data {
-            r.draw(surface, physical_size, do_draw);
+            r.draw(surface, physical_buffer_size, do_draw);
         } else {
             warn!("Rendering data not initialized in draw");
         }
@@ -305,8 +323,9 @@ impl SimpleWindow {
         debug!("scale_changed: {new_scale} for {:?}", self.window_id);
         self.current_scale = new_scale;
 
-        if let Some(size) = self.size {
-            self.on_resize(size, size.to_physical(self.current_scale), shm);
+        if let Some(geometry_size) = self.logical_geometry_size {
+            let total_logical = self.total_logical_size(geometry_size);
+            self.on_resize(total_logical, total_logical.to_physical(self.current_scale), shm);
         }
     }
 
@@ -327,7 +346,11 @@ impl SimpleWindow {
     }
 
     pub fn show_menu(&self, position: LogicalPoint, seat: &WlSeat, serial: u32) {
-        self.window.show_window_menu(seat, serial, (position.x.round(), position.y.round()));
+        let adjusted = LogicalPoint {
+            x: LogicalPixels(position.x.0 + f64::from(self.insets.left)),
+            y: LogicalPixels(position.y.0 + f64::from(self.insets.top)),
+        };
+        self.window.show_window_menu(seat, serial, (adjusted.x.round(), adjusted.y.round()));
     }
 
     pub fn set_max_size(&self, max_size: LogicalSize) {
@@ -348,5 +371,24 @@ impl SimpleWindow {
         };
         self.window.set_min_size(opt_min_size);
         self.window.commit();
+    }
+
+    pub const fn get_insets(&self) -> LogicalSideOffsets {
+        self.insets
+    }
+
+    const fn total_logical_size(&self, geometry_size: LogicalSize) -> LogicalSize {
+        LogicalSize {
+            width: geometry_size.width + self.insets.left + self.insets.right,
+            height: geometry_size.height + self.insets.top + self.insets.bottom,
+        }
+    }
+
+    pub fn logical_buffer_size(&self) -> Option<LogicalSize> {
+        self.logical_geometry_size.map(|geometry| self.total_logical_size(geometry))
+    }
+
+    pub fn physical_buffer_size(&self) -> Option<PhysicalSize> {
+        self.logical_buffer_size().map(|logical| logical.to_physical(self.current_scale))
     }
 }

@@ -28,6 +28,7 @@ import org.jetbrains.desktop.linux.generated.NativeKeyDownEvent
 import org.jetbrains.desktop.linux.generated.NativeKeyUpEvent
 import org.jetbrains.desktop.linux.generated.NativeLogicalPoint
 import org.jetbrains.desktop.linux.generated.NativeLogicalRect
+import org.jetbrains.desktop.linux.generated.NativeLogicalSideOffsets
 import org.jetbrains.desktop.linux.generated.NativeLogicalSize
 import org.jetbrains.desktop.linux.generated.NativeModifiersChangedEvent
 import org.jetbrains.desktop.linux.generated.NativeMouseDownEvent
@@ -38,6 +39,7 @@ import org.jetbrains.desktop.linux.generated.NativeMouseUpEvent
 import org.jetbrains.desktop.linux.generated.NativeNotificationClosedEvent
 import org.jetbrains.desktop.linux.generated.NativeNotificationShownEvent
 import org.jetbrains.desktop.linux.generated.NativeOpenFileDialogParams
+import org.jetbrains.desktop.linux.generated.NativePhysicalSideOffsets
 import org.jetbrains.desktop.linux.generated.NativePhysicalSize
 import org.jetbrains.desktop.linux.generated.NativeSaveFileDialogParams
 import org.jetbrains.desktop.linux.generated.NativeScrollData
@@ -135,6 +137,29 @@ internal fun LogicalRect.toNative(arena: Arena): MemorySegment {
     NativeLogicalRect.height(result, height)
     return result
 }
+
+internal fun LogicalSideOffsets.toNative(arena: Arena): MemorySegment {
+    val result = NativeLogicalSideOffsets.allocate(arena)
+    NativeLogicalSideOffsets.top(result, top)
+    NativeLogicalSideOffsets.left(result, left)
+    NativeLogicalSideOffsets.bottom(result, bottom)
+    NativeLogicalSideOffsets.right(result, right)
+    return result
+}
+
+internal fun LogicalSideOffsets.Companion.fromNative(s: MemorySegment) = LogicalSideOffsets(
+    top = NativeLogicalSideOffsets.top(s),
+    left = NativeLogicalSideOffsets.left(s),
+    bottom = NativeLogicalSideOffsets.bottom(s),
+    right = NativeLogicalSideOffsets.right(s),
+)
+
+internal fun PhysicalSideOffsets.Companion.fromNative(s: MemorySegment) = PhysicalSideOffsets(
+    top = NativePhysicalSideOffsets.top(s),
+    left = NativePhysicalSideOffsets.left(s),
+    bottom = NativePhysicalSideOffsets.bottom(s),
+    right = NativePhysicalSideOffsets.right(s),
+)
 
 internal fun PhysicalSize.Companion.fromNative(s: MemorySegment) = PhysicalSize(
     width = NativePhysicalSize.width(s),
@@ -912,7 +937,9 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             val nativeEvent = NativeEvent.window_configure(s)
             Event.WindowConfigure(
                 windowId = NativeWindowConfigureEvent.window_id(nativeEvent),
-                size = LogicalSize.fromNative(NativeWindowConfigureEvent.size(nativeEvent)),
+                logicalGeometrySize = LogicalSize.fromNative(NativeWindowConfigureEvent.logical_geometry_size(nativeEvent)),
+                logicalBufferSize = LogicalSize.fromNative(NativeWindowConfigureEvent.logical_buffer_size(nativeEvent)),
+                logicalInsets = LogicalSideOffsets.fromNative(NativeWindowConfigureEvent.logical_insets(nativeEvent)),
                 active = NativeWindowConfigureEvent.active(nativeEvent),
                 maximized = NativeWindowConfigureEvent.maximized(nativeEvent),
                 fullscreen = NativeWindowConfigureEvent.fullscreen(nativeEvent),
@@ -953,7 +980,9 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             Event.WindowDraw(
                 windowId = NativeWindowDrawEvent.window_id(nativeEvent),
                 softwareDrawData = SoftwareDrawData.fromNative(NativeWindowDrawEvent.software_draw_data(nativeEvent)),
-                size = PhysicalSize.fromNative(NativeWindowDrawEvent.physical_size(nativeEvent)),
+                physicalGeometrySize = PhysicalSize.fromNative(NativeWindowDrawEvent.physical_geometry_size(nativeEvent)),
+                physicalBufferSize = PhysicalSize.fromNative(NativeWindowDrawEvent.physical_buffer_size(nativeEvent)),
+                physicalInsets = PhysicalSideOffsets.fromNative(NativeWindowDrawEvent.physical_insets(nativeEvent)),
                 scale = NativeWindowDrawEvent.scale(nativeEvent),
             )
         }

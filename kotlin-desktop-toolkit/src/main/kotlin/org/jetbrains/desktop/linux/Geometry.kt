@@ -54,3 +54,42 @@ public data class LogicalRect(
     val width: Int,
     val height: Int,
 )
+
+public data class LogicalSideOffsets(
+    val top: Int,
+    val left: Int,
+    val bottom: Int,
+    val right: Int,
+) {
+    public constructor(all: Int) : this(all, all, all, all)
+
+    init {
+        require(top >= 0 && left >= 0 && bottom >= 0 && right >= 0) {
+            "Invalid SideOffsets (top, left, bottom and right must be positive)"
+        }
+    }
+
+    public companion object {
+        public val Zero: LogicalSideOffsets = LogicalSideOffsets(0)
+    }
+
+    public fun toPhysical(scale: Double): PhysicalSideOffsets = PhysicalSideOffsets(
+        top = (top.toDouble() * scale).roundToInt(),
+        left = (left.toDouble() * scale).roundToInt(),
+        bottom = (bottom.toDouble() * scale).roundToInt(),
+        right = (right.toDouble() * scale).roundToInt(),
+    )
+}
+
+public data class PhysicalSideOffsets(
+    val top: PhysicalPixels,
+    val left: PhysicalPixels,
+    val bottom: PhysicalPixels,
+    val right: PhysicalPixels,
+) {
+    public constructor(all: Int) : this(all, all, all, all)
+
+    public companion object {
+        public val Zero: PhysicalSideOffsets = PhysicalSideOffsets(0)
+    }
+}
