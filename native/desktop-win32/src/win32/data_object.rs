@@ -5,9 +5,7 @@ use std::mem::ManuallyDrop;
 
 use anyhow::Context;
 use windows::Win32::{
-    Foundation::{
-        DV_E_DVASPECT, DV_E_FORMATETC, DV_E_TYMED, E_NOTIMPL, E_POINTER, E_UNEXPECTED, HANDLE, OLE_E_ADVISENOTSUPPORTED, S_FALSE, S_OK,
-    },
+    Foundation::{DV_E_DVASPECT, DV_E_FORMATETC, DV_E_TYMED, E_NOTIMPL, E_POINTER, E_UNEXPECTED, HANDLE, OLE_E_ADVISENOTSUPPORTED, S_OK},
     System::{
         Com::{
             DATADIR, DATADIR_GET, DVASPECT_CONTENT, FORMATETC, IAdviseSink, IDataObject, IDataObject_Impl, IEnumFORMATETC, IEnumSTATDATA,
@@ -213,16 +211,7 @@ impl IDataObject_Impl for DataObject_Impl {
     }
 }
 
-pub fn is_data_object_format_available(data_object: &IDataObject, data_format: DataFormat) -> anyhow::Result<bool> {
-    let format_etc = get_format_etc_for_supported_tymeds(data_format);
-    match unsafe { data_object.QueryGetData(&raw const format_etc) } {
-        S_OK => Ok(true),
-        S_FALSE | DV_E_FORMATETC | DV_E_TYMED => Ok(false),
-        result => Err(WinError::from(result).into()),
-    }
-}
-
-pub fn enum_data_object_format_ids(data_object: &IDataObject) -> anyhow::Result<Box<[u32]>> {
+pub fn enum_data_object_format_ids(data_object: &IDataObject) -> anyhow::Result<std::collections::HashSet<u32>> {
     let iter = unsafe { data_object.EnumFormatEtc(DATADIR_GET.0.cast_unsigned())? };
     let mut hash_set = std::collections::HashSet::new();
     let mut formats = [FORMATETC::default(); 1];
@@ -235,7 +224,7 @@ pub fn enum_data_object_format_ids(data_object: &IDataObject) -> anyhow::Result<
             hash_set.insert(u32::from(format_etc.cfFormat));
         }
     }
-    Ok(hash_set.into_iter().collect())
+    Ok(hash_set)
 }
 
 /// Returns a `FORMATETC` requesting `data_format` in any `TYMED` the data-transfer path handles —
@@ -529,17 +518,6 @@ mod tests {
     }
 
     #[test]
-    fn is_data_object_format_available_reflects_presence() {
-        let data_object = ComObject::new(DataObject::new());
-        let data = hglobal_writer::new_bytes(b"payload").unwrap();
-        assert!(data_object.add_format(DataFormat::Other(CUSTOM_FORMAT), data));
-        let iface: IDataObject = data_object.to_interface();
-
-        assert!(super::is_data_object_format_available(&iface, DataFormat::Other(CUSTOM_FORMAT)).unwrap());
-        assert!(!super::is_data_object_format_available(&iface, DataFormat::Other(UNKNOWN_FORMAT)).unwrap());
-    }
-
-    #[test]
     fn set_data_with_null_medium_returns_e_pointer() {
         let data_object: IDataObject = DataObject::new().into();
         let format_etc = get_format_etc_for_hglobal(DataFormat::Other(CUSTOM_FORMAT));
@@ -563,15 +541,6 @@ mod tests {
         unsafe { data_object.SetData(&raw const format_etc, &raw const second_medium, false) }.unwrap();
 
         assert_eq!(read_get_data_bytes(&data_object, CUSTOM_FORMAT), b"second");
-    }
-
-    #[test]
-    fn is_data_object_format_available_true_for_stream_format() {
-        // The availability query spans HGLOBAL and ISTREAM, so a stream-only format reads as present.
-        let data_object: IDataObject = DataObject::new().into();
-        set_istream_format(&data_object, CUSTOM_FORMAT, b"stream-payload");
-
-        assert!(super::is_data_object_format_available(&data_object, DataFormat::Other(CUSTOM_FORMAT)).unwrap());
     }
 
     #[test]
