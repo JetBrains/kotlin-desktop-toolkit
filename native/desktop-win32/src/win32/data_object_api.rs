@@ -13,7 +13,7 @@ use windows_core::ComObject;
 
 use super::{
     com::ComInterfaceRawPtr,
-    data_object::{DataObject, enum_data_object_format_ids, is_data_object_format_available},
+    data_object::{DataObject, enum_data_object_format_ids},
     data_reader::DataReader,
     data_transfer::{
         DataFormat, DataTransferBoolResult, DataTransferByteArrayResult, DataTransferStringArrayResult, DataTransferStringResult,
@@ -113,7 +113,8 @@ pub extern "C" fn com_data_object_is_format_available_result(
 ) -> DataTransferBoolResult {
     data_transfer_boundary("com_data_object_is_format_available_result", || {
         let data_object = data_object_ptr.cast::<IDataObject>()?;
-        is_data_object_format_available(&data_object, DataFormat::Other(data_format))
+        let formats = enum_data_object_format_ids(&data_object)?;
+        Ok(formats.contains(&data_format))
     })
 }
 
@@ -122,7 +123,7 @@ pub extern "C" fn com_data_object_enum_formats_result(data_object_ptr: ComInterf
     data_transfer_boundary("com_data_object_enum_formats_result", || {
         let data_object = data_object_ptr.cast::<IDataObject>()?;
         let formats = enum_data_object_format_ids(&data_object)?;
-        Ok(AutoDropArray::new(formats))
+        Ok(AutoDropArray::new(formats.into_iter().collect()))
     })
 }
 
