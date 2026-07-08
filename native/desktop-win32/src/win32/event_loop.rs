@@ -15,7 +15,7 @@ use windows::Win32::{
     UI::{
         HiDpi::{AdjustWindowRectExForDpi, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext},
         Input::{
-            KeyboardAndMouse::{GetCapture, ReleaseCapture, SetCapture},
+            KeyboardAndMouse::{GetCapture, ReleaseCapture, SetCapture, VK_PROCESSKEY},
             Pointer::EnableMouseInPointer,
         },
         Shell::{ABE_BOTTOM, ABE_LEFT, ABE_RIGHT, ABE_TOP, ABM_GETAUTOHIDEBAREX, ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage},
@@ -23,12 +23,12 @@ use windows::Win32::{
             DefWindowProcW, DispatchMessageW, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetMessagePos, GetMessageTime, GetMessageW,
             GetWindowLongPtrW, GetWindowRect, HMENU, HTCAPTION, HTCLIENT, HTCLOSE, HTMAXBUTTON, HTMINBUTTON, HTTOP, MINMAXINFO, MSG,
             NCCALCSIZE_PARAMS, SC_KEYMENU, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
-            USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_CANCELMODE, WM_CAPTURECHANGED,
-            WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_INITMENUPOPUP, WM_KEYDOWN,
-            WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCLBUTTONDOWN, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP,
-            WM_NCPOINTERUPDATE, WM_NCRBUTTONUP, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL, WM_POINTERLEAVE,
-            WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE, WM_SYSCHAR,
-            WM_SYSCOLORCHANGE, WM_SYSCOMMAND, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
+            TranslateMessage, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_CANCELMODE,
+            WM_CAPTURECHANGED, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_INITMENUPOPUP,
+            WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCLBUTTONDOWN, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN,
+            WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_NCRBUTTONUP, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL,
+            WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE,
+            WM_SYSCHAR, WM_SYSCOLORCHANGE, WM_SYSCOMMAND, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
         },
     },
 };
@@ -75,7 +75,16 @@ impl EventLoop {
             match unsafe { GetMessageW(&raw mut msg, None, 0, 0).0 } {
                 -1 => anyhow::bail!("Event loop has exited with an error: {}", windows_core::Error::from_thread()),
                 0 => break,
-                _ => unsafe { DispatchMessageW(&raw const msg) },
+                _ => {
+                    // VK_PROCESSKEY is a special virtual key that must be translated by `TranslateMessage` for IME to work.
+                    // See https://doxygen.reactos.org/d4/d8c/win32ss_2user_2user32_2windows_2message_8c.html#a601d5db3c8d8100630fe50b98b0451d0).
+                    if matches!(msg.message, WM_KEYDOWN | WM_KEYUP | WM_SYSKEYDOWN | WM_SYSKEYUP)
+                        && VirtualKey::from(msg.wParam).0 == VK_PROCESSKEY.0
+                    {
+                        let _ = unsafe { TranslateMessage(&raw const msg) };
+                    }
+                    unsafe { DispatchMessageW(&raw const msg) }
+                }
             };
         }
         log::trace!("Event loop has finished");
@@ -649,6 +658,10 @@ fn alt_space_anchor(window: &Window) -> PhysicalPoint {
 
 fn on_keyevent(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     let virtual_key = VirtualKey::from(wparam);
+    if virtual_key.0 == VK_PROCESSKEY.0 {
+        // Do not pass VK_PROCESSKEY to Kotlin.
+        return None;
+    }
     let timestamp = unsafe { GetMessageTime() }.cast_unsigned();
     let pos = unsafe { GetMessagePos() };
     let original_msg_id = LAST_KEYEVENT_MESSAGE_ID.with(|c| {
