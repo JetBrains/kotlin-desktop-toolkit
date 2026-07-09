@@ -15,6 +15,7 @@ use windows::Win32::{
 
 use super::{
     geometry::{LogicalSize, PhysicalPoint},
+    strings::copy_from_wide_string,
     window::Window,
 };
 
@@ -38,9 +39,7 @@ pub(crate) fn enumerate_screens() -> anyhow::Result<Box<[ScreenInfo]>> {
     let screens = Box::into_raw(Box::new(Vec::<ScreenInfo>::new()));
     let enum_result = unsafe { EnumDisplayMonitors(None, None, Some(monitor_enum_proc), LPARAM(screens as isize)) };
     let screens = unsafe { Box::from_raw(screens) };
-    if !enum_result.as_bool() {
-        anyhow::bail!("failed to enumerate screens");
-    }
+    anyhow::ensure!(enum_result.as_bool(), "failed to enumerate screens");
     Ok(screens.into_boxed_slice())
 }
 
@@ -66,31 +65,40 @@ pub(crate) fn get_screen_info(hmonitor: HMONITOR) -> anyhow::Result<ScreenInfo> 
         },
         ..Default::default()
     };
-    if !unsafe { GetMonitorInfoW(hmonitor, (&raw mut monitor_info).cast()).as_bool() } {
-        anyhow::bail!("failed to get monitor info");
-    }
-    let device_name_len = monitor_info
-        .szDevice
-        .iter()
-        .position(|&c| c == 0)
-        .unwrap_or(monitor_info.szDevice.len());
-    let device_name = windows_core::HSTRING::from_wide(&monitor_info.szDevice[..device_name_len]);
+    anyhow::ensure!(
+        unsafe { GetMonitorInfoW(hmonitor, (&raw mut monitor_info).cast()) }.as_bool(),
+        "failed to get monitor info: {err}",
+        err = windows_core::Error::from_thread(),
+    );
     let mut display_device = DISPLAY_DEVICEW {
         cb: size_of::<DISPLAY_DEVICEW>().try_into()?,
         ..Default::default()
     };
-    if !unsafe { EnumDisplayDevicesW(&device_name, 0, &raw mut display_device, 0).as_bool() } {
-        anyhow::bail!("failed to get display device info");
-    }
+    let raw_device_name = windows_core::PCWSTR::from_raw(monitor_info.szDevice.as_mut_ptr());
+    anyhow::ensure!(
+        unsafe { EnumDisplayDevicesW(raw_device_name, 0, &raw mut display_device, 0) }.as_bool(),
+        "failed to get display device info: {err}",
+        err = windows_core::Error::from_thread(),
+    );
     let mut device_mode = DEVMODEW {
         dmSize: size_of::<DEVMODEW>().try_into()?,
         dmDriverExtra: 0,
         ..Default::default()
     };
-    if !unsafe { EnumDisplaySettingsW(&device_name, ENUM_CURRENT_SETTINGS, &raw mut device_mode).as_bool() } {
-        anyhow::bail!("failed to enum display's current settings");
-    }
-    let device_name = super::strings::copy_from_wide_string(&device_name).context("failed to copy the device name into a string")?;
+    anyhow::ensure!(
+        unsafe { EnumDisplaySettingsW(raw_device_name, ENUM_CURRENT_SETTINGS, &raw mut device_mode) }.as_bool(),
+        "failed to enum display's current settings: {err}",
+        err = windows_core::Error::from_thread(),
+    );
+    // TODO: if device name can contain embedded nuls and it is the form in which it should be passed
+    // to win32 api, that means we cannot use device name from Kotlin for any win32 api calls
+    let device_name_len = monitor_info
+        .szDevice
+        .iter()
+        .position(|&c| c == 0)
+        .unwrap_or(monitor_info.szDevice.len());
+    let device_name =
+        copy_from_wide_string(&monitor_info.szDevice[..device_name_len]).context("failed to copy the device name into a string")?;
     let device_position = unsafe { device_mode.Anonymous1.Anonymous2.dmPosition };
     let (mut dpi_x, mut dpi_y) = (USER_DEFAULT_SCREEN_DPI, USER_DEFAULT_SCREEN_DPI);
     unsafe { GetDpiForMonitor(hmonitor, MDT_EFFECTIVE_DPI, &raw mut dpi_x, &raw mut dpi_y) }
