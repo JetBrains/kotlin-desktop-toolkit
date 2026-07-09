@@ -35,7 +35,7 @@ an OS integration layer for Compose for Desktop.
 | --------------------- | ----- | ------- | ------- | --- |
 | Run event loop        | ✅    | ✅      | ✅      | ✅  |
 | Invoke on Main thread | ✅    | ✅      | ✅      | ✅  |
-| List screens          | ✅    | ✅      | ✅      |     |
+| List screens          | ✅    | ✅      | ✅      | ✅  |
 | Terminate application | ✅    | ✅      | ✅      | ✅  |
 | Show notification     | ✅    | ✅      | ❌      | ✅  |
 | System tray           | ❌    | ❌      | ❌      | ❌  |
@@ -47,19 +47,19 @@ an OS integration layer for Compose for Desktop.
 #### Window
 
 |                    | MacOS | Wayland            | Windows | X11 |
-| ------------------ | ----- | ------------------ | ------- | --- |
-| Position           | ✅    | ➖ (`startMove`)   | ✅      | ❌ (`startMove`)   |
-| Size               | ✅    | ➖ (`startResize`) | ✅      | ❌ (`startResize`) |
-| Max/Min size       | ✅    | ✅                 | ✅      | 🚧 (`setMinSize`)  |
-| Content size       | ✅    | ➖                 | ✅      | ❌  |
-| Current screen     | ✅    | ✅                 | ✅      | ❌  |
-| Full screen        | ✅    | ✅                 | ❌      | ✅  |
-| Maximize/Minimize  | ✅    | ✅                 | ✅      | ✅  |
-| Request focus      | ✅    | ✅                 | 🚧      | ✅  |
-| Set cursor icon    | ✅    | ✅                 | ✅      | ✅  |
-| Transparency       | ✅    | ✅                 | ✅      | ✅  |
-| Background effects | ✅    | ❌                 | ✅      | ❌  |
-| Close window       | ✅    | ✅                 | ✅      | ✅  |
+| ------------------ | ----- | ------------------ |---------| --- |
+| Position           | ✅    | ➖ (`startMove`)   | ✅       | ❌ (`startMove`)   |
+| Size               | ✅    | ➖ (`startResize`) | ✅       | ❌ (`startResize`) |
+| Max/Min size       | ✅    | ✅                 | ✅       | 🚧 (`setMinSize`)  |
+| Content size       | ✅    | ➖                 | ✅       | ❌  |
+| Current screen     | ✅    | ✅                 | ✅       | ❌  |
+| Full screen        | ✅    | ✅                 | ❌       | ✅  |
+| Maximize/Minimize  | ✅    | ✅                 | ✅       | ✅  |
+| Request focus      | ✅    | ✅                 | ✅       | ✅  |
+| Set cursor icon    | ✅    | ✅                 | ✅       | ✅  |
+| Transparency       | ✅    | ✅                 | ✅       | ✅  |
+| Background effects | ✅    | ❌                 | ✅       | ❌  |
+| Close window       | ✅    | ✅                 | ✅       | ✅  |
 
 #### Rendering
 
@@ -118,10 +118,10 @@ an OS integration layer for Compose for Desktop.
 
 |                                 | MacOS | Wayland | Windows | X11 |
 | ------------------------------- | ----- | ------- | ------- | --- |
-| Simple text copy/paste          | ✅    | ✅      | 🚧      | ✅  |
-| Copy files                      | ✅    | ✅      | 🚧      | ✅  |
-| System defined clipboard types  | ✅    | ➖      | ❌      | ✅  |
-| Custom binary clipboard content | ✅    | ✅      | ❌      | ✅  |
+| Simple text copy/paste          | ✅    | ✅      | ✅      | ✅  |
+| Copy files                      | ✅    | ✅      | ✅      | ✅  |
+| System defined clipboard types  | ✅    | ➖      | ✅      | ✅  |
+| Custom binary clipboard content | ✅    | ✅      | ✅      | ✅  |
 | Lazy fetch of clipboard content | ❌    | ✅      | ❌      | ✅  |
 
 #### Screen
@@ -133,7 +133,7 @@ an OS integration layer for Compose for Desktop.
 | Name                | ✅    | ✅      | ✅      | ✅  |
 | Origin              | ✅    | ✅      | ✅      | ✅  |
 | Size                | ✅    | ✅      | ✅      | ✅  |
-| Scale               | ✅    | ✅      | ✅      | ✅  |
+| Scale               | ✅    | ❌      | ✅      | ✅  |
 | FPS                 | ✅    | ✅      | ✅      | ✅  |
 | Color space         | ❌    | ❌      | ❌      | ❌  |
 | Persistent identity | ✅    | 🚧      | ❌      | ❌  |
@@ -144,12 +144,12 @@ an OS integration layer for Compose for Desktop.
 
 |                       | MacOS | Wayland | Windows | X11 |
 | --------------------- | ----- | ------- | ------- | --- |
-| Window as drag target | ✅    | ✅      | ❌      | ✅  |
-| Drag entered          | ✅    | ✅      | ❌      | ✅  |
-| Drag updated          | ✅    | ✅      | ❌      | ✅  |
-| Drag exited           | ✅    | ✅      | ❌      | ✅  |
-| Drag performed        | ✅    | ✅      | ❌      | ✅  |
-| Drag source           | ✅    | ✅      | ❌      | ✅  |
+| Window as drag target | ✅    | ✅      | ✅      | ✅  |
+| Drag entered          | ✅    | ✅      | ✅      | ✅  |
+| Drag updated          | ✅    | ✅      | ✅      | ✅  |
+| Drag exited           | ✅    | ✅      | ✅      | ✅  |
+| Drag performed        | ✅    | ✅      | ✅      | ✅  |
+| Drag source           | ✅    | ✅      | ✅      | ✅  |
 
 ## Acknowledgements
 Many libraries tackle the same problem from different angles, but each makes slightly different trade-offs compared to KDT.
