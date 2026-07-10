@@ -813,7 +813,7 @@ fn get_resize_edge(x: f64, y: f64, size: LogicalSize) -> WindowResizeEdge {
     let is_left = x < 0.0;
     let is_right = x > w;
 
-    debug!("get resize edge: top = {is_top}, bottom = {is_bottom}, left = {is_left}, right = {is_right}");
+    // debug!("get resize edge: top = {is_top}, bottom = {is_bottom}, left = {is_left}, right = {is_right}");
 
     match () {
         () if is_top && is_left => WindowResizeEdge::TopLeft,

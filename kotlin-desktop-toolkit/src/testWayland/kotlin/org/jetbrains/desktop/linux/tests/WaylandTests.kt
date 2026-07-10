@@ -1114,7 +1114,15 @@ abstract class WaylandTestsBase {
                                 canvas.clear(SkColor.WHITE)
                                 SkPaint().use { paint ->
                                     paint.color = SkColor.RED
-                                    canvas.drawRect(SkRect.makeXYWH(event.physicalBufferSize.width - 10f, event.physicalBufferSize.height - 10f, 10f, 10f), paint)
+                                    canvas.drawRect(
+                                        SkRect.makeXYWH(
+                                            event.physicalBufferSize.width - 10f,
+                                            event.physicalBufferSize.height - 10f,
+                                            10f,
+                                            10f,
+                                        ),
+                                        paint,
+                                    )
                                 }
                             }
                             EventHandlerResult.Stop
@@ -2163,7 +2171,12 @@ class WaylandTests : WaylandTestsBase() {
                 ui { window.setFullScreen() }
             }
 
-            expectedConfigureEvent = expectedConfigureEvent.copy(fullscreen = true, logicalGeometrySize = fullscreenGeometrySize, logicalBufferSize = fullscreenGeometrySize)
+            expectedConfigureEvent =
+                expectedConfigureEvent.copy(
+                    fullscreen = true,
+                    logicalGeometrySize = fullscreenGeometrySize,
+                    logicalBufferSize = fullscreenGeometrySize,
+                )
             withNextEvent { event ->
                 expectedConfigureEvent.assertEquals(event, "fullscreen configure, useWm=$useWm")
             }
@@ -2203,7 +2216,12 @@ class WaylandTests : WaylandTestsBase() {
                 ui { window.unsetFullScreen() }
             }
 
-            expectedConfigureEvent = expectedConfigureEvent.copy(fullscreen = false, logicalGeometrySize = requestedGeometrySize, logicalBufferSize = requestedGeometrySize)
+            expectedConfigureEvent =
+                expectedConfigureEvent.copy(
+                    fullscreen = false,
+                    logicalGeometrySize = requestedGeometrySize,
+                    logicalBufferSize = requestedGeometrySize,
+                )
 
             withNextEvent { event ->
                 expectedConfigureEvent.assertEquals(event, "fullscreen exit configure, useWm=$useWm")
@@ -2631,7 +2649,10 @@ class WaylandTests : WaylandTestsBase() {
         checkNextEvents(
             checks = mapOf(
                 "Window 1 tiled" to { event, _ ->
-                    if (event is Event.WindowConfigure && event.windowId == window1Params.windowId && event.logicalGeometrySize == tiledWindowGeometrySize) {
+                    if (event is Event.WindowConfigure &&
+                        event.windowId == window1Params.windowId &&
+                        event.logicalGeometrySize == tiledWindowGeometrySize
+                    ) {
                         expectedWindow1ConfigureEvent.assertEquals(event)
                         true
                     } else {
@@ -2639,7 +2660,10 @@ class WaylandTests : WaylandTestsBase() {
                     }
                 },
                 "Window 2 tiled" to { event, _ ->
-                    if (event is Event.WindowConfigure && event.windowId == window2Params.windowId && event.logicalGeometrySize == tiledWindowGeometrySize) {
+                    if (event is Event.WindowConfigure &&
+                        event.windowId == window2Params.windowId &&
+                        event.logicalGeometrySize == tiledWindowGeometrySize
+                    ) {
                         expectedWindow2ConfigureEvent.assertEquals(event)
                         true
                     } else {

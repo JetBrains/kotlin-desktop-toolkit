@@ -85,7 +85,7 @@ abstract class SkikoWindowLinux(
                     event.physicalInsets.top.toFloat(),
                     (event.physicalInsets.left + event.physicalGeometrySize.width).toFloat(),
                     (event.physicalInsets.top + event.physicalGeometrySize.height).toFloat(),
-                )
+                ),
             )
             canvas.translate(event.physicalInsets.left.toFloat(), event.physicalInsets.top.toFloat())
 

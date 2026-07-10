@@ -1078,7 +1078,8 @@ private class WindowContainer(
                 layoutLeft = filterUnsupportedButtons(xdgDesktopSettings.titlebarLayout.layoutLeft, event.capabilities),
                 layoutRight = filterUnsupportedButtons(xdgDesktopSettings.titlebarLayout.layoutRight, event.capabilities),
             )
-            val titlebarSize = LogicalSize(width = event.logicalGeometrySize.width, height = SkikoCustomTitlebarLinux.CUSTOM_TITLEBAR_HEIGHT)
+            val titlebarSize =
+                LogicalSize(width = event.logicalGeometrySize.width, height = SkikoCustomTitlebarLinux.CUSTOM_TITLEBAR_HEIGHT)
             val titlebar = customTitlebar ?: SkikoCustomTitlebarLinux(
                 size = titlebarSize,
                 titlebarLayout,
