@@ -33,7 +33,7 @@ public value class MouseButton internal constructor(public val value: Int) {
             LEFT -> "MouseButton.LEFT"
             RIGHT -> "MouseButton.RIGHT"
             MIDDLE -> "MouseButton.MIDDLE"
-            SIDE -> "MouseButton.MIDDLE"
+            SIDE -> "MouseButton.SIDE"
             EXTRA -> "MouseButton.EXTRA"
             FORWARD -> "MouseButton.FORWARD"
             BACK -> "MouseButton.BACK"

@@ -4,7 +4,7 @@ use core::f64;
 
 use anyhow::bail;
 use log::warn;
-use objc2_app_kit::{NSEvent, NSEventType, NSScreen, NSWindow, NSWindowOcclusionState};
+use objc2_app_kit::{NSEvent, NSEventPhase, NSEventType, NSScreen, NSWindow, NSWindowOcclusionState};
 use objc2_foundation::{MainThreadMarker, NSArray, NSURL};
 
 use desktop_common::{
@@ -128,6 +128,89 @@ pub struct ScrollWheelEvent {
     pub timestamp: Timestamp,
 }
 
+/// Phase of a continuous gesture (pinch, rotate, swipe), derived from `NSEvent.phase`.
+/// Apple doc: <https://developer.apple.com/documentation/appkit/nsevent/phase?language=objc>
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub enum EventPhase {
+    None,
+    Began,
+    Stationary,
+    Changed,
+    Ended,
+    Cancelled,
+    MayBegin,
+}
+
+impl EventPhase {
+    fn from_ns_event(ns_event: &NSEvent) -> Self {
+        // `NSEventPhase` is an option set, but a single event reports one phase bit.
+        let phase = ns_event.phase();
+        if phase.contains(NSEventPhase::Began) {
+            Self::Began
+        } else if phase.contains(NSEventPhase::Changed) {
+            Self::Changed
+        } else if phase.contains(NSEventPhase::Ended) {
+            Self::Ended
+        } else if phase.contains(NSEventPhase::Cancelled) {
+            Self::Cancelled
+        } else if phase.contains(NSEventPhase::Stationary) {
+            Self::Stationary
+        } else if phase.contains(NSEventPhase::MayBegin) {
+            Self::MayBegin
+        } else {
+            Self::None
+        }
+    }
+}
+
+/// Pinch-to-zoom (`magnifyWithEvent:`). `magnification` is the incremental change for this event;
+/// accumulate it across a gesture (a full pinch sums to roughly ±1.0).
+#[repr(C)]
+#[derive(Debug)]
+pub struct MagnifyEvent {
+    pub window_id: WindowId,
+    pub magnification: f64,
+    pub phase: EventPhase,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
+}
+
+/// Two-finger rotation (`rotateWithEvent:`). `rotation` is the incremental change in degrees for
+/// this event (counter-clockwise is positive), to be accumulated across the gesture.
+#[repr(C)]
+#[derive(Debug)]
+pub struct RotateEvent {
+    pub window_id: WindowId,
+    pub rotation: f64,
+    pub phase: EventPhase,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
+}
+
+/// Two-finger double-tap "smart zoom" (`smartMagnifyWithEvent:`). Carries no magnitude; the consumer
+/// decides how to toggle zoom.
+#[repr(C)]
+#[derive(Debug)]
+pub struct SmartMagnifyEvent {
+    pub window_id: WindowId,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
+}
+
+/// Trackpad swipe (`swipeWithEvent:`). `delta_x`/`delta_y` indicate direction, typically -1, 0, or 1
+/// (a positive `delta_x` is a swipe to the left).
+#[repr(C)]
+#[derive(Debug)]
+pub struct SwipeEvent {
+    pub window_id: WindowId,
+    pub delta_x: f64,
+    pub delta_y: f64,
+    pub phase: EventPhase,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowScreenChangeEvent {
@@ -202,6 +285,10 @@ pub enum Event<'a> {
     MouseDown(MouseDownEvent),
     MouseUp(MouseUpEvent),
     ScrollWheel(ScrollWheelEvent),
+    Magnify(MagnifyEvent),
+    Rotate(RotateEvent),
+    SmartMagnify(SmartMagnifyEvent),
+    Swipe(SwipeEvent),
     WindowScreenChange(WindowScreenChangeEvent),
     WindowResize(WindowResizeEvent),
     WindowMove(WindowMoveEvent),
@@ -346,6 +433,21 @@ pub(crate) fn handle_mouse_up(ns_event: &NSEvent) -> bool {
     handled
 }
 
+pub(crate) fn handle_swipe(ns_event: &NSEvent) -> bool {
+    let handled = AppState::with(|state| {
+        let event = Event::Swipe(SwipeEvent {
+            window_id: ns_event.window_id(),
+            delta_x: ns_event.deltaX(),
+            delta_y: ns_event.deltaY(),
+            phase: EventPhase::from_ns_event(ns_event),
+            location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            timestamp: ns_event.timestamp(),
+        });
+        (state.event_handler)(&event)
+    });
+    handled
+}
+
 pub(crate) fn handle_scroll_wheel(ns_event: &NSEvent) -> bool {
     let handled = AppState::with(|state| {
         let event = Event::ScrollWheel(ScrollWheelEvent {
@@ -354,6 +456,46 @@ pub(crate) fn handle_scroll_wheel(ns_event: &NSEvent) -> bool {
             scrolling_delta_y: ns_event.scrollingDeltaY(),
             has_precise_scrolling_deltas: ns_event.hasPreciseScrollingDeltas(),
             is_direction_inverted: ns_event.isDirectionInvertedFromDevice(),
+            location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            timestamp: ns_event.timestamp(),
+        });
+        (state.event_handler)(&event)
+    });
+    handled
+}
+
+pub(crate) fn handle_magnify(ns_event: &NSEvent) -> bool {
+    let handled = AppState::with(|state| {
+        let event = Event::Magnify(MagnifyEvent {
+            window_id: ns_event.window_id(),
+            magnification: ns_event.magnification(),
+            phase: EventPhase::from_ns_event(ns_event),
+            location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            timestamp: ns_event.timestamp(),
+        });
+        (state.event_handler)(&event)
+    });
+    handled
+}
+
+pub(crate) fn handle_rotate(ns_event: &NSEvent) -> bool {
+    let handled = AppState::with(|state| {
+        let event = Event::Rotate(RotateEvent {
+            window_id: ns_event.window_id(),
+            rotation: f64::from(ns_event.rotation()),
+            phase: EventPhase::from_ns_event(ns_event),
+            location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            timestamp: ns_event.timestamp(),
+        });
+        (state.event_handler)(&event)
+    });
+    handled
+}
+
+pub(crate) fn handle_smart_magnify(ns_event: &NSEvent) -> bool {
+    let handled = AppState::with(|state| {
+        let event = Event::SmartMagnify(SmartMagnifyEvent {
+            window_id: ns_event.window_id(),
             location_in_window: ns_event.cursor_location_in_window(state.mtm),
             timestamp: ns_event.timestamp(),
         });

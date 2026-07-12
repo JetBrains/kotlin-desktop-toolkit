@@ -120,7 +120,7 @@ class ApplicationState(private val app: Application) : AutoCloseable {
             window.setImmersiveDarkMode(true)
         }
 
-//        window.initializeDropManager()
+        window.initializeDropManager()
     }
 
     fun handleEvent(event: Event, windowId: WindowId): EventHandlerResult {

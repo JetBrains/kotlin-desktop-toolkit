@@ -329,14 +329,14 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 ## DataObject
 
-**Purpose.** Rust-implemented `IDataObject` backed by a `papaya::HashMap<u32, HGlobalData>`. Both ends of the OLE clipboard / drag-drop path use it: it's the Rust-side container that Kotlin populates and hands to Win32, and it's also the wrapper that reads back from any `IDataObject` (own or external) via `data_object_api`'s `com_data_object_*` functions.
+**Purpose.** Rust-implemented `IDataObject` backed by a `papaya::HashMap<u32, StoredMedium>`. Both ends of the OLE clipboard / drag-drop path use it: it's the Rust-side container that Kotlin populates and hands to Win32, and it's also the wrapper that reads back from any `IDataObject` (own or external) via `data_object_api`'s `com_data_object_*` functions.
 
 **Files.** `data_object.rs`, `data_object_api.rs` + Kotlin `DataObject.kt`, `DataFormat.kt`.
 
 **FFI surface.** `data_object_create() -> i64`, `data_object_drop(i64)`, `data_object_add_from_{bytes,file_list,html_fragment,text}`, `data_object_into_com() -> ComInterfaceRawPtr`, result-bearing `com_data_object_{is_format_available,enum_formats,read_bytes,read_file_list,read_html_fragment,read_text}_result`, `com_data_object_retain`, `com_data_object_release`, `native_u32_array_drop`, `native_byte_array_drop`.
 
 **Key types.**
-- `DataObject` (Rust) — `#[implement(IDataObject)]`. `papaya::HashMap<u32, HGlobalData>` keyed on cfFormat (cast to u32). Implements `GetData`, `EnumFormatEtc`, `QueryGetData`. `SetData`, `GetDataHere`, `DAdvise*` return `E_NOTIMPL` / `OLE_E_ADVISENOTSUPPORTED`.
+- `DataObject` (Rust) — `#[implement(IDataObject)]`. `papaya::HashMap<u32, StoredMedium>` keyed on cfFormat (cast to u32), where `StoredMedium` is `HGlobal(HGlobalData)` or `Stream(IAgileReference)` — each format keeps the medium it was set with. Implements `GetData`, `EnumFormatEtc`, `QueryGetData`, and `SetData` — which accepts `TYMED_HGLOBAL` (contents copied into an owned HGLOBAL) and `TYMED_ISTREAM` (retained as an agile reference via `RoGetAgileReference`, not byte-copied), calls `ReleaseStgMedium` only on success + `fRelease`, and rejects other tymeds with `DV_E_TYMED`. `GetData` serves each format back with its stored medium — an HGLOBAL copy or a `Resolve()`d `IStream` — so a stream round-trips as `TYMED_ISTREAM`; `GetData` / `QueryGetData` return granular `DV_E_FORMATETC` / `DV_E_DVASPECT` / `DV_E_TYMED`, and `EnumFormatEtc` advertises each format's real tymed. `GetDataHere`, `DAdvise*` return `E_NOTIMPL` / `OLE_E_ADVISENOTSUPPORTED`.
 - Global registry: `static DATA_OBJECT_REGISTRY: papaya::HashMap<i64, ComObject<DataObject>>` keyed on `AtomicI64` IDs. `data_object_create` inserts; `data_object_into_com` removes and converts to `ComInterfaceRawPtr` for OS hand-off.
 - `DataObject` (Kotlin, `AutoCloseable`) — wraps the `ComInterfaceRawPtr`. `requireOpen` guard. `read*` (throwing) and `tryRead*` (nullable) variants.
 - `DataObjectBuilder` (Kotlin) — used inside `DataObject.build { … }` block-scoped builder. Hides the `data_object_create` → populate → `data_object_into_com` lifecycle.
@@ -397,27 +397,30 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 ## Drag-and-drop
 
-**Purpose.** Bidirectional OLE drag-drop: implements both `IDropSource` (start a drag) and `IDropTarget` (receive a drop), bridging the COM callbacks to Kotlin function pointers via `DropTargetCallbacks` / `DragSourceCallbacks` structs.
+**Purpose.** Bidirectional OLE drag-drop: implements both `IDropSource` (start a drag) and `IDropTarget` (receive a drop), bridging the COM callbacks to Kotlin function pointers via `DropTargetCallbacks` / `DragSourceCallbacks` structs. Both directions integrate the Shell drag-image helper (`CLSID_DragDropHelper`) so a source drag can show a custom image and drop targets render the OS drag image.
 
-**Files.** `drag_drop.rs`, `drag_drop_api.rs` + Kotlin `DragDrop.kt`.
+**Files.** `drag_drop.rs`, `drag_drop_api.rs`, `wic_image.rs` (drag-image decode → `SHDRAGIMAGE`) + Kotlin `DragDrop.kt`.
 
-**FFI surface.** `drag_drop_register_target`, `drag_drop_start`, `drag_drop_revoke_target`.
+**FFI surface.** `drag_drop_register_target`, `drag_drop_start` (also takes `drag_image_bytes: BorrowedArray<u8>` + `drag_image_offset: PhysicalPoint`; a null byte array means no image), `drag_drop_revoke_target`.
 
 **Key types.**
 - `DropTarget`, `DragSource` — `windows-core` `implement!`-decorated COM impls.
 - `DropTargetCallbacks` — `extern "C"` function pointers held by `DropTarget`. Allocated by Kotlin in an `Arena.ofShared()` whose lifetime matches the `DragDropManager`.
 - `DragSourceCallbacks` — same pattern for the source side.
 - `DragDropManager` (Kotlin, `AutoCloseable`).
+- `DragImage` (Kotlin) — optional custom drag image passed to `doDragDrop`: encoded image bytes + a `PhysicalPoint` cursor offset.
+- `WicBitmap` (Rust, `wic_image.rs`) — RAII owner of a decoded top-down 32bpp straight-BGRA DIB; `decode_from_bytes` (WIC) builds it, `into_handle()` hands the `HBITMAP` to an `SHDRAGIMAGE` and otherwise frees it on drop.
 
 **Mechanism.**
-- Drop side: `RegisterDragDrop(hwnd, drop_target)` registers our `IDropTarget`. Win32 calls `DragEnter` / `DragOver` / `DragLeave` / `Drop` with an `IDataObject`. We wrap that as `ComInterfaceRawPtr` and upcall to Kotlin.
-- Source side: `DoDragDrop(data_object, drop_source, allowed_effects, &mut effect)`. `DragSource::GiveFeedback` always returns `DRAGDROP_S_USEDEFAULTCURSORS`.
+- Drop side: `RegisterDragDrop(hwnd, drop_target)` registers our `IDropTarget`. Win32 calls `DragEnter` / `DragOver` / `DragLeave` / `Drop` with an `IDataObject`. We wrap that as `ComInterfaceRawPtr` and upcall to Kotlin, then forward each call to an `IDropTargetHelper` (created at registration) so the OS drag image renders over the window.
+- Source side: `DoDragDrop(data_object, drop_source, allowed_effects, &mut effect)`. `DragSource::GiveFeedback` always returns `DRAGDROP_S_USEDEFAULTCURSORS`. When a `DragImage` is supplied, before `DoDragDrop` we create an `IDragSourceHelper2` and call `SetFlags(DSH_ALLOWDROPDESCRIPTIONTEXT)` (so a drop target's drop-description text renders over the custom image) before `InitializeFromBitmap` with the `SHDRAGIMAGE` from `create_drag_image` (which decodes via `WicBitmap`); on success the helper owns the `HBITMAP`, freed by us only on failure.
 - `drag_drop_revoke_target` calls `RevokeDragDrop`.
 
 **Gotchas.**
 - **`ComInterfaceRawPtr` lifetime in callbacks** (drag_drop.rs). The `DataObject(rawPtr)` Kotlin instance constructed inside `dragEnter` / `drop` wraps a pointer whose validity is bounded by the COM callback. If Kotlin stores that `DataObject` beyond the callback, the pointer escapes. Currently no enforcement.
 - Module-blanket `#![allow(clippy::inline_always)]` and `#![allow(clippy::ref_as_ptr)]` (drag_drop.rs) — same as `data_object.rs`, inherited from `implement!`.
 - COM callbacks arrive on the STA thread; the confined `Arena` for callback stubs is single-thread, so this is consistent only as long as drag-drop stays on the STA thread.
+- Drag-image helper calls are cosmetic and best-effort: a missing helper or an `IDropTargetHelper` forwarding error is swallowed, never altering the drop result. `SetData` preserves each format's medium — an `IStream` is retained as an agile reference and served back as `TYMED_ISTREAM`, which the Shell drag-image helper needs to read its `DragContext` stream back cross-process.
 
 **Cross-refs.** `data_object` (the wrapped `IDataObject`), `com.rs` (`ComInterfaceRawPtr`), `geometry` (`PhysicalPoint` from `POINTL`), `window`.
 
