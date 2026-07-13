@@ -76,6 +76,15 @@ pub extern "C" fn window_set_titlebar_configuration(window_ptr: WindowPtr, mode:
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn window_get_titlebar_left_inset(window_ptr: WindowPtr) -> LogicalPixels {
+    ffi_boundary("window_get_titlebar_left_inset", || {
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        window.titlebar.borrow().left_inset()
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn window_get_window_id(window_ptr: WindowPtr) -> WindowId {
     ffi_boundary("window_get_window_id", || {
         let window = unsafe { window_ptr.borrow::<Window>() };

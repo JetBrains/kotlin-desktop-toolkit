@@ -334,6 +334,20 @@ public class Window internal constructor(
         }
     }
 
+    /**
+     * Returns the horizontal space taken by the traffic light button block, measured from
+     * the window's left edge. This spans from the left edge to the right edge of the
+     * rightmost button, plus symmetric trailing padding equal to the leading gap between
+     * the window edge and the first button — so content laid out at this inset is padded
+     * away from the buttons by the same amount the buttons are padded from the window edge.
+     *
+     * Returns 0 when the window uses the regular titlebar (see [TitlebarConfiguration])
+     * or is in full screen.
+     */
+    public fun getTitlebarLeftInset(): LogicalPixels {
+        return ffiDownCall { desktop_macos_h.window_get_titlebar_left_inset(pointer) }
+    }
+
     public var overriddenAppearance: Appearance?
         get() {
             return if (ffiDownCall { desktop_macos_h.window_appearance_is_overridden(pointer) }) {
