@@ -367,9 +367,8 @@ class RotatingBallWindow(
         return if (super.handleEvent(event) == EventHandlerResult.Continue) {
             when {
                 event is Event.WindowResize -> {
-                    val viewSize = view.size().toLogical(window.scaleFactor())
-                    assert(event.size == viewSize)
-                    updateLayout(event.size)
+                    val contentSize = view.size().toLogical(window.scaleFactor())
+                    updateLayout(contentSize)
                     EventHandlerResult.Stop
                 }
             }
