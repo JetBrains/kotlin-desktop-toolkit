@@ -339,7 +339,10 @@ class RotatingBallWindow(
                 title = title,
                 origin = origin,
                 titlebarConfiguration = if (useCustomTitlebar) {
-                    TitlebarConfiguration.Custom(titlebarHeight = container.customTitlebar?.size?.height ?: 0.0)
+                    TitlebarConfiguration.Custom(
+                        titlebarHeight = container.customTitlebar?.size?.height ?: 0.0,
+                        largeCornerRadius = true,
+                    )
                 } else {
                     TitlebarConfiguration.Regular
                 },
@@ -350,6 +353,10 @@ class RotatingBallWindow(
     }
 
     val textInput = ToyTextInput(window, LogicalPoint.Zero, LogicalSize.Zero)
+
+    // Whether this window's custom titlebar requests the macOS 26 large corner radius.
+    // Toggled at runtime from the Window ▸ Titlebar menu.
+    var largeCornerRadius: Boolean = true
 
     init {
         window.setTextInputClient(textInput)
@@ -456,16 +463,36 @@ class ApplicationState : AutoCloseable {
                 val size = currentTitlebar.size
                 val newSize = LogicalSize(width = size.width, height = size.height + delta)
                 currentTitlebar.size = newSize
-                window.window.setTitlebarConfiguration(configuration = TitlebarConfiguration.Custom(newSize.height))
+                window.window.setTitlebarConfiguration(
+                    configuration = TitlebarConfiguration.Custom(newSize.height, largeCornerRadius = window.largeCornerRadius),
+                )
                 window.windowContainer.resize(window.window.size)
             }
+        }
+    }
+
+    private fun toggleLargeCornerRadius() {
+        mainWindow()?.let { window ->
+            window.largeCornerRadius = !window.largeCornerRadius
+            Logger.info { "Large corner radius: ${window.largeCornerRadius}" }
+            val titlebar = window.windowContainer.customTitlebar
+            if (titlebar == null) {
+                Logger.info { "Large corner radius only applies to a custom titlebar" }
+                return@let
+            }
+            window.window.setTitlebarConfiguration(
+                configuration = TitlebarConfiguration.Custom(titlebar.size.height, largeCornerRadius = window.largeCornerRadius),
+            )
         }
     }
 
     private fun setCustomTitlebarEnabled(enabled: Boolean) {
         mainWindow()?.let { window ->
             if (enabled) {
-                val configuration = TitlebarConfiguration.Custom(CustomTitlebar.DEFAULT_CUSTOM_TITLEBAR_HEIGHT)
+                val configuration = TitlebarConfiguration.Custom(
+                    CustomTitlebar.DEFAULT_CUSTOM_TITLEBAR_HEIGHT,
+                    largeCornerRadius = window.largeCornerRadius,
+                )
                 window.windowContainer.customTitlebar = CustomTitlebar(
                     LogicalPoint.Zero,
                     LogicalSize(width = window.window.contentSize.width, height = CustomTitlebar.DEFAULT_CUSTOM_TITLEBAR_HEIGHT),
@@ -561,9 +588,9 @@ class ApplicationState : AutoCloseable {
 //                Logger.info { "$event" }
 //            }
 //
-//            is Event.MouseMoved -> {
-//                Logger.info { "$event" }
-//            }
+            is Event.MouseMoved -> {
+                Logger.info { "$event" }
+            }
 //
 //            is Event.MouseDragged -> {
 //                Logger.info { "$event" }
@@ -808,6 +835,11 @@ class ApplicationState : AutoCloseable {
                     AppMenuItem.Action(
                         title = "Switch to Regular Titlebar",
                         perform = { setCustomTitlebarEnabled(false) },
+                    ),
+                    AppMenuItem.Action(
+                        title = "Toggle Large Corner Radius",
+                        keystroke = Keystroke(key = "r", modifiers = KeyModifiersSet.create(command = true, option = true)),
+                        perform = { toggleLargeCornerRadius() },
                     ),
                 ),
                 AppMenuItem.Action(
