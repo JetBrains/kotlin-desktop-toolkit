@@ -54,16 +54,21 @@ class GrandCentralDispatchTest : KDTTestBase() {
     }
 
     @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun `nested invocations`() {
+        val countDownLatch = CountDownLatch(3)
         val actions = mutableListOf<Int>()
         GrandCentralDispatch.dispatchOnMain {
             actions.add(1)
+            countDownLatch.countDown()
             GrandCentralDispatch.dispatchOnMain {
                 actions.add(3)
+                countDownLatch.countDown()
             }
             actions.add(2)
+            countDownLatch.countDown()
         }
-        GrandCentralDispatch.dispatchOnMainSync {}
+        countDownLatch.await()
         assertEquals(listOf(1, 2, 3), actions)
     }
 
@@ -82,7 +87,7 @@ class GrandCentralDispatchTest : KDTTestBase() {
     }
 
     @Test
-    fun `hight priority tasks are executed first`() {
+    fun `high priority tasks are executed first`() {
         val tasksCount = 100
         val executionOrder = mutableListOf<Int>()
         GrandCentralDispatch.dispatchOnMainSync {
