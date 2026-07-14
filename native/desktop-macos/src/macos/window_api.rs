@@ -62,7 +62,13 @@ pub extern "C" fn window_drop(window_ptr: WindowPtr) {
 #[repr(C)]
 pub enum TitlebarConfiguration {
     Regular,
-    Custom { title_bar_height: LogicalPixels },
+    Custom {
+        title_bar_height: LogicalPixels,
+        /// When true, attach an empty unified toolbar so macOS 26 (Tahoe) rounds the window
+        /// with the new, larger corner radius. Has no visible effect on earlier macOS versions,
+        /// or when the running JDK is linked against a pre-26 SDK.
+        large_corner_radius: bool,
+    },
 }
 
 #[unsafe(no_mangle)]

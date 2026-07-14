@@ -2,8 +2,12 @@ use crate::geometry::LogicalPixels;
 use crate::macos::window_api::TitlebarConfiguration;
 use anyhow::{Context, ensure};
 use objc2::rc::Retained;
-use objc2_app_kit::{NSButton, NSLayoutConstraint, NSView, NSWindow, NSWindowButton, NSWindowStyleMask, NSWindowTitleVisibility};
-use objc2_foundation::NSArray;
+use objc2::{MainThreadOnly, available};
+use objc2_app_kit::{
+    NSButton, NSLayoutConstraint, NSToolbar, NSToolbarDisplayMode, NSView, NSWindow, NSWindowButton, NSWindowStyleMask,
+    NSWindowTitleVisibility, NSWindowToolbarStyle,
+};
+use objc2_foundation::{MainThreadMarker, NSArray, ns_string};
 
 pub(crate) struct Titlebar {
     ns_window: Retained<NSWindow>,
@@ -19,11 +23,11 @@ impl Titlebar {
     pub(crate) fn new(ns_window: &NSWindow, title_bar_mode: &TitlebarConfiguration) -> Self {
         let state = match title_bar_mode {
             TitlebarConfiguration::Regular => TitlebarState::Regular,
-            TitlebarConfiguration::Custom { title_bar_height } => {
-                let mut state = CustomTitlebarState {
-                    height: *title_bar_height,
-                    constraints: None,
-                };
+            TitlebarConfiguration::Custom {
+                title_bar_height,
+                large_corner_radius,
+            } => {
+                let mut state = CustomTitlebarState::new(*title_bar_height, *large_corner_radius, ns_window.mtm());
                 state.init(ns_window);
                 TitlebarState::Custom(state)
             }
@@ -43,22 +47,42 @@ impl Titlebar {
                 state.deinit(&self.ns_window);
                 self.state = TitlebarState::Regular;
             }
-            (TitlebarState::Regular, TitlebarConfiguration::Custom { title_bar_height }) => {
-                let mut state = CustomTitlebarState {
-                    height: *title_bar_height,
-                    constraints: None,
-                };
+            (
+                TitlebarState::Regular,
+                TitlebarConfiguration::Custom {
+                    title_bar_height,
+                    large_corner_radius,
+                },
+            ) => {
+                let mut state = CustomTitlebarState::new(*title_bar_height, *large_corner_radius, self.ns_window.mtm());
                 state.init(&self.ns_window);
                 self.state = TitlebarState::Custom(state);
             }
-            (TitlebarState::Custom(state), TitlebarConfiguration::Custom { title_bar_height }) =>
-            {
+            (
+                TitlebarState::Custom(state),
+                TitlebarConfiguration::Custom {
+                    title_bar_height,
+                    large_corner_radius,
+                },
+            ) => {
+                let fullscreen = self.ns_window.styleMask().contains(NSWindowStyleMask::FullScreen);
                 #[allow(clippy::float_cmp)]
                 if state.height != *title_bar_height {
                     state.height = *title_bar_height;
-                    if !self.ns_window.styleMask().contains(NSWindowStyleMask::FullScreen) {
+                    if !fullscreen {
                         state.deactivate_constraints(&self.ns_window).unwrap();
                         state.activate_constraints(&self.ns_window).unwrap();
+                    }
+                }
+                if state.toolbar.is_some() != *large_corner_radius {
+                    if *large_corner_radius {
+                        state.toolbar = Some(make_large_corner_radius_toolbar(self.ns_window.mtm()));
+                        if !fullscreen {
+                            state.attach_toolbar(&self.ns_window);
+                        }
+                    } else {
+                        state.detach_toolbar(&self.ns_window);
+                        state.toolbar = None;
                     }
                 }
             }
@@ -68,6 +92,9 @@ impl Titlebar {
     pub(crate) fn before_enter_fullscreen(&mut self) {
         if let TitlebarState::Custom(ref mut state) = self.state {
             state.deactivate_constraints(&self.ns_window).unwrap();
+            // The toolbar must go away in full screen, otherwise it shows up as an
+            // empty strip; it's re-attached in after_exit_fullscreen.
+            state.detach_toolbar(&self.ns_window);
         }
     }
 
@@ -86,6 +113,7 @@ impl Titlebar {
     pub(crate) fn after_exit_fullscreen(&mut self) {
         if let TitlebarState::Custom(ref mut state) = self.state {
             state.activate_constraints(&self.ns_window).unwrap();
+            state.attach_toolbar(&self.ns_window);
         }
     }
 }
@@ -93,9 +121,22 @@ impl Titlebar {
 struct CustomTitlebarState {
     height: LogicalPixels,
     constraints: Option<Retained<NSArray<NSLayoutConstraint>>>,
+    // An empty unified toolbar, present only when the large corner radius is requested.
+    // Attaching it (together with the transparent titlebar, hidden title and full-size content
+    // view set below) is what makes macOS 26 (Tahoe) round the window with the new, larger
+    // corner radius. See https://github.com/electron/electron/issues/47514#issuecomment-3508053035
+    toolbar: Option<Retained<NSToolbar>>,
 }
 
 impl CustomTitlebarState {
+    fn new(height: LogicalPixels, large_corner_radius: bool, mtm: MainThreadMarker) -> Self {
+        Self {
+            height,
+            constraints: None,
+            toolbar: large_corner_radius.then(|| make_large_corner_radius_toolbar(mtm)),
+        }
+    }
+
     fn init(&mut self, ns_window: &NSWindow) {
         let mut style_mask = ns_window.styleMask();
         style_mask |= NSWindowStyleMask::FullSizeContentView;
@@ -107,6 +148,7 @@ impl CustomTitlebarState {
         if !style_mask.contains(NSWindowStyleMask::FullScreen) {
             ns_window.setFrame_display(frame, true);
             set_default_titlebar_enabled(ns_window, false);
+            self.attach_toolbar(ns_window);
             self.activate_constraints(ns_window).unwrap();
         }
     }
@@ -119,7 +161,21 @@ impl CustomTitlebarState {
         if !style_mask.contains(NSWindowStyleMask::FullScreen) {
             ns_window.setFrame_display(frame, true);
             self.deactivate_constraints(ns_window).unwrap();
+            self.detach_toolbar(ns_window);
             set_default_titlebar_enabled(ns_window, true);
+        }
+    }
+
+    fn attach_toolbar(&self, ns_window: &NSWindow) {
+        if let Some(toolbar) = &self.toolbar {
+            ns_window.setToolbarStyle(NSWindowToolbarStyle::Unified);
+            ns_window.setToolbar(Some(toolbar));
+        }
+    }
+
+    fn detach_toolbar(&self, ns_window: &NSWindow) {
+        if self.toolbar.is_some() {
+            ns_window.setToolbar(None);
         }
     }
 
@@ -146,6 +202,20 @@ impl CustomTitlebarState {
         }
         Ok(())
     }
+}
+
+// Builds the empty, non-customizable toolbar that triggers the larger macOS 26 window
+// corner radius. It carries no items, so nothing is drawn in the titlebar; content stays
+// clickable through it.
+fn make_large_corner_radius_toolbar(mtm: MainThreadMarker) -> Retained<NSToolbar> {
+    let toolbar = NSToolbar::initWithIdentifier(NSToolbar::alloc(mtm), ns_string!("KdtLargeCornerRadiusToolbar"));
+    toolbar.setDisplayMode(NSToolbarDisplayMode::IconOnly);
+    toolbar.setAllowsUserCustomization(false);
+    toolbar.setAutosavesConfiguration(false);
+    if available!(macos = 15.0) {
+        toolbar.setAllowsDisplayModeCustomization(false);
+    }
+    toolbar
 }
 
 fn set_default_titlebar_enabled(ns_window: &NSWindow, enabled: bool) {
