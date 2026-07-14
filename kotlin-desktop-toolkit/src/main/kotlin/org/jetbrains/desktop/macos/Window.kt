@@ -439,7 +439,18 @@ public sealed class WindowBackground {
 
 public sealed class TitlebarConfiguration {
     public data object Regular : TitlebarConfiguration()
-    public data class Custom(val titlebarHeight: LogicalPixels) : TitlebarConfiguration()
+
+    /**
+     * A custom titlebar of the given [titlebarHeight].
+     *
+     * When [largeCornerRadius] is true, the window is rounded with the larger corner radius
+     * introduced in macOS 26 (Tahoe). This has no visible effect on earlier macOS versions, or
+     * when the running JVM is linked against a pre-26 macOS SDK.
+     */
+    public data class Custom(
+        val titlebarHeight: LogicalPixels,
+        val largeCornerRadius: Boolean = false,
+    ) : TitlebarConfiguration()
 
     internal fun toNative(arena: Arena): MemorySegment {
         val result = NativeTitlebarConfiguration.allocate(arena)
@@ -451,6 +462,7 @@ public sealed class TitlebarConfiguration {
                 NativeTitlebarConfiguration.tag(result, desktop_macos_h.NativeTitlebarConfiguration_Custom())
                 val custom = NativeTitlebarConfiguration_NativeCustom_Body.allocate(arena)
                 NativeTitlebarConfiguration_NativeCustom_Body.title_bar_height(custom, titlebarHeight)
+                NativeTitlebarConfiguration_NativeCustom_Body.large_corner_radius(custom, largeCornerRadius)
                 NativeTitlebarConfiguration.custom(result, custom)
             }
         }

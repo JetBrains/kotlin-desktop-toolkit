@@ -47,6 +47,7 @@ objc2-app-kit = { version = "0.3.2", features = [
   "NSLayoutAnchor",
   "NSControl",
   "NSButton",
+  "NSToolbar",
   "NSLayoutConstraint",
   "NSVisualEffectView",
   "NSColor",
