@@ -229,6 +229,17 @@ fun sampleMainClass(): String {
 tasks.jpackage {
     dependsOn(prepareJPackageInput, prepareJPackageNativeLibs)
 
+    // package with a JDK linked against the macOS 26 SDK. jpackage copies its own JDK's
+    // `jpackageapplauncher` into the .app as the launcher binary, and the OS keys the large
+    // corner radius off that launcher's linked SDK. Homebrew's OpenJDK 25 is built against
+    // SDK 26.0; the bundled runtime is jlinked from the same JDK.
+    javaLauncher.set(
+        javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(25))
+            vendor.set(JvmVendorSpec.matching("Homebrew"))
+        },
+    )
+
     appName = "SkikoSample"
     appVersion = "1.0.0"
     vendor = "JetBrains"
