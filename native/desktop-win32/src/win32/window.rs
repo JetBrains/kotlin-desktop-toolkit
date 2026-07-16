@@ -48,10 +48,12 @@ use super::{
     cursor::{Cursor, CursorIcon},
     event_loop::EventLoop,
     geometry::{LogicalPoint, LogicalRect, LogicalSize, PhysicalPoint},
+    ime::{ClientCallbackGuard, ImeState},
     pointer::{PointerButton, PointerClickCounter},
     screen::{self, ScreenInfo},
     strings::copy_from_utf8_string,
     system_menu::{seed_system_menu, sync_system_menu_state},
+    text_input_client::TextInputClient,
     utils,
     window_api::{WindowParams, WindowStyle, WindowTitleBarKind},
 };
@@ -138,6 +140,7 @@ pub struct Window {
     pointer_click_counter: RefCell<PointerClickCounter>,
     cursor: RefCell<Option<Cursor>>,
     backdrop_tint: RefCell<Option<SpriteVisual>>,
+    ime: Cell<ImeState>,
     event_loop: Weak<EventLoop>,
 }
 
@@ -177,6 +180,7 @@ impl Window {
             pointer_click_counter: RefCell::new(PointerClickCounter::new()),
             cursor: RefCell::new(None),
             backdrop_tint: RefCell::new(None),
+            ime: Cell::new(ImeState::new()),
             event_loop,
         };
         Ok(window)
@@ -708,6 +712,88 @@ impl Window {
         set_icon_worker(SM_CXSMICON, SM_CYSMICON, ICON_SMALL)?;
         set_icon_worker(SM_CXICON, SM_CYICON, ICON_BIG)?;
         Ok(())
+    }
+
+    pub(crate) const fn ime_client(&self) -> Option<TextInputClient> {
+        self.ime.get().client
+    }
+
+    pub(crate) fn enabled_client(&self) -> Option<TextInputClient> {
+        let ime = self.ime.get();
+        (ime.enabled).then_some(ime.client).flatten()
+    }
+
+    pub(crate) fn active_client(&self) -> Option<TextInputClient> {
+        let ime = self.ime.get();
+        (ime.focused && ime.enabled).then_some(ime.client).flatten()
+    }
+
+    pub(crate) fn with_enabled_client<R>(&self, f: impl FnOnce(TextInputClient) -> R) -> Option<R> {
+        let client = self.enabled_client()?;
+        let _guard = ClientCallbackGuard::enter(&self.ime);
+        Some(f(client))
+    }
+
+    pub(crate) fn with_active_client<R>(&self, f: impl FnOnce(TextInputClient) -> R) -> Option<R> {
+        let client = self.active_client()?;
+        let _guard = ClientCallbackGuard::enter(&self.ime);
+        Some(f(client))
+    }
+
+    pub(crate) const fn ime_revision(&self) -> u64 {
+        self.ime.get().composition_revision
+    }
+
+    pub(crate) fn ime_start(&self, app_has_marked_text: bool) -> u64 {
+        let mut ime = self.ime.get();
+        ime.composition_active = true;
+        ime.app_has_marked_text = app_has_marked_text;
+        ime.reset_pending_surrogate();
+        let revision = ime.advance_composition_revision();
+        self.ime.set(ime);
+        revision
+    }
+
+    pub(crate) fn ime_end(&self) -> bool {
+        let had_marked_text = self.ime.get().app_has_marked_text;
+        self.clear_composition_state();
+        had_marked_text
+    }
+
+    pub(crate) const fn ime_is_finalizing(&self) -> bool {
+        self.ime.get().finalizing
+    }
+
+    pub(crate) fn ime_set_app_marked(&self, value: bool) -> u64 {
+        let mut ime = self.ime.get();
+        ime.app_has_marked_text = value;
+        let revision = ime.advance_composition_revision();
+        self.ime.set(ime);
+        revision
+    }
+
+    pub(crate) fn clear_composition_state(&self) -> u64 {
+        let mut ime = self.ime.get();
+        ime.composition_active = false;
+        ime.app_has_marked_text = false;
+        ime.finalizing = false;
+        ime.reset_pending_surrogate();
+        let revision = ime.advance_composition_revision();
+        self.ime.set(ime);
+        revision
+    }
+
+    pub(crate) fn join_surrogate(&self, unit: u16) -> Option<String> {
+        let mut ime = self.ime.get();
+        let result = ime.join_surrogate(unit);
+        self.ime.set(ime);
+        result
+    }
+
+    pub(crate) fn clear_pending_surrogate(&self) {
+        let mut ime = self.ime.get();
+        ime.reset_pending_surrogate();
+        self.ime.set(ime);
     }
 }
 
