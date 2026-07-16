@@ -729,6 +729,26 @@ fn resolve_locale_name(langid: u32) -> String {
 }
 
 fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    if window.active_client().is_none() {
+        return character_received(event_loop, window, msg, wparam, lparam);
+    }
+    if msg != WM_CHAR {
+        window.clear_pending_surrogate();
+        return character_received(event_loop, window, msg, wparam, lparam);
+    }
+    let unit = LOWORD!(wparam.0);
+    // Control characters (in ranges 0x0-0x1F and 0x7F-0x9F)
+    if unit <= 0x1F || (0x7F..=0x9F).contains(&unit) {
+        window.clear_pending_surrogate();
+        return character_received(event_loop, window, msg, wparam, lparam);
+    }
+    if let Some(text) = window.join_surrogate(unit) {
+        let _ = window.with_active_client(|client| client.insert_text(&text));
+    }
+    Some(LRESULT(0))
+}
+
+fn character_received(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     let character = LOWORD!(wparam.0);
     let event = CharacterReceivedEvent {
         character,
