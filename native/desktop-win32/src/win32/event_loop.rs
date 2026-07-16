@@ -255,6 +255,7 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
             .set_content_top_offset(window.max_chrome_y())
             .inspect_err(|err| log::warn!("set_content_top_offset on DPI change failed: {err}"));
     }
+    window.update_ime_windows();
     result
 }
 

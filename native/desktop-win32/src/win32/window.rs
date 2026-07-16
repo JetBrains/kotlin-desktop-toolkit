@@ -12,7 +12,9 @@ use anyhow::Context;
 use windows::{
     UI::Composition::{CompositionBackfaceVisibility, Compositor, ContainerVisual, Desktop::DesktopWindowTarget, SpriteVisual},
     Win32::{
-        Foundation::{COLORREF, ERROR_SUCCESS, GetLastError, HANDLE, HWND, LPARAM, LRESULT, RECT, SetLastError, WIN32_ERROR, WPARAM},
+        Foundation::{
+            COLORREF, ERROR_SUCCESS, GetLastError, HANDLE, HWND, LPARAM, LRESULT, POINT, RECT, SetLastError, WIN32_ERROR, WPARAM,
+        },
         Graphics::{
             Dwm::{
                 DWM_SYSTEMBACKDROP_TYPE, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE, DWMWA_EXTENDED_FRAME_BOUNDS, DWMWA_SYSTEMBACKDROP_TYPE,
@@ -27,16 +29,20 @@ use windows::{
         UI::{
             Controls::MARGINS,
             HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
-            Input::KeyboardAndMouse::SetActiveWindow,
+            Input::{
+                Ime::{CANDIDATEFORM, CFS_EXCLUDE, CFS_POINT, COMPOSITIONFORM, ImmSetCandidateWindow, ImmSetCompositionWindow},
+                KeyboardAndMouse::SetActiveWindow,
+            },
             WindowsAndMessaging::{
-                BringWindowToTop, CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateIconFromResourceEx, CreateWindowExW, DefWindowProcW,
-                DestroyWindow, GWL_STYLE, GetClientRect, GetForegroundWindow, GetPropW, GetWindowLongPtrW, GetWindowThreadProcessId, HMENU,
-                ICON_BIG, ICON_SMALL, IsHungAppWindow, IsIconic, IsZoomed, LR_DEFAULTCOLOR, PostMessageW, RegisterClassExW, RemovePropW,
-                SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXPADDEDBORDER, SM_CXSMICON, SM_CYICON, SM_CYSIZEFRAME, SM_CYSMICON,
-                SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SendMessageW,
-                SetCursor, SetForegroundWindow, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, TPM_RETURNCMD,
-                TPM_RIGHTBUTTON, TrackPopupMenu, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_NULL, WM_SETICON,
-                WM_SYSCOMMAND, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
+                BringWindowToTop, CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateCaret, CreateIconFromResourceEx, CreateWindowExW,
+                DefWindowProcW, DestroyCaret, DestroyWindow, GWL_STYLE, GetClientRect, GetForegroundWindow, GetPropW, GetWindowLongPtrW,
+                GetWindowThreadProcessId, HMENU, ICON_BIG, ICON_SMALL, IsHungAppWindow, IsIconic, IsZoomed, LR_DEFAULTCOLOR, PostMessageW,
+                RegisterClassExW, RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXPADDEDBORDER, SM_CXSMICON, SM_CYICON,
+                SM_CYSIZEFRAME, SM_CYSMICON, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE,
+                SWP_NOZORDER, SendMessageW, SetCaretPos, SetCursor, SetForegroundWindow, SetPropW, SetWindowLongPtrW, SetWindowPos,
+                SetWindowTextW, ShowWindow, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE,
+                WM_NCDESTROY, WM_NULL, WM_SETICON, WM_SYSCOMMAND, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
+                WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
             },
         },
     },
@@ -48,12 +54,12 @@ use super::{
     cursor::{Cursor, CursorIcon},
     event_loop::EventLoop,
     geometry::{LogicalPoint, LogicalRect, LogicalSize, PhysicalPoint},
-    ime::{ClientCallbackGuard, ImeState},
+    ime::{ClientCallbackGuard, ImeState, ImmContext},
     pointer::{PointerButton, PointerClickCounter},
     screen::{self, ScreenInfo},
     strings::copy_from_utf8_string,
     system_menu::{seed_system_menu, sync_system_menu_state},
-    text_input_client::TextInputClient,
+    text_input_client::{TextInputClient, client_logical_to_physical_rect},
     utils,
     window_api::{WindowParams, WindowStyle, WindowTitleBarKind},
 };
@@ -794,6 +800,70 @@ impl Window {
         let mut ime = self.ime.get();
         ime.reset_pending_surrogate();
         self.ime.set(ime);
+    }
+
+    pub(crate) fn update_ime_windows(&self) {
+        let revision = self.ime_revision();
+        let Some(range) = self
+            .with_active_client(super::text_input_client::TextInputClient::selected_range)
+            .flatten()
+        else {
+            return;
+        };
+        if self.ime_revision() != revision {
+            return;
+        }
+        let Some(caret_rect) = self.with_active_client(|client| client.caret_rect(range)) else {
+            return;
+        };
+        if self.ime_revision() != revision || self.active_client().is_none() {
+            return;
+        }
+        let Some(context) = ImmContext::get(self.hwnd()) else {
+            log::warn!("active IME client has no input context; skipping positioning");
+            return;
+        };
+
+        let caret = client_logical_to_physical_rect(caret_rect, self.get_scale());
+        let origin = POINT {
+            x: caret.left,
+            y: caret.top,
+        };
+        let composition = COMPOSITIONFORM {
+            dwStyle: CFS_POINT,
+            ptCurrentPos: origin,
+            ..Default::default()
+        };
+        // SAFETY: `context` owns a valid HIMC and `composition` is live for the synchronous call.
+        if !unsafe { ImmSetCompositionWindow(context.himc(), &raw const composition) }.as_bool() {
+            log::warn!("ImmSetCompositionWindow failed");
+        }
+
+        let candidate = CANDIDATEFORM {
+            dwIndex: 0,
+            dwStyle: CFS_EXCLUDE,
+            ptCurrentPos: origin,
+            rcArea: caret,
+        };
+        // SAFETY: `context` owns a valid HIMC and `candidate` is live for the synchronous call.
+        if !unsafe { ImmSetCandidateWindow(context.himc(), &raw const candidate) }.as_bool() {
+            log::warn!("ImmSetCandidateWindow failed");
+        }
+
+        // SAFETY: active-client gating requires focus; lifecycle code attempted to create this caret.
+        if let Err(err) = unsafe { SetCaretPos(origin.x, origin.y) } {
+            log::warn!("SetCaretPos failed: {err}");
+        }
+    }
+
+    fn create_caret(&self) -> windows_core::Result<()> {
+        // SAFETY: callers use this only for a live, focused HWND with an active client.
+        unsafe { CreateCaret(self.hwnd(), None, 1, 1) }
+    }
+
+    fn destroy_caret(&self) -> windows_core::Result<()> {
+        // SAFETY: callers use this only while this window owns the GUI thread's caret.
+        unsafe { DestroyCaret() }
     }
 }
 

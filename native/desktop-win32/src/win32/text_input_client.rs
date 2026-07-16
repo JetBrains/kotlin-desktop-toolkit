@@ -1,5 +1,7 @@
 use desktop_common::ffi_utils::{BorrowedArray, BorrowedUtf8};
 
+use windows::Win32::Foundation::RECT;
+
 use super::geometry::{LogicalPoint, LogicalRect, LogicalSize};
 
 /// cbindgen:ignore
@@ -119,6 +121,17 @@ impl TextInputClient {
     }
 }
 
+pub(crate) fn client_logical_to_physical_rect(rect: LogicalRect, scale: f32) -> RECT {
+    let top_left = rect.origin.to_physical(scale);
+    let bottom_right = LogicalPoint::new(rect.origin.x.0 + rect.size.width.0, rect.origin.y.0 + rect.size.height.0).to_physical(scale);
+    RECT {
+        left: top_left.x.0,
+        top: top_left.y.0,
+        right: bottom_right.x.0,
+        bottom: bottom_right.y.0,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -128,5 +141,15 @@ mod tests {
         assert_eq!(TextRange::none().into_option(), None);
         let range = TextRange { location: 4, length: 2 };
         assert_eq!(range.into_option(), Some(range));
+    }
+
+    #[test]
+    fn logical_caret_rect_scales_both_corners() {
+        let rect = LogicalRect {
+            origin: LogicalPoint::new(10.25, 5.25),
+            size: LogicalSize::new(3.5, 4.5),
+        };
+        let physical = client_logical_to_physical_rect(rect, 1.5);
+        assert_eq!((physical.left, physical.top, physical.right, physical.bottom), (15, 8, 21, 15));
     }
 }
