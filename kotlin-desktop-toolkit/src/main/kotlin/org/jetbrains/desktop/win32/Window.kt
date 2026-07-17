@@ -66,6 +66,9 @@ public class Window internal constructor(
         }
     }
 
+    private val textInputClientHolder = TextInputClientHolder()
+    private var closed = false
+
     internal inline fun <T> withPointer(block: (MemorySegment) -> T): T = block(this.ptr)
 
     public val id: WindowId get() = this.windowId
@@ -234,6 +237,30 @@ public class Window internal constructor(
         return ffiDownCall { desktop_win32_h.window_show(ptr) }
     }
 
+    public fun setTextInputClient(client: TextInputClient) {
+        textInputClientHolder.replace(client) { native ->
+            ffiDownCall { desktop_win32_h.window_set_text_input_client(ptr, native) }
+        }
+    }
+
+    public fun clearTextInputClient() {
+        textInputClientHolder.clear {
+            ffiDownCall { desktop_win32_h.window_clear_text_input_client(ptr) }
+        }
+    }
+
+    public fun setImeEnabled(enabled: Boolean) {
+        ffiDownCall { desktop_win32_h.window_set_ime_enabled(ptr, enabled) }
+    }
+
+    public fun notifySelectionChanged() {
+        ffiDownCall { desktop_win32_h.window_notify_selection_changed(ptr) }
+    }
+
+    public fun notifyLayoutChanged() {
+        ffiDownCall { desktop_win32_h.window_notify_layout_changed(ptr) }
+    }
+
     /**
      * Forcibly brings the window to the foreground and gives it keyboard focus,
      * stealing focus from whatever the user is currently interacting with.
@@ -259,9 +286,13 @@ public class Window internal constructor(
     }
 
     override fun close() {
-        ffiDownCall {
-            desktop_win32_h.window_drop(ptr)
+        if (closed) return
+        textInputClientHolder.clear {
+            ffiDownCall { desktop_win32_h.window_clear_text_input_client(ptr) }
         }
+        ffiDownCall { desktop_win32_h.window_drop(ptr) }
+        closed = true
+        textInputClientHolder.close()
     }
 }
 

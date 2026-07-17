@@ -23,6 +23,13 @@ internal fun LogicalRect.Companion.fromNative(s: MemorySegment) = LogicalRect(
     size = LogicalSize.fromNative(NativeLogicalRect.size(s)),
 )
 
+internal fun LogicalRect.toNative(result: MemorySegment) {
+    NativeLogicalPoint.x(NativeLogicalRect.origin(result), origin.x)
+    NativeLogicalPoint.y(NativeLogicalRect.origin(result), origin.y)
+    NativeLogicalSize.width(NativeLogicalRect.size(result), size.width)
+    NativeLogicalSize.height(NativeLogicalRect.size(result), size.height)
+}
+
 internal fun LogicalSize.toNative(arena: Arena): MemorySegment = NativeLogicalSize.allocate(arena).also { result ->
     NativeLogicalSize.width(result, width)
     NativeLogicalSize.height(result, height)
