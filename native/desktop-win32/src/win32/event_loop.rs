@@ -8,6 +8,7 @@ use desktop_common::ffi_utils::RustAllocatedStrPtr;
 use anyhow::Context;
 use windows::Win32::{
     Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM},
+    Globalization::LCIDToLocaleName,
     Graphics::{
         Dwm::DwmDefWindowProc,
         Gdi::{BeginPaint, EndPaint, GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow, PAINTSTRUCT},
@@ -25,10 +26,11 @@ use windows::Win32::{
             NCCALCSIZE_PARAMS, SC_KEYMENU, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
             TranslateMessage, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_CANCELMODE,
             WM_CAPTURECHANGED, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_INITMENUPOPUP,
-            WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCLBUTTONDOWN, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN,
-            WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_NCRBUTTONUP, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL,
-            WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE,
-            WM_SYSCHAR, WM_SYSCOLORCHANGE, WM_SYSCOMMAND, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
+            WM_INPUTLANGCHANGE, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCLBUTTONDOWN, WM_NCMOUSELEAVE,
+            WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_NCRBUTTONUP, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN,
+            WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT,
+            WM_SETTINGCHANGE, WM_SYSCHAR, WM_SYSCOLORCHANGE, WM_SYSCOMMAND, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP,
+            WM_WINDOWPOSCHANGED,
         },
     },
 };
@@ -36,10 +38,10 @@ use windows::Win32::{
 use super::{
     appearance::{Appearance, HighContrast},
     events::{
-        CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerDownEvent, PointerEnteredEvent,
-        PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, SystemAppearanceChangeEvent,
-        SystemHighContrastChangeEvent, Timestamp, WindowActivatedEvent, WindowDrawEvent, WindowMoveEvent, WindowResizeEvent,
-        WindowScaleChangedEvent, WindowTitleChangedEvent,
+        CharacterReceivedEvent, Event, EventHandler, InputLanguageChangedEvent, KeyEvent, NCCalcSizeEvent, NCHitTestEvent,
+        PointerDownEvent, PointerEnteredEvent, PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent,
+        SystemAppearanceChangeEvent, SystemHighContrastChangeEvent, Timestamp, WindowActivatedEvent, WindowDrawEvent, WindowMoveEvent,
+        WindowResizeEvent, WindowScaleChangedEvent, WindowTitleChangedEvent,
     },
     geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
@@ -133,6 +135,8 @@ impl EventLoop {
             WM_SETFOCUS => self.handle_event(window, Event::WindowKeyboardEnter),
 
             WM_KILLFOCUS => self.handle_event(window, Event::WindowKeyboardLeave),
+
+            WM_INPUTLANGCHANGE => on_inputlangchange(self, window, lparam),
 
             WM_CHAR | WM_DEADCHAR | WM_SYSCHAR | WM_SYSDEADCHAR => on_char(self, window, msg, wparam, lparam),
 
@@ -699,6 +703,29 @@ fn on_keyevent(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM
     let result = event_loop.handle_event(window, event);
     KEYEVENT_MESSAGES.with_borrow_mut(|map| map.remove(&original_msg_id));
     result
+}
+
+fn on_inputlangchange(event_loop: &EventLoop, window: &Window, lparam: LPARAM) -> Option<LRESULT> {
+    let hkl = lparam.0.cast_unsigned();
+    let langid = u32::try_from(hkl & 0xFFFF).unwrap_or_default();
+    let locale_name = RustAllocatedStrPtr::allocate(resolve_locale_name(langid))
+        .unwrap_or_else(|_| RustAllocatedStrPtr::null())
+        .to_auto_drop();
+    let _ = event_loop.handle_event(window, InputLanguageChangedEvent { hkl, locale_name });
+    None
+}
+
+fn resolve_locale_name(langid: u32) -> String {
+    let mut buffer = [0u16; 85];
+    // SAFETY: the buffer is writable for `LOCALE_NAME_MAX_LENGTH` UTF-16 units; a LANGID is a
+    // valid SORT_DEFAULT LCID because its high word is zero.
+    let length = unsafe { LCIDToLocaleName(langid, Some(buffer.as_mut_slice()), 0) };
+    if length > 1 {
+        let content_length = usize::try_from(length - 1).unwrap_or_default();
+        String::from_utf16_lossy(&buffer[..content_length])
+    } else {
+        String::new()
+    }
 }
 
 fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {

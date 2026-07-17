@@ -2,6 +2,7 @@ package org.jetbrains.desktop.win32
 
 import org.jetbrains.desktop.win32.generated.NativeCharacterReceivedEvent
 import org.jetbrains.desktop.win32.generated.NativeEvent
+import org.jetbrains.desktop.win32.generated.NativeInputLanguageChangedEvent
 import org.jetbrains.desktop.win32.generated.NativeKeyEvent
 import org.jetbrains.desktop.win32.generated.NativeNCCalcSizeEvent
 import org.jetbrains.desktop.win32.generated.NativeNCHitTestEvent
@@ -50,6 +51,12 @@ public sealed class Event {
         val keyStatus: PhysicalKeyStatus,
         val isDeadChar: Boolean,
         val isSystemKey: Boolean,
+    ) : Event()
+
+    @ConsistentCopyVisibility
+    public data class InputLanguageChanged internal constructor(
+        val hkl: Long,
+        val localeName: String,
     ) : Event()
 
     public abstract class KeyEvent : Event() {
@@ -256,6 +263,7 @@ public enum class NCHitTestResult {
 
 internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeEvent.tag(s)) {
     desktop_win32_h.NativeEvent_CharacterReceived() -> characterReceived(s)
+    desktop_win32_h.NativeEvent_InputLanguageChanged() -> inputLanguageChanged(s)
     desktop_win32_h.NativeEvent_KeyDown() -> keyDown(s)
     desktop_win32_h.NativeEvent_KeyUp() -> keyUp(s)
     desktop_win32_h.NativeEvent_NCCalcSize() -> ncCalcSize(s)
@@ -289,6 +297,14 @@ private fun characterReceived(s: MemorySegment): Event {
         keyStatus = PhysicalKeyStatus.fromNative(NativeCharacterReceivedEvent.key_status(nativeEvent)),
         isDeadChar = NativeCharacterReceivedEvent.is_dead_char(nativeEvent),
         isSystemKey = NativeCharacterReceivedEvent.is_system_key(nativeEvent),
+    )
+}
+
+private fun inputLanguageChanged(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.input_language_changed(s)
+    return Event.InputLanguageChanged(
+        hkl = NativeInputLanguageChangedEvent.hkl(nativeEvent),
+        localeName = NativeInputLanguageChangedEvent.locale_name(nativeEvent).getString(0),
     )
 }
 

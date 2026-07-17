@@ -13,6 +13,7 @@ use super::{
 #[allow(dead_code)]
 pub enum Event {
     CharacterReceived(CharacterReceivedEvent),
+    InputLanguageChanged(InputLanguageChangedEvent),
     KeyDown(KeyEvent),
     KeyUp(KeyEvent),
     NCCalcSize(NCCalcSizeEvent),
@@ -67,6 +68,19 @@ pub struct CharacterReceivedEvent {
 impl From<CharacterReceivedEvent> for Event {
     fn from(value: CharacterReceivedEvent) -> Self {
         Self::CharacterReceived(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct InputLanguageChangedEvent {
+    pub hkl: usize,
+    pub locale_name: AutoDropStrPtr,
+}
+
+impl From<InputLanguageChangedEvent> for Event {
+    fn from(value: InputLanguageChangedEvent) -> Self {
+        Self::InputLanguageChanged(value)
     }
 }
 
