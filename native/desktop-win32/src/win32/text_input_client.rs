@@ -326,6 +326,38 @@ impl CompositionSnapshot {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum CompositionAction {
+    Insert(String),
+    SetMarked(PreeditSnapshot),
+    DiscardMarked,
+    SetAppMarked(bool),
+    ClearComposition,
+    UpdateWindows,
+}
+
+fn reduce_composition(snapshot: CompositionSnapshot) -> Vec<CompositionAction> {
+    let mut actions = Vec::new();
+    if let Some(result) = snapshot.result.filter(|text| !text.is_empty()) {
+        actions.push(CompositionAction::Insert(result));
+        actions.push(CompositionAction::SetAppMarked(false));
+    }
+    if let Some(preedit) = snapshot.preedit {
+        if preedit.text.is_empty() {
+            actions.push(CompositionAction::DiscardMarked);
+            actions.push(CompositionAction::SetAppMarked(false));
+        } else {
+            actions.push(CompositionAction::SetAppMarked(true));
+            actions.push(CompositionAction::SetMarked(preedit));
+        }
+        actions.push(CompositionAction::UpdateWindows);
+    } else if snapshot.cancelled {
+        actions.push(CompositionAction::ClearComposition);
+        actions.push(CompositionAction::DiscardMarked);
+    }
+    actions
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -500,5 +532,70 @@ mod tests {
             ..Default::default()
         };
         assert!(CompositionSnapshot::read(&source, GCS_COMPSTR.0).is_err());
+    }
+
+    #[test]
+    fn reducer_commits_before_starting_next_preedit() {
+        let preedit = PreeditSnapshot {
+            text: "つぎ".to_owned(),
+            selected: TextRange { location: 1, length: 0 },
+            underlines: fallback_underlines(2),
+        };
+        let actions = reduce_composition(CompositionSnapshot {
+            result: Some("確定".to_owned()),
+            preedit: Some(preedit.clone()),
+            cancelled: false,
+        });
+        assert_eq!(
+            actions,
+            vec![
+                CompositionAction::Insert("確定".to_owned()),
+                CompositionAction::SetAppMarked(false),
+                CompositionAction::SetAppMarked(true),
+                CompositionAction::SetMarked(preedit),
+                CompositionAction::UpdateWindows,
+            ],
+        );
+    }
+
+    #[test]
+    fn reducer_distinguishes_empty_preedit_and_cancel() {
+        let empty = PreeditSnapshot {
+            text: String::new(),
+            selected: TextRange { location: 0, length: 0 },
+            underlines: Vec::new(),
+        };
+        assert_eq!(
+            reduce_composition(CompositionSnapshot {
+                result: None,
+                preedit: Some(empty),
+                cancelled: false
+            }),
+            vec![
+                CompositionAction::DiscardMarked,
+                CompositionAction::SetAppMarked(false),
+                CompositionAction::UpdateWindows
+            ],
+        );
+        assert_eq!(
+            reduce_composition(CompositionSnapshot {
+                result: None,
+                preedit: None,
+                cancelled: true
+            }),
+            vec![CompositionAction::ClearComposition, CompositionAction::DiscardMarked],
+        );
+    }
+
+    #[test]
+    fn reducer_accepts_post_end_result_without_active_composition() {
+        assert_eq!(
+            reduce_composition(CompositionSnapshot {
+                result: Some("한".to_owned()),
+                preedit: None,
+                cancelled: false,
+            }),
+            vec![CompositionAction::Insert("한".to_owned()), CompositionAction::SetAppMarked(false)],
+        );
     }
 }
