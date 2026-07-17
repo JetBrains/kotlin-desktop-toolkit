@@ -1,6 +1,6 @@
 # Win32 IME (Input Method Editor) Support — Design & Implementation Plan
 
-Status: proposed · Crate: `native/desktop-win32` · Backend: IMM32 · Kotlin API: pull `TextInputClient`
+Status: implemented · Crate: `native/desktop-win32` · Backend: IMM32 · Kotlin API: pull `TextInputClient`
 
 This document is self-contained. It explains how Windows IME input works, what the
 `desktop-win32` backend looks like today, the design, and an ordered implementation plan.
@@ -657,8 +657,10 @@ Callback lifetime/order is part of the ABI contract:
    it call `window_drop` and close the Arena. A callback therefore cannot destroy the HWND or free
    the currently executing stub.
 
-`InputLanguageChanged` stays in the `Event` enum (append keeps existing tags stable for
-`fromNative`). Like `WindowTitleChanged`, its string is a Rust-owned `AutoDropStrPtr` freed when the
+`InputLanguageChanged` stays in the `Event` enum, at its alphabetical position. (Review decision,
+2026-07-17: native `Event` tag values are **not** ABI-stable — the C header, JExtract Java, and
+Kotlin `fromNative` all regenerate in lockstep and there are no external header consumers, so no
+append-only ordering is required.) Like `WindowTitleChanged`, its string is a Rust-owned `AutoDropStrPtr` freed when the
 event drops after the synchronous handler call:
 
 ```rust
@@ -1522,7 +1524,7 @@ Kotlin/JVM, JUnit 5, Skiko/Skia, PowerShell/Gradle.
 | `native/desktop-win32/src/win32/ime_api.rs` | Five exported window downcalls only. |
 | `native/desktop-win32/src/win32/window.rs` | The `ime` state cell and its `Window` helpers, HWND-bound lifecycle (client/enable/focus/teardown, caret), `CompositionSink` impl, caret-rect scaling. |
 | `native/desktop-win32/src/win32/event_loop.rs` | Message arms (`WM_IME_*` handlers, `WM_INPUTLANGCHANGE`), existing character fallback, DPI/focus dispatch. |
-| `native/desktop-win32/src/win32/events.rs` | Append-only `InputLanguageChanged` push event ABI. |
+| `native/desktop-win32/src/win32/events.rs` | `InputLanguageChanged` push event ABI (tag values regenerate in lockstep with all bindings; no append-only ordering). |
 | `kotlin-desktop-toolkit/.../win32/TextInputClient.kt` | Public Win32 client model, borrowed-value decoders, stable holder/upcall stubs. |
 | `kotlin-desktop-toolkit/.../win32/Window.kt` | Holder ownership, five public methods, ordered idempotent close. |
 | `kotlin-desktop-toolkit/.../win32/Event.kt` | Managed language-event variant and decoder. |
@@ -2553,12 +2555,13 @@ Expected: state tests pass; `cargo check` ends with `Finished`.
 
 **Interfaces:**
 - Consumes: `AutoDropStrPtr`, `RustAllocatedStrPtr`, and `EventLoop::handle_event`.
-- Produces: appended `Event::InputLanguageChanged`, locale resolution, and a
+- Produces: the `Event::InputLanguageChanged` variant, locale resolution, and a
   `WM_INPUTLANGCHANGE` handler that always falls through.
 
-- [ ] **Step 1: Append the ABI event**
+- [ ] **Step 1: Add the ABI event**
 
-Append after `WindowTitleChanged` so existing tags remain stable:
+Add at its alphabetical position — `Event` tag values are not ABI-stable (all bindings regenerate
+in lockstep; no external header consumers), so no append-only ordering is required:
 
 ```rust
 InputLanguageChanged(InputLanguageChangedEvent),

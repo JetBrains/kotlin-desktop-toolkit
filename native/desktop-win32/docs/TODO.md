@@ -50,16 +50,6 @@ None currently tracked here.
 - **Must verify during implementation**: the exact repaint/update requirement for this toolkit's custom-frame path after changing `SC_CLOSE` (`DrawMenuBar`, `SetWindowPos(... SWP_FRAMECHANGED ...)`, or both); behavior of Alt+F4 and system-menu Close when `SC_CLOSE` is grayed; integration point is `system_menu::sync_system_menu_state` (`system_menu.rs`), which already owns the `SC_*` gray state and needs an `is_closable` input added; UIA invoke patterns.
 - **Sources**: [Microsoft `GetSystemMenu`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getsystemmenu), [Microsoft `EnableMenuItem`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-enablemenuitem), [Microsoft Window Class Styles (`CS_NOCLOSE`)](https://learn.microsoft.com/en-us/windows/win32/winmsg/window-class-styles), Raymond Chen's [caption-button enablement post](https://devblogs.microsoft.com/oldnewthing/20100604-00/?p=13803) and [`SC_CLOSE` state post](https://devblogs.microsoft.com/oldnewthing/20110805-00/?p=9963), Chromium [`Window::EnableClose`](https://chromium.googlesource.com/chromium/src/+/51077acd7f613ca7bc38d61ad1d22be2233a6e15/chrome/views/window.cc), and [.NET `VisualStyleElement.Window.CloseButton.Disabled`](https://learn.microsoft.com/en-us/dotnet/api/system.windows.forms.visualstyles.visualstyleelement.window.closebutton.disabled).
 
-### IME support (WM_IME_*)
-- **Where**: `event_loop.rs` — no `WM_IME_STARTCOMPOSITION`, `WM_IME_COMPOSITION`, `WM_IME_ENDCOMPOSITION`, `WM_IME_NOTIFY`, `WM_INPUTLANGCHANGE` handlers.
-- **What**: IME composed characters currently arrive only via `WM_CHAR` / `WM_DEADCHAR`. The toolkit cannot:
-  - Show or position an IME composition window.
-  - Inspect the in-progress composition string.
-  - Distinguish committed vs. tentative input.
-  - React to input-language changes.
-- **Impact**: CJK / IME users get the final text but no on-the-fly composition feedback or the ability to render their own composition UI.
-- **Fix**: design the IME event surface (candidate `Event` variants to review: `ImeCompositionStart`, `ImeCompositionUpdate`, `ImeCompositionEnd`, `ImeInputLanguageChanged`) and wire `WM_IME_*` handlers in `event_loop.rs`. Decide whether to use the legacy IMM API or the modern Text Services Framework. Coordinate with the macOS / Linux backends if a unified IME API is desired.
-
 ### No file-type filter in file dialog
 - **Where**: `file_dialog.rs` — `COMDLG_FILTERSPEC` and `IFileDialog::SetFileTypes` not used.
 - **What**: Open / save dialogs cannot restrict the file-type dropdown. Verify the intended cross-platform parity against the macOS counterpart before designing the API.
@@ -118,9 +108,9 @@ None currently tracked here.
 - **Status**: per code-owner — review later. Reading: intentional, gives `&R` from a raw `*mut T` without consuming the box (effectively `Box::leak(Box::from_raw(p))`). Sound under the toolkit's single-thread-of-ownership assumption; type-level safety is by convention.
 - **Open question**: whether to formalise the assumption (e.g. `!Send` newtype or a phantom marker) or to refactor to a different pattern (e.g. `Pin<&T>` from a stored `Pin<Box<T>>`).
 
-### Universal lack of `// SAFETY` comments
-- **Where**: every `unsafe` block in `data_object.rs`, `data_reader.rs`, `drag_drop.rs`, `screen.rs`, `pointer.rs`, `keyboard*.rs`, `cursor.rs`, `file_dialog.rs`, `window.rs`, `renderer_angle.rs`, `renderer_egl_utils.rs`, `event_loop.rs`, `events_api.rs`, `desktop-common::ffi_utils.rs` (module-wide `#![allow(clippy::missing_safety_doc)]` at line 1), `desktop-common::logger.rs`.
-- **Fix (incremental)**: add `// SAFETY:` comments as files are touched. Remove the module-wide allow once the backlog is drained.
+### Missing `// SAFETY` comments on pre-IME `unsafe` blocks
+- **Where**: `unsafe` blocks that predate the IME work in `data_object.rs`, `data_reader.rs`, `drag_drop.rs`, `screen.rs`, `pointer.rs`, `keyboard*.rs`, `cursor.rs`, `file_dialog.rs`, `window.rs`, `renderer_angle.rs`, `renderer_egl_utils.rs`, `event_loop.rs`, `events_api.rs`, `desktop-common::ffi_utils.rs` (module-wide `#![allow(clippy::missing_safety_doc)]` at line 1), `desktop-common::logger.rs`. The IME work set the bar: `ime.rs`, `text_input_client.rs`, and the blocks it added or touched in `window.rs` / `event_loop.rs` carry `// SAFETY:` comments throughout.
+- **Fix (incremental)**: add `// SAFETY:` comments to the remaining pre-IME blocks as files are touched. Remove the module-wide allow once the backlog is drained.
 
 ### Module-blanket clippy suppressions
 - `desktop-common::ffi_utils.rs` — `#![allow(clippy::missing_safety_doc)]`.

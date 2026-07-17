@@ -52,11 +52,11 @@ native/
       lib.rs                      DllMain → captures HINSTANCE; declares win32 + logger_api
       logger_api.rs               thin Win32 logger glue
       win32/
-        mod.rs                    declares 41 sibling pub mod entries
+        mod.rs                    declares 44 sibling pub mod entries
         application.rs            Application: OLE STA, DispatcherQueue, CompositorDriver
         application_api.rs        FFI: app lifecycle + dispatcher dispatch
         event_loop.rs             window_proc: WM_* → Event dispatch; thread_local key/exception stash
-        events.rs                 Event enum (22 variants, #[repr(C)]) + payload structs
+        events.rs                 Event enum (25 variants, #[repr(C)]) + payload structs
         events_api.rs             FFI: keyevent_translate_message, keydown_to_unicode
         window.rs                 Window struct: HWND, WinRT composition tree, DWM, cursor, icon
         window_api.rs             FFI: window lifecycle + per-window setters
@@ -67,6 +67,9 @@ native/
         geometry.rs               PhysicalPixels/LogicalPixels + Point/Size/Rect (#[repr(C)])
         keyboard.rs               VirtualKey, PhysicalKeyStatus (LPARAM decode)
         keyboard_api.rs           FFI: keyboard_get_key_state, keyboard_get_state
+        ime.rs                    ImmContext (HIMC RAII), ImeState, ClientCallbackGuard, composition apply
+        ime_api.rs                FFI: window_set/clear_text_input_client, set_ime_enabled, notify_*
+        text_input_client.rs      TextInputClient fn-pointer table, TextRange, UnderlineSegment (#[repr(C)])
         pointer.rs                PointerInfo (Touch/Pen/Common), PointerClickCounter, modifiers
         cursor.rs                 Cursor RAII (HCURSOR + is_system flag), CursorIcon → PCWSTR
         cursor_api.rs             FFI: cursor_show / cursor_hide (counter)
@@ -99,7 +102,7 @@ kotlin-desktop-toolkit/src/main/kotlin/org/jetbrains/desktop/
     Arrays.kt                     byteArrayFromNative / intArrayFromNative
     Converters.kt                 geometry toNative / fromNative
     Application.kt, Window.kt, Renderers.kt, Geometry.kt, Event.kt,
-    Keyboard.kt, Pointer.kt, Cursor.kt, Screen.kt, Appearance.kt,
+    Keyboard.kt, TextInputClient.kt, Pointer.kt, Cursor.kt, Screen.kt, Appearance.kt,
     Clipboard.kt, DataTransfer.kt, DragDrop.kt, DataObject.kt, DataFormat.kt, FileDialog.kt
   common/
     Platform.kt                   internal OS/arch detection (apparently unused from win32)
@@ -223,6 +226,7 @@ Conventions:
                 │  └── invokes ──▶ Dispatcher (message-only HWND) │
                 │                                                 │
                 │  Input  : keyboard / pointer / cursor ◀─ event_loop dispatches
+                │  Text input: ime / text_input_client  ◀─ WM_IME_* → pull upcalls into Kotlin
                 │  Display: screen / appearance         ◀─ on demand / WM_SETTINGCHANGE
                 │  Per-window chrome dark/light: DWMWA_USE_IMMERSIVE_DARK_MODE
                 │    cache on Window, set by app via setImmersiveDarkMode.
@@ -319,6 +323,27 @@ Kotlin: Clipboard.get()                       (synchronous; caller is on the OLE
   → DataObject.close() → com_data_object_release(ptr) → IUnknown::Release
 ```
 
+### 6. IME composition (pull TextInputClient)
+
+```
+Kotlin: window.setTextInputClient(client)          // upcall stubs in a per-window holder (shared Arena)
+  → window_set_text_input_client(ptr, TextInputClient{6 fn ptrs})
+       (rejected, like clear/set_ime_enabled/window_destroy, while a text-input callback is running)
+User composes with an IME active (every WM_IME_* arm no-ops unless the window has an enabled client):
+  WM_IME_STARTCOMPOSITION → ime_start; position hidden caret / IME windows
+  WM_IME_COMPOSITION      → ImmContext::get(hwnd)             // fresh RAII HIMC guard per message
+                             → PreeditSnapshot::read(GCS_*)    // snapshot BEFORE any upcall
+                             → apply_owned_composition:
+                                  insert_text / set_marked_text / unmark_text upcalls into Kotlin,
+                                  each wrapped in ClientCallbackGuard (callback_depth);
+                                  composition_revision re-checked after each upcall — a mid-apply
+                                  teardown (nested END, focus loss) advances it and aborts the rest
+  WM_IME_ENDCOMPOSITION   → discard_marked_text if the app still holds a preedit
+  WM_INPUTLANGCHANGE      → Event::InputLanguageChanged { hkl, locale_name (AutoDropStrPtr) }
+While a client is active, printable WM_CHAR units divert to insert_text (surrogate joining);
+CharacterReceived does not fire for them. window.clearTextInputClient() restores plain WM_CHAR flow.
+```
+
 ## Composition: WinRT `Windows.UI.Composition`, not DirectComposition
 
 A common conflation — these are distinct stacks that can both produce visual trees rendered by DWM, but the APIs, types, and lifetimes differ:
@@ -348,7 +373,7 @@ This document so far focuses on the Rust side. The Kotlin counterpart at `kotlin
 - **Marshalling.** `Strings.kt`, `Arrays.kt`, and `Converters.kt` form the support layer used by the wrapper classes. `Arena.ofConfined().use { arena -> ... ffiDownCall { native(...) } ... }` is the canonical scope for native struct allocation.
 - **Use-after-close guard.** `DataObject.requireOpen` (DataObject.kt) is the prototype: an inline helper that throws `IllegalStateException` if the underlying pointer is `MemorySegment.NULL`. The pattern should be applied wherever a Kotlin wrapper holds an opaque Rust pointer with a documented lifetime.
 - **Builders for COM objects.** `DataObject.build { … }` is a block-scoped builder that hides the `data_object_create` / `data_object_into_com` lifecycle so callers never see a "half-built" `DataObject`.
-- **Two-tier event delivery.** The Rust event handler is one C function pointer per `Application`; on the Kotlin side `Event.fromNative(tag, segment)` reads the tag integer and dispatches to the matching `sealed class Event` subclass (22 variants mirror the Rust `Event` enum 1-to-1).
+- **Two-tier event delivery.** The Rust event handler is one C function pointer per `Application`; on the Kotlin side `Event.fromNative(tag, segment)` reads the tag integer and dispatches to the matching `sealed class Event` subclass (25 variants mirror the Rust `Event` enum 1-to-1).
 
 ## Dependencies on Win11 builds / runtime quirks
 
