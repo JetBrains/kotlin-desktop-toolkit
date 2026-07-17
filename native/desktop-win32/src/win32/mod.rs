@@ -25,6 +25,7 @@ pub mod font_settings_api;
 pub mod geometry;
 pub mod global_data;
 pub mod ime;
+pub mod ime_api;
 pub mod keyboard;
 pub mod keyboard_api;
 pub mod pointer;
