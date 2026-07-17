@@ -16,6 +16,7 @@ use windows::Win32::{
     UI::{
         HiDpi::{AdjustWindowRectExForDpi, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext},
         Input::{
+            Ime::ISC_SHOWUICOMPOSITIONWINDOW,
             KeyboardAndMouse::{GetCapture, ReleaseCapture, SetCapture, VK_PROCESSKEY},
             Pointer::EnableMouseInPointer,
         },
@@ -26,11 +27,11 @@ use windows::Win32::{
             NCCALCSIZE_PARAMS, SC_KEYMENU, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
             TranslateMessage, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_CANCELMODE,
             WM_CAPTURECHANGED, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO,
-            WM_IME_ENDCOMPOSITION, WM_IME_STARTCOMPOSITION, WM_INITMENUPOPUP, WM_INPUTLANGCHANGE, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS,
-            WM_NCCALCSIZE, WM_NCHITTEST, WM_NCLBUTTONDOWN, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE,
-            WM_NCRBUTTONUP, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP,
-            WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE, WM_SYSCHAR, WM_SYSCOLORCHANGE,
-            WM_SYSCOMMAND, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
+            WM_IME_COMPOSITION, WM_IME_ENDCOMPOSITION, WM_IME_SETCONTEXT, WM_IME_STARTCOMPOSITION, WM_INITMENUPOPUP, WM_INPUTLANGCHANGE,
+            WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCLBUTTONDOWN, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN,
+            WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_NCRBUTTONUP, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL,
+            WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE,
+            WM_SYSCHAR, WM_SYSCOLORCHANGE, WM_SYSCOMMAND, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
         },
     },
 };
@@ -44,10 +45,11 @@ use super::{
         WindowResizeEvent, WindowScaleChangedEvent, WindowTitleChangedEvent,
     },
     geometry::{PhysicalPoint, PhysicalSize},
-    ime::{on_ime_endcomposition_phase1, on_ime_startcomposition_phase1},
+    ime::ImmContext,
     keyboard::{PhysicalKeyStatus, VirtualKey},
     pointer::{PointerButton, PointerButtonChangeKind, PointerClickCounter, PointerInfo},
     strings::copy_from_wide_string,
+    text_input_client::{TextInputClient, apply_owned_composition},
     utils::{GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
     window::Window,
 };
@@ -137,9 +139,13 @@ impl EventLoop {
 
             WM_KILLFOCUS => on_killfocus(self, window),
 
-            WM_IME_STARTCOMPOSITION => on_ime_startcomposition_phase1(window),
+            WM_IME_SETCONTEXT => on_ime_setcontext(window, msg, wparam, lparam),
 
-            WM_IME_ENDCOMPOSITION => on_ime_endcomposition_phase1(window),
+            WM_IME_STARTCOMPOSITION => on_ime_startcomposition(window),
+
+            WM_IME_COMPOSITION => on_ime_composition(window, lparam),
+
+            WM_IME_ENDCOMPOSITION => on_ime_endcomposition(window),
 
             WM_INPUTLANGCHANGE => on_inputlangchange(self, window, lparam),
 
@@ -723,6 +729,48 @@ fn on_killfocus(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
         log::warn!("IME focus-loss update failed: {err:#}");
     }
     event_loop.handle_event(window, Event::WindowKeyboardLeave)
+}
+
+fn on_ime_setcontext(window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    window.enabled_client()?;
+    let adjusted = LPARAM(lparam.0 & !(ISC_SHOWUICOMPOSITIONWINDOW as isize));
+    // SAFETY: arguments came from this live wndproc; only the documented composition-UI bit changed.
+    Some(unsafe { DefWindowProcW(window.hwnd(), msg, wparam, adjusted) })
+}
+
+fn on_ime_startcomposition(window: &Window) -> Option<LRESULT> {
+    window.enabled_client()?;
+    window.ime_start(false);
+    window.update_ime_windows();
+    Some(LRESULT(0))
+}
+
+fn on_ime_composition(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
+    window.enabled_client()?;
+    if window.ime_is_finalizing() {
+        return Some(LRESULT(0));
+    }
+    let Some(context) = ImmContext::get(window.hwnd()) else {
+        log::warn!("enabled IME client has no input context; keeping composition ownership");
+        return Some(LRESULT(0));
+    };
+    let Ok(gcs) = u32::try_from(lparam.0) else {
+        log::warn!("WM_IME_COMPOSITION carried an invalid negative or oversized lParam");
+        return Some(LRESULT(0));
+    };
+    let _ = apply_owned_composition(window, &context, gcs);
+    Some(LRESULT(0))
+}
+
+fn on_ime_endcomposition(window: &Window) -> Option<LRESULT> {
+    window.enabled_client()?;
+    if window.ime_is_finalizing() {
+        return Some(LRESULT(0));
+    }
+    if window.ime_end() {
+        let _ = window.with_enabled_client(TextInputClient::discard_marked_text);
+    }
+    Some(LRESULT(0))
 }
 
 fn on_inputlangchange(event_loop: &EventLoop, window: &Window, lparam: LPARAM) -> Option<LRESULT> {

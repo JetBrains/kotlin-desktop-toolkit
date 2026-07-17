@@ -12,6 +12,7 @@ use windows::Win32::{
 use super::{
     geometry::{LogicalPoint, LogicalRect, LogicalSize},
     ime::ImmContext,
+    window::Window,
 };
 
 /// cbindgen:ignore
@@ -142,7 +143,7 @@ pub(crate) fn client_logical_to_physical_rect(rect: LogicalRect, scale: f32) -> 
     }
 }
 
-trait CompositionSource {
+pub(crate) trait CompositionSource {
     fn bytes(&self, which: IME_COMPOSITION_STRING) -> anyhow::Result<Vec<u8>>;
     fn cursor(&self) -> anyhow::Result<usize>;
 }
@@ -275,7 +276,7 @@ const GCS_ANY: u32 = GCS_COMPREADSTR.0
 const GCS_PREEDIT_UPDATE: u32 = GCS_COMPSTR.0 | GCS_COMPATTR.0 | GCS_COMPCLAUSE.0 | GCS_CURSORPOS.0 | GCS_DELTASTART.0;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct PreeditSnapshot {
+pub(crate) struct PreeditSnapshot {
     text: String,
     selected: TextRange,
     underlines: Vec<UnderlineSegment>,
@@ -358,8 +359,99 @@ fn reduce_composition(snapshot: CompositionSnapshot) -> Vec<CompositionAction> {
     actions
 }
 
+pub(crate) trait CompositionSink {
+    fn revision(&self) -> u64;
+    fn set_app_marked(&self, value: bool) -> u64;
+    fn clear_composition(&self) -> u64;
+    fn insert_text(&self, text: &str);
+    fn set_marked_text(&self, preedit: &PreeditSnapshot);
+    fn discard_marked_text(&self);
+    fn update_windows(&self);
+}
+
+impl CompositionSink for Window {
+    fn revision(&self) -> u64 {
+        self.ime_revision()
+    }
+    fn set_app_marked(&self, value: bool) -> u64 {
+        self.ime_set_app_marked(value)
+    }
+    fn clear_composition(&self) -> u64 {
+        self.clear_composition_state()
+    }
+    fn insert_text(&self, text: &str) {
+        let _ = self.with_enabled_client(|client| client.insert_text(text));
+    }
+    fn set_marked_text(&self, preedit: &PreeditSnapshot) {
+        let _ = self.with_enabled_client(|client| {
+            client.set_marked_text(&preedit.text, Some(preedit.selected), &preedit.underlines);
+        });
+    }
+    fn discard_marked_text(&self) {
+        let _ = self.with_enabled_client(TextInputClient::discard_marked_text);
+    }
+    fn update_windows(&self) {
+        self.update_ime_windows();
+    }
+}
+
+fn apply_composition_actions(sink: &impl CompositionSink, actions: Vec<CompositionAction>) {
+    let mut expected_revision = sink.revision();
+    for action in actions {
+        let called_client = match action {
+            CompositionAction::Insert(text) => {
+                sink.insert_text(&text);
+                true
+            }
+            CompositionAction::SetMarked(preedit) => {
+                sink.set_marked_text(&preedit);
+                true
+            }
+            CompositionAction::DiscardMarked => {
+                sink.discard_marked_text();
+                true
+            }
+            CompositionAction::SetAppMarked(value) => {
+                expected_revision = sink.set_app_marked(value);
+                false
+            }
+            CompositionAction::ClearComposition => {
+                expected_revision = sink.clear_composition();
+                false
+            }
+            CompositionAction::UpdateWindows => {
+                sink.update_windows();
+                true
+            }
+        };
+        if called_client && sink.revision() != expected_revision {
+            return;
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OwnedCompositionResult {
+    Applied,
+    ReadFailed,
+}
+
+pub(crate) fn apply_owned_composition(sink: &impl CompositionSink, source: &impl CompositionSource, gcs: u32) -> OwnedCompositionResult {
+    let snapshot = match CompositionSnapshot::read(source, gcs) {
+        Ok(snapshot) => snapshot,
+        Err(err) => {
+            log::warn!("reading IME composition failed; keeping ownership until next update or END: {err:#}");
+            return OwnedCompositionResult::ReadFailed;
+        }
+    };
+    apply_composition_actions(sink, reduce_composition(snapshot));
+    OwnedCompositionResult::Applied
+}
+
 #[cfg(test)]
 mod tests {
+    use std::cell::{Cell, RefCell};
+
     use super::*;
 
     use windows::Win32::UI::Input::Ime::{
@@ -597,5 +689,145 @@ mod tests {
             }),
             vec![CompositionAction::Insert("한".to_owned()), CompositionAction::SetAppMarked(false)],
         );
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum ReenterOn {
+        Insert,
+        SetMarked,
+    }
+
+    #[derive(Default)]
+    struct FakeSink {
+        revision: Cell<u64>,
+        composition_active: Cell<bool>,
+        app_marked: Cell<bool>,
+        callbacks: RefCell<Vec<&'static str>>,
+        reenter_on: Option<ReenterOn>,
+    }
+
+    impl FakeSink {
+        fn advance_revision(&self) -> u64 {
+            let next = self.revision.get().checked_add(1).expect("fake revision overflow");
+            self.revision.set(next);
+            next
+        }
+
+        fn callback(&self, name: &'static str, kind: ReenterOn) {
+            self.callbacks.borrow_mut().push(name);
+            if self.reenter_on == Some(kind) {
+                // Model a nested END/focus-loss finalization before returning to the outer callback.
+                self.composition_active.set(false);
+                self.app_marked.set(false);
+                self.advance_revision();
+            }
+        }
+    }
+
+    impl CompositionSink for FakeSink {
+        fn revision(&self) -> u64 {
+            self.revision.get()
+        }
+        fn set_app_marked(&self, value: bool) -> u64 {
+            self.app_marked.set(value);
+            self.advance_revision()
+        }
+        fn clear_composition(&self) -> u64 {
+            self.composition_active.set(false);
+            self.app_marked.set(false);
+            self.advance_revision()
+        }
+        fn insert_text(&self, _text: &str) {
+            self.callback("insert", ReenterOn::Insert);
+        }
+        fn set_marked_text(&self, _preedit: &PreeditSnapshot) {
+            self.callback("set_marked", ReenterOn::SetMarked);
+        }
+        fn discard_marked_text(&self) {
+            self.callbacks.borrow_mut().push("discard");
+        }
+        fn update_windows(&self) {
+            self.callbacks.borrow_mut().push("update_windows");
+        }
+    }
+
+    #[test]
+    fn action_driver_stops_after_reentrant_end_during_insert() {
+        let sink = FakeSink {
+            reenter_on: Some(ReenterOn::Insert),
+            ..Default::default()
+        };
+        sink.app_marked.set(true);
+        apply_composition_actions(
+            &sink,
+            vec![
+                CompositionAction::Insert("commit".to_owned()),
+                CompositionAction::SetAppMarked(false),
+                CompositionAction::SetAppMarked(true),
+                CompositionAction::SetMarked(PreeditSnapshot {
+                    text: "stale".to_owned(),
+                    selected: TextRange { location: 0, length: 0 },
+                    underlines: Vec::new(),
+                }),
+            ],
+        );
+        assert_eq!(&*sink.callbacks.borrow(), &["insert"]);
+        assert!(!sink.app_marked.get());
+    }
+
+    #[test]
+    fn action_driver_stops_before_positioning_after_reentrant_focus_loss() {
+        let sink = FakeSink {
+            reenter_on: Some(ReenterOn::SetMarked),
+            ..Default::default()
+        };
+        apply_composition_actions(
+            &sink,
+            vec![
+                CompositionAction::SetAppMarked(true),
+                CompositionAction::SetMarked(PreeditSnapshot {
+                    text: "preedit".to_owned(),
+                    selected: TextRange { location: 0, length: 0 },
+                    underlines: Vec::new(),
+                }),
+                CompositionAction::UpdateWindows,
+            ],
+        );
+        assert_eq!(&*sink.callbacks.borrow(), &["set_marked"]);
+        assert!(!sink.app_marked.get());
+    }
+
+    #[test]
+    fn owned_core_read_failure_preserves_sink_state() {
+        let sink = FakeSink::default();
+        sink.revision.set(7);
+        sink.composition_active.set(true);
+        sink.app_marked.set(true);
+        let source = FakeSource {
+            fail_on: Some(GCS_COMPSTR),
+            ..Default::default()
+        };
+        assert_eq!(
+            apply_owned_composition(&sink, &source, GCS_COMPSTR.0),
+            OwnedCompositionResult::ReadFailed,
+        );
+        assert_eq!(sink.revision.get(), 7);
+        assert!(sink.composition_active.get());
+        assert!(sink.app_marked.get());
+        assert!(sink.callbacks.borrow().is_empty());
+    }
+
+    #[test]
+    fn owned_post_end_result_is_still_applied() {
+        let sink = FakeSink::default();
+        let source = FakeSource {
+            result: utf16_bytes("한"),
+            ..Default::default()
+        };
+        assert_eq!(
+            apply_owned_composition(&sink, &source, GCS_RESULTSTR.0),
+            OwnedCompositionResult::Applied,
+        );
+        assert_eq!(&*sink.callbacks.borrow(), &["insert"]);
     }
 }

@@ -1,11 +1,11 @@
 use std::cell::Cell;
 
 use windows::Win32::{
-    Foundation::{HWND, LRESULT},
+    Foundation::HWND,
     UI::Input::Ime::{HIMC, ImmGetContext, ImmReleaseContext},
 };
 
-use super::{text_input_client::TextInputClient, window::Window};
+use super::text_input_client::TextInputClient;
 
 pub(crate) struct ImmContext {
     hwnd: HWND,
@@ -140,19 +140,6 @@ impl Drop for ClientCallbackGuard<'_> {
         ime.callback_depth = ime.callback_depth.checked_sub(1).expect("text input callback depth underflow");
         self.0.set(ime);
     }
-}
-
-pub(crate) fn on_ime_startcomposition_phase1(window: &Window) -> Option<LRESULT> {
-    if window.active_client().is_some() {
-        window.ime_start(false);
-        window.update_ime_windows();
-    }
-    None
-}
-
-pub(crate) fn on_ime_endcomposition_phase1(window: &Window) -> Option<LRESULT> {
-    window.clear_composition_state();
-    None
 }
 
 #[cfg(test)]
