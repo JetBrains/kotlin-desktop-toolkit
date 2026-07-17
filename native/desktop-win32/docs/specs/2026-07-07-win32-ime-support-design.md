@@ -253,9 +253,11 @@ self-drawn preedit.
 
 ### 5.1 New module `src/win32/ime.rs`
 
-Holds all IMM32 logic, keeping `event_loop.rs` a thin dispatcher. Contents:
+Holds all IMM32 logic and per-window IME state, keeping `event_loop.rs` a thin dispatcher and
+`text_input_client.rs` a pure FFI callback ABI. Contents:
 
-- A RAII input-context wrapper:
+- A RAII input-context wrapper that is the *sole owner* of the raw `HIMC`. Every IMM32 call that
+  needs the handle is an inherent method on the guard; the handle itself never leaves the module:
 
   ```rust
   pub(crate) struct ImmContext {
@@ -270,9 +272,18 @@ Holds all IMM32 logic, keeping `event_loop.rs` a thin dispatcher. Contents:
           (!himc.is_invalid()).then_some(Self { hwnd, himc })
       }
 
-      pub(crate) const fn himc(&self) -> HIMC {
-          self.himc
-      }
+      /// Two-call `ImmGetCompositionStringW` transport: probe for the byte size, then fill.
+      /// `T` is the natural element type of the payload (`u16` strings, `u8` attributes).
+      fn composition_payload<T: Copy + Default>(&self, which: IME_COMPOSITION_STRING) -> anyhow::Result<Vec<T>> { ... }
+
+      /// `CFS_POINT` composition window at the caret origin; failures are logged, never propagated.
+      pub(crate) fn set_composition_window(&self, origin: POINT) { ... }
+
+      /// `CFS_EXCLUDE` candidate window around the caret rect; failures are logged, never propagated.
+      pub(crate) fn set_candidate_window(&self, origin: POINT, exclude: RECT) { ... }
+
+      /// Ask the IME to finalize the composition string (`CPS_COMPLETE` / `CPS_CANCEL`).
+      pub(crate) fn notify_composition(&self, action: NOTIFY_IME_INDEX) -> bool { ... }
   }
 
   impl Drop for ImmContext {
@@ -285,9 +296,8 @@ Holds all IMM32 logic, keeping `event_loop.rs` a thin dispatcher. Contents:
   }
   ```
 
-- The `WM_IME_*` / `WM_INPUTLANGCHANGE` handlers (§6, §7).
-- The `GCS_*` readers and the attribute→underline conversion (§7.3).
-- The client-logical → client-physical coordinate conversion (§6.3).
+- The per-window `ImeState` record and `ClientCallbackGuard` (§5.2).
+- The `GCS_*` readers, the attribute→underline conversion, and the composition-apply logic (§7.3).
 
 ### 5.2 Per-window state (`window.rs`)
 
@@ -299,58 +309,51 @@ before calling it.
 ime: Cell<ImeState>,
 
 #[derive(Clone, Copy)]
-struct ImeState {
-    client: Option<TextInputClient>,  // per-window callback table (app routes to its focused field)
-    enabled: bool,                    // IME active for the currently focused field
-    focused: bool,                    // this window currently holds keyboard focus
-    composition_active: bool,         // between START and END in both phases
-    app_has_marked_text: bool,        // Phase 2: app currently renders a preedit
-    finalizing: bool,                 // suppress nested finalization / composition edits during either CPS path
-    composition_revision: u64,        // invalidates an outer action batch after reentrant IME/focus state changes
-    callback_depth: u32,              // reject client-lifetime mutation from inside a client up-call
-    pending_high_surrogate: u16,      // Phase 1: joins a split non-BMP WM_CHAR pair (0 = none)
+pub(crate) struct ImeState {
+    client: Option<TextInputClient>,      // per-window callback table (app routes to its focused field)
+    enabled: bool,                        // IME active for the currently focused field
+    focused: bool,                        // this window currently holds keyboard focus
+    composition_active: bool,             // between START and END in both phases
+    app_has_marked_text: bool,            // Phase 2: app currently renders a preedit
+    finalizing: bool,                     // suppress nested finalization / composition edits during either CPS path
+    composition_revision: u64,            // invalidates an outer apply sequence after reentrant IME/focus state changes
+    callback_depth: u32,                  // reject client-lifetime mutation from inside a client up-call
+    pending_high_surrogate: Option<u16>,  // Phase 1: joins a split non-BMP WM_CHAR pair
 }
+```
 
+All fields are private. Reads go through accessors (`enabled_client`, `active_client`,
+`is_active`, `is_enabled`, `is_composition_active`, `app_has_marked_text`, `is_finalizing`,
+`revision`) and every mutation goes through a transition method, so the revision invariant —
+*every composition- or focus-relevant transition advances `composition_revision`* — is enforced by
+`ImeState` itself rather than by caller convention:
+
+```rust
 impl ImeState {
     // Window creation leaves Windows' default HIMC association untouched, preserving today's
     // IME-enabled behavior. An explicit disable is the only operation that detaches it.
-    const fn new() -> Self {
-        Self {
-            client: None,
-            enabled: true,
-            focused: false,
-            composition_active: false,
-            app_has_marked_text: false,
-            finalizing: false,
-            composition_revision: 0,
-            callback_depth: 0,
-            pending_high_surrogate: 0,
-        }
-    }
+    pub(crate) const fn new() -> Self { ... }
 
-    // Use only after the HWND has been detached or during terminal teardown.
-    const fn detached() -> Self {
-        Self { enabled: false, ..Self::new() }
-    }
-
-    fn advance_composition_revision(&mut self) -> u64 {
-        self.composition_revision = self
-            .composition_revision
-            .checked_add(1)
-            .expect("IME composition revision overflow");
+    const fn advance_composition_revision(&mut self) -> u64 {
+        self.composition_revision += 1;  // u64 cannot overflow in practice
         self.composition_revision
     }
 
-    fn reset_pending_surrogate(&mut self) {
-        self.pending_high_surrogate = 0;
+    pub(crate) const fn reset_pending_surrogate(&mut self) {
+        self.pending_high_surrogate = None;
     }
 
-    fn replace_client(&mut self, client: Option<TextInputClient>) {
+    pub(crate) const fn replace_client(&mut self, client: Option<TextInputClient>) {
         self.client = client;
         self.reset_pending_surrogate();
     }
 
-    fn set_focused(&mut self, focused: bool) {
+    pub(crate) const fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        self.reset_pending_surrogate();
+    }
+
+    pub(crate) const fn set_focused(&mut self, focused: bool) {
         let changed = self.focused != focused;
         self.focused = focused;
         self.reset_pending_surrogate();
@@ -359,7 +362,25 @@ impl ImeState {
         }
     }
 
-    fn clear_composition_state(&mut self) -> u64 {
+    // START ownership: a fresh native composition never starts with an app-side preedit.
+    pub(crate) const fn start_composition(&mut self) {
+        self.composition_active = true;
+        self.app_has_marked_text = false;
+        self.reset_pending_surrogate();
+        self.advance_composition_revision();
+    }
+
+    pub(crate) const fn set_app_marked(&mut self, value: bool) -> u64 {
+        self.app_has_marked_text = value;
+        self.advance_composition_revision()
+    }
+
+    pub(crate) const fn begin_finalizing(&mut self) {
+        self.finalizing = true;
+        self.advance_composition_revision();
+    }
+
+    pub(crate) const fn clear_composition_state(&mut self) -> u64 {
         self.composition_active = false;
         self.app_has_marked_text = false;
         self.finalizing = false;
@@ -374,25 +395,25 @@ selection live in the Kotlin client, not here. The system caret is **not** track
 flag: it is a single per-GUI-thread resource, so only a focused, enabled window with a registered
 client owns it (§6.4).
 
-Helpers on `Window` are the only code allowed to mutate the private field. They are
-`pub(crate)` where `event_loop.rs` / `ime.rs` need them; sibling modules do not access
-`window.ime` directly.
+Helpers on `Window` are the only code allowed to touch the private `ime` cell. They are
+`pub(crate)` where `event_loop.rs` needs them; sibling modules do not access `window.ime`
+directly.
 
-- `ime_client() -> Option<TextInputClient>` — clones the callback table (function pointers are
-  `Copy`) before an up-call.
-- `enabled_client() -> Option<TextInputClient>` — the client table when
-  `enabled && client.is_some()`. `WM_IME_*` ownership uses this even during focus-transition message
-  ordering.
+- `enabled_client() -> Option<TextInputClient>` — copies the client table (function pointers are
+  `Copy`) when `enabled && client.is_some()`. `WM_IME_*` ownership uses this even during
+  focus-transition message ordering.
 - `active_client() -> Option<TextInputClient>` — `enabled_client()` only while `focused`.
   Positioning and thread-global caret operations use this stricter gate so an unfocused window
   cannot move another window's caret.
-- `ime_focus_gained`, `ime_focus_lost`, `ime_start`, `ime_end`, and `ime_set_app_marked` — narrow
-  state transitions used by `event_loop.rs` / `ime.rs`. Each composition- or focus-relevant
-  transition advances `composition_revision`. Their pure `ImeState` transitions own surrogate
-  reset so client replacement, focus loss, and composition end are unit-testable without an HWND.
-- `with_client_callback` — increments `callback_depth` around each synchronous up-call. Client
-  replacement/clear and enable changes fail while this depth is nonzero; notification downcalls
-  remain allowed so a callback can update its buffer and request a caret refresh.
+- `ime_focus_gained`, `ime_focus_lost`, `ime_start`, `ime_end`, and `ime_set_app_marked` — thin
+  get/transition/set wrappers over the `ImeState` transitions above, used by `event_loop.rs` and
+  the `CompositionSink` impl. The pure `ImeState` transitions own surrogate reset and revision
+  advancement so client replacement, focus loss, and composition end are unit-testable without an
+  HWND.
+- `with_enabled_client` / `with_active_client` — increment `callback_depth` around each
+  synchronous up-call. Client replacement/clear and enable changes fail while this depth is
+  nonzero; notification downcalls remain allowed so a callback can update its buffer and request a
+  caret refresh.
 - `update_ime_windows()` (§6.3), `set_text_input_client` /
   `set_ime_enabled` (§6.4), `join_surrogate` (§6.2), `create_caret` / `destroy_caret`,
   `finalize_composition`, `clear_composition_state`, and `ime_teardown` (§6.4).
@@ -403,21 +424,21 @@ teardown must still finish it. Phase 2 additionally tracks whether a client-side
 be accepted or discarded.
 
 `composition_revision` makes a sequence of individually reentrant callbacks transactional enough
-for one `WM_IME_COMPOSITION`: the action driver records the revision, applies each local state
+for one `WM_IME_COMPOSITION`: `apply_composition` records the revision, applies each local state
 change *before* its corresponding client mutation, and checks the revision after every up-call. A
-nested START/END or focus transition advances it, so the stale outer batch stops without overwriting
-the newer state.
+nested START/END or focus transition advances it, so the stale outer sequence stops without
+overwriting the newer state.
 
 Every up-call goes through one of the guarded helpers below; handlers never invoke a copied table
 directly:
 
 ```rust
-struct ClientCallbackGuard<'a>(&'a Cell<ImeState>);
+pub(crate) struct ClientCallbackGuard<'a>(&'a Cell<ImeState>);
 
 impl<'a> ClientCallbackGuard<'a> {
-    fn enter(state: &'a Cell<ImeState>) -> Self {
+    pub(crate) fn enter(state: &'a Cell<ImeState>) -> Self {
         let mut ime = state.get();
-        ime.callback_depth = ime.callback_depth.checked_add(1).expect("text input callback depth overflow");
+        ime.callback_depth += 1;
         state.set(ime);
         Self(state)
     }
@@ -560,27 +581,29 @@ pub struct TextInputClient {
 }
 ```
 
-`ime.rs` calls the table through thin wrappers that map the `NOT_FOUND` sentinel to `Option` and
-build the borrowed arguments — mirroring the macOS `TextInputClientHandler`. Text borrows the
-caller's `&str` bytes through length-bearing `BorrowedUtf8`; the `underlines` slice is likewise
-borrowed for the synchronous up-call only:
+Callers use the table through thin wrappers beside it in `text_input_client.rs` that build the
+borrowed arguments — mirroring the macOS `TextInputClientHandler`. Text borrows the caller's
+`&str` bytes through length-bearing `BorrowedUtf8`; the `underlines` slice is likewise borrowed
+for the synchronous up-call only. Only the query direction maps the `NOT_FOUND` sentinel to
+`Option`; `set_marked_text` passes the sentinel-carrying `TextRange` through unchanged (a `none`
+range means the IME shows no composition cursor, §7.3):
 
 ```rust
 impl TextRange {
-    const fn none() -> Self { Self { location: NOT_FOUND, length: 0 } }
+    pub(crate) const fn none() -> Self { Self { location: NOT_FOUND, length: 0 } }
     const fn into_option(self) -> Option<Self> {
         if self.location == NOT_FOUND { None } else { Some(self) }
     }
 }
 
 impl TextInputClient {
-    fn selected_range(self) -> Option<TextRange> {
+    pub(crate) fn selected_range(self) -> Option<TextRange> {
         let mut out = TextRange::none();
         (self.selected_range)(&mut out);
         out.into_option()
     }
 
-    fn caret_rect(self, range: TextRange) -> LogicalRect {
+    pub(crate) fn caret_rect(self, range: TextRange) -> LogicalRect {
         let mut args = CaretRectArgs {
             range_in: range,
             rect_out: LogicalRect {
@@ -592,20 +615,21 @@ impl TextInputClient {
         args.rect_out
     }
 
-    fn insert_text(self, text: &str) {
+    pub(crate) fn insert_text(self, text: &str) {
         (self.insert_text)(InsertTextArgs { text: BorrowedUtf8::new(text) });
     }
 
-    fn set_marked_text(self, text: &str, selected: Option<TextRange>, underlines: &[UnderlineSegment]) {
+    /// A `none` `selected_range` means the IME shows no composition cursor.
+    pub(crate) fn set_marked_text(self, text: &str, selected_range: TextRange, underlines: &[UnderlineSegment]) {
         (self.set_marked_text)(SetMarkedTextArgs {
             text: BorrowedUtf8::new(text),
-            selected_range: selected.unwrap_or_else(TextRange::none),
+            selected_range,
             underlines: BorrowedArray::from_slice(underlines),
         });
     }
 
-    fn unmark_text(self)         { (self.unmark_text)(); }
-    fn discard_marked_text(self) { (self.discard_marked_text)(); }
+    pub(crate) fn unmark_text(self)         { (self.unmark_text)(); }
+    pub(crate) fn discard_marked_text(self) { (self.discard_marked_text)(); }
 }
 ```
 
@@ -742,9 +766,11 @@ fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lp
         return character_received(event_loop, window, msg, wparam, lparam); // never inserted
     }
     let unit = LOWORD!(wparam.0);
-    if unit <= 0x1F || (0x7F..=0x9F).contains(&unit) {
+    // Control units (Enter, Tab, Backspace, ...) must still reach the app as CharacterReceived,
+    // never as an insertText edit.
+    if matches!(unit, 0x00..=0x1F | 0x7F..=0x9F) {
         window.clear_pending_surrogate();
-        return character_received(event_loop, window, msg, wparam, lparam); // C0/C1 control
+        return character_received(event_loop, window, msg, wparam, lparam);
     }
     if let Some(text) = window.join_surrogate(unit) { // Some once a full scalar is ready
         let _ = window.with_active_client(|client| client.insert_text(&text));
@@ -755,26 +781,23 @@ fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lp
 
 `character_received` is the current `on_char` body (builds `CharacterReceivedEvent`, fires it).
 
-`join_surrogate` joins a non-BMP character split across two `WM_CHAR` messages so `insert_text`
-always gets a whole scalar, and defines the edge cases:
+`ImeState::join_surrogate` joins a non-BMP character split across two `WM_CHAR` messages so
+`insert_text` always gets a whole scalar, and defines the edge cases (`Window::join_surrogate` is
+the get/transition/set wrapper):
 
 ```rust
-fn join_surrogate(&self, unit: u16) -> Option<String> {
-    let mut ime = self.ime.get();
-    let pending = ime.pending_high_surrogate;
+pub(crate) fn join_surrogate(&mut self, unit: u16) -> Option<String> {
+    let pending = self.pending_high_surrogate.take();
     if (0xD800..=0xDBFF).contains(&unit) {
         // high surrogate: stash and wait; an unpaired previous high surrogate is dropped
-        ime.pending_high_surrogate = unit;
-        self.ime.set(ime);
+        self.pending_high_surrogate = Some(unit);
         return None;
     }
-    ime.pending_high_surrogate = 0;
-    self.ime.set(ime);
     if (0xDC00..=0xDFFF).contains(&unit) {
         // low surrogate: valid only after a high surrogate; a lone low surrogate is ignored
-        return (pending != 0).then(|| String::from_utf16_lossy(&[pending, unit]));
+        return pending.map(|high| String::from_utf16_lossy(&[high, unit]));
     }
-    // BMP unit: any stashed high surrogate was unpaired and is discarded above
+    // BMP unit: any stashed high surrogate was unpaired and is discarded by the take above
     Some(String::from_utf16_lossy(&[unit]))
 }
 ```
@@ -782,50 +805,38 @@ fn join_surrogate(&self, unit: u16) -> Option<String> {
 The pending high surrogate is cleared on any non-text/control message, client switch, focus loss,
 disable, and composition end (§6.4, §7.2) so a stale half can never join across an input boundary.
 
-### 6.3 Positioning (`window.rs` / `ime.rs`)
+### 6.3 Positioning (`window.rs`)
 
 The backend has no stored caret — it **pulls** a client-relative logical rectangle, then scales it
-to the client-relative physical pixels IMM32 wants:
+to the client-relative physical pixels IMM32 wants. Both query callbacks run under one callback
+guard; `callback_depth` blocks client/enable mutation while they run, and the revision check after
+the cycle catches any composition or focus transition a callback pumped synchronously before this
+window touches the thread-global caret or its input context:
 
 ```rust
-fn update_ime_windows(&self) {
+pub(crate) fn update_ime_windows(&self) {
     // Candidate UI follows the insertion caret, never the whole preedit.
     let revision = self.ime_revision();
-    let Some(range) = self.with_active_client(|client| client.selected_range()).flatten() else {
+    let caret_rect = self
+        .with_active_client(|client| client.selected_range().map(|range| client.caret_rect(range)))
+        .flatten();
+    let Some(caret_rect) = caret_rect else {
         return;
     };
     if self.ime_revision() != revision {
         return;
     }
-    let Some(caret_rect) = self.with_active_client(|client| client.caret_rect(range)) else {
-        return;
-    };
-    // Either callback can synchronously pump focus-changing work. Revalidate after each one before
-    // touching the thread-global caret or this HWND's input context.
-    if self.ime_revision() != revision || self.active_client().is_none() {
-        return;
-    }
-    let Some(ctx) = ImmContext::get(self.hwnd()) else {
+    let Some(context) = ImmContext::get(self.hwnd()) else {
         log::warn!("active IME client has no input context; skipping positioning");
         return;
     };
 
     let caret = client_logical_to_physical_rect(caret_rect, self.get_scale());
     let origin = POINT { x: caret.left, y: caret.top };
-
-    // Composition window: a point at the caret.
-    let comp = COMPOSITIONFORM { dwStyle: CFS_POINT, ptCurrentPos: origin, ..Default::default() };
-    // SAFETY: ctx owns a valid HIMC and comp remains live for the synchronous call.
-    if !unsafe { ImmSetCompositionWindow(ctx.himc(), &raw const comp) }.as_bool() {
-        log::warn!("ImmSetCompositionWindow failed");
-    }
-
-    // Candidate window: exclude the whole caret rectangle so the list never overlaps the caret line.
-    let cand = CANDIDATEFORM { dwIndex: 0, dwStyle: CFS_EXCLUDE, ptCurrentPos: origin, rcArea: caret };
-    // SAFETY: ctx owns a valid HIMC and cand remains live for the synchronous call.
-    if !unsafe { ImmSetCandidateWindow(ctx.himc(), &raw const cand) }.as_bool() {
-        log::warn!("ImmSetCandidateWindow failed");
-    }
+    // Composition window: a point at the caret. Candidate window: exclude the whole caret
+    // rectangle so the list never overlaps the caret line.
+    context.set_composition_window(origin);
+    context.set_candidate_window(origin, caret);
 
     // Keep the 1x1 system caret on the insertion point for GetCaretPos-reading IMEs. This shim is
     // best effort: its failure must not roll back a valid HIMC association or client registration.
@@ -838,7 +849,8 @@ fn update_ime_windows(&self) {
 
 There is no `LogicalRect::to_physical`, so scale both corners with the existing
 `LogicalPoint::to_physical`. Converting the bottom-right corner independently preserves the full
-`CFS_EXCLUDE` rectangle under fractional scale factors:
+`CFS_EXCLUDE` rectangle under fractional scale factors. The helper lives next to its sole caller
+in `window.rs`:
 
 ```rust
 fn client_logical_to_physical_rect(rect: LogicalRect, scale: f32) -> RECT {
@@ -876,30 +888,31 @@ remains attached, so IME is initially enabled. `set_ime_enabled(false)` explicit
 context; a later `set_ime_enabled(true)` restores the thread's default context with `IACE_DEFAULT`.
 
 ```rust
-fn set_text_input_client(&self, client: Option<TextInputClient>) -> anyhow::Result<()> {
+pub(crate) fn set_text_input_client(&self, client: Option<TextInputClient>) -> anyhow::Result<()> {
     let current = self.ime.get();
-    anyhow::ensure!(current.callback_depth == 0, "text input client cannot change during its callback");
-    if current.composition_active {
+    current.ensure_mutation_allowed("text input client change")?;
+    if current.is_composition_active() {
         self.finalize_composition()?; // finish while the outgoing callback table is still valid
     }
 
     // Finalization can synchronously reenter the wndproc and change focus. Derive caret ownership
     // from fresh state after the outgoing-client callbacks finish.
     let current = self.ime.get();
-    let was_active = current.focused && current.enabled && current.client.is_some();
-    let mut ime = self.ime.get();
+    let was_active = current.is_active();
+    let mut ime = current;
     ime.replace_client(client);
     self.ime.set(ime);
 
-    let is_active = ime.focused && ime.enabled && ime.client.is_some();
+    let is_active = ime.is_active();
     if was_active && !is_active {
         if let Err(err) = self.destroy_caret() {
             log::warn!("DestroyCaret failed after clearing text input client: {err}");
         }
-    } else if !was_active && is_active {
-        if let Err(err) = self.create_caret() {
-            log::warn!("CreateCaret failed after registering text input client: {err}");
-        }
+    } else if !was_active
+        && is_active
+        && let Err(err) = self.create_caret()
+    {
+        log::warn!("CreateCaret failed after registering text input client: {err}");
     }
     if is_active {
         self.update_ime_windows();
@@ -907,10 +920,10 @@ fn set_text_input_client(&self, client: Option<TextInputClient>) -> anyhow::Resu
     Ok(())
 }
 
-fn set_ime_enabled(&self, enabled: bool) -> anyhow::Result<()> {
+pub(crate) fn set_ime_enabled(&self, enabled: bool) -> anyhow::Result<()> {
     let current = self.ime.get();
-    anyhow::ensure!(current.callback_depth == 0, "IME enablement cannot change during a text input callback");
-    if current.enabled == enabled {
+    current.ensure_mutation_allowed("IME enablement change")?;
+    if current.is_enabled() == enabled {
         return Ok(());
     }
     let hwnd = self.hwnd();
@@ -920,9 +933,9 @@ fn set_ime_enabled(&self, enabled: bool) -> anyhow::Result<()> {
         anyhow::ensure!(unsafe { ImmAssociateContextEx(hwnd, HIMC::default(), IACE_DEFAULT) }.as_bool(),
             "ImmAssociateContextEx(IACE_DEFAULT) failed");
         let mut ime = self.ime.get();
-        ime.enabled = true; // change state only after the OS operation succeeds
+        ime.set_enabled(true); // change state only after the OS operation succeeds
         self.ime.set(ime);
-        if ime.focused && ime.client.is_some() {
+        if ime.is_active() {
             if let Err(err) = self.create_caret() {
                 log::warn!("CreateCaret failed after enabling IME: {err}");
             }
@@ -936,50 +949,44 @@ fn set_ime_enabled(&self, enabled: bool) -> anyhow::Result<()> {
         anyhow::ensure!(unsafe { ImmAssociateContextEx(hwnd, HIMC::default(), 0) }.as_bool(),
             "ImmAssociateContextEx(detach) failed");
         let mut ime = self.ime.get();
-        let destroy_caret = ime.enabled && ime.focused && ime.client.is_some();
-        ime.enabled = false; // change state only after the OS operation succeeds
-        ime.reset_pending_surrogate();
+        let destroy_caret = ime.is_active();
+        ime.set_enabled(false); // change state only after the OS operation succeeds
         self.ime.set(ime);
-        if destroy_caret {
-            if let Err(err) = self.destroy_caret() {
-                log::warn!("DestroyCaret failed after disabling IME: {err}");
-            }
+        if destroy_caret && let Err(err) = self.destroy_caret() {
+            log::warn!("DestroyCaret failed after disabling IME: {err}");
         }
     }
     Ok(())
 }
 
-// Resolve any in-progress composition when focus / enable / the client changes.
+// Resolve any in-progress composition when focus / enable / the client changes. Both CPS paths
+// share one shape; only the notify action and the app-side unmark differ. CPS_CANCEL is the
+// Phase-2 path (the app renders the preedit: accept it app-side, then discard the IME's own copy
+// so a trailing WM_IME_COMPOSITION does not re-commit the same text). CPS_COMPLETE is the
+// Phase-1 / idle path: it synchronously reenters WM_IME_COMPOSITION with GCS_RESULTSTR, and the
+// finalizing arm of on_ime_composition routes that to insert_text (§7.2).
 fn finalize_composition(&self) -> anyhow::Result<()> {
-    let ime = self.ime.get();
-    if ime.finalizing || !ime.composition_active {
+    let current = self.ime.get();
+    if current.is_finalizing() || !current.is_composition_active() {
         return Ok(());
     }
-    let ctx = ImmContext::get(self.hwnd()).context("window has no input context")?;
-    let mut finalizing = self.ime.get();
-    finalizing.finalizing = true; // guard both CPS paths before either can synchronously reenter
-    finalizing.advance_composition_revision();
-    self.ime.set(finalizing);
-    if ime.app_has_marked_text {
-        // Phase 2: the app renders the preedit. Accept it, then discard the IME's own copy so a
-        // trailing WM_IME_COMPOSITION does not re-commit the same text.
-        let _ = self.with_enabled_client(|client| client.unmark_text());
-        // SAFETY: ctx owns a valid HIMC acquired for this live HWND.
-        let notified = unsafe { ImmNotifyIME(ctx.himc(), NI_COMPOSITIONSTR, CPS_CANCEL, 0) }.as_bool();
-        self.clear_composition_state(); // also clears finalizing
-        anyhow::ensure!(notified, "ImmNotifyIME(CPS_CANCEL) failed");
+    let context = ImmContext::get(self.hwnd()).context("window has no input context")?;
+    let mut ime = current;
+    ime.begin_finalizing(); // guard both CPS paths before either can synchronously reenter
+    self.ime.set(ime);
+    let (action, action_name) = if current.app_has_marked_text() {
+        let _ = self.with_enabled_client(TextInputClient::unmark_text);
+        (CPS_CANCEL, "CPS_CANCEL")
     } else {
-        // Phase 1 / idle: CPS_COMPLETE synchronously reenters WM_IME_COMPOSITION with
-        // GCS_RESULTSTR; the finalizing arm of on_ime_composition routes it to insert_text (§7.2).
-        // SAFETY: ctx owns a valid HIMC acquired for this live HWND.
-        let notified = unsafe { ImmNotifyIME(ctx.himc(), NI_COMPOSITIONSTR, CPS_COMPLETE, 0) }.as_bool();
-        self.clear_composition_state();
-        anyhow::ensure!(notified, "ImmNotifyIME(CPS_COMPLETE) failed");
-    }
+        (CPS_COMPLETE, "CPS_COMPLETE")
+    };
+    let notified = context.notify_composition(action);
+    self.clear_composition_state(); // also clears finalizing
+    anyhow::ensure!(notified, "ImmNotifyIME({action_name}) failed");
     Ok(())
 }
 
-fn clear_composition_state(&self) -> u64 {
+pub(crate) fn clear_composition_state(&self) -> u64 {
     let mut ime = self.ime.get();
     let revision = ime.clear_composition_state();
     self.ime.set(ime);
@@ -1012,9 +1019,7 @@ WM_SETFOCUS  => on_setfocus(self, window),
 WM_KILLFOCUS => on_killfocus(self, window),
 
 fn on_setfocus(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
-    if let Err(err) = window.ime_focus_gained() {
-        log::warn!("IME focus-gain update failed: {err:#}");
-    }
+    window.ime_focus_gained();
     event_loop.handle_event(window, Event::WindowKeyboardEnter)
 }
 
@@ -1034,27 +1039,28 @@ the leaked `Weak<Window>`, before the HWND can be recycled. This cannot be defer
 which may run after the HWND is gone.
 
 ```rust
-fn ime_teardown(&self) {
-    if self.ime.get().composition_active {
-        if let Err(err) = self.finalize_composition() {
-            log::warn!("finalizing IME during teardown failed: {err:#}");
-        }
+pub(crate) fn ime_teardown(&self) {
+    if self.ime.get().is_composition_active()
+        && let Err(err) = self.finalize_composition()
+    {
+        log::warn!("finalizing IME during teardown failed: {err:#}");
     }
     let ime = self.ime.get();
-    if ime.enabled {
+    if ime.is_enabled() {
         // Null HIMC + flags 0 is the de-facto detach idiom (winit, GLFW); Learn documents
         // only the IACE_* flags.
         // SAFETY: teardown runs before WM_NCDESTROY releases the live HWND.
         if !unsafe { ImmAssociateContextEx(self.hwnd(), HIMC::default(), 0) }.as_bool() {
             log::warn!("ImmAssociateContextEx(detach during teardown) failed");
         }
-        if ime.focused && ime.client.is_some() {
-            if let Err(err) = self.destroy_caret() {
-                log::warn!("DestroyCaret during IME teardown failed: {err}");
-            }
+        if ime.is_active()
+            && let Err(err) = self.destroy_caret()
+        {
+            log::warn!("DestroyCaret during IME teardown failed: {err}");
         }
     }
-    self.ime.set(ImeState::detached()); // always clear callbacks and local state; idempotent
+    // No state reset afterwards: WM_NCDESTROY removes the window property right after this
+    // returns, so nothing can observe the record again.
 }
 ```
 
@@ -1065,13 +1071,13 @@ shortcut input), and `true` to restore the default context. The 1×1 caret is in
 draws its own cursor); it exists only so caret-reading IMEs position correctly.
 
 The Phase-1 `WM_IME_STARTCOMPOSITION` arm records the native composition, positions the IME's own
-composition window at the caret, then forwards so the IME still draws it. It does not set
-`app_has_marked_text` — in Phase 1 the app renders no preedit:
+composition window at the caret, then forwards so the IME still draws it. `start_composition`
+clears `app_has_marked_text` — a fresh native composition never starts with an app-side preedit:
 
 ```rust
 WM_IME_STARTCOMPOSITION => {
     if window.active_client().is_some() {
-        window.ime_start(false);
+        window.ime_start();
         window.update_ime_windows();
     }
     None // forward to DefWindowProcW; the IME draws the composition
@@ -1082,48 +1088,41 @@ WM_IME_ENDCOMPOSITION => {
 }
 ```
 
-### 6.5 Language change (`event_loop.rs` + `ime.rs`)
+### 6.5 Language change (`event_loop.rs`)
 
 Add the dispatch arm and handler. `WM_INPUTLANGCHANGE`'s `lParam` is the new `HKL`; the event carries
-it plus a resolved locale name so the app does not have to decode a bare `LANGID`. Fire the event and
-return `None` so `DefWindowProc` still activates the new locale.
+it plus a resolved locale name so the app does not have to decode a bare `LANGID`. Fire the event
+(discarding the handled result) and return `None` so `DefWindowProc` still activates the new locale.
 
 ```rust
 // window_proc dispatch table
 WM_INPUTLANGCHANGE => on_inputlangchange(self, window, lparam),
 
-// ime.rs
 fn on_inputlangchange(event_loop: &EventLoop, window: &Window, lparam: LPARAM) -> Option<LRESULT> {
-    let hkl = lparam.0 as usize;                     // the input-locale handle
-    let langid = u32::try_from(hkl & 0xFFFF).unwrap_or_default(); // LOWORD(HKL) = LANGID / LCID
+    let hkl = lparam.0.cast_unsigned();   // the input-locale handle
+    let langid = u32::from(LOWORD!(hkl)); // LOWORD(HKL) = LANGID / LCID
     let locale_name = RustAllocatedStrPtr::allocate(resolve_locale_name(langid))
+        .inspect_err(|err| log::error!("Failed to allocate the locale name: {err:?}"))
         .unwrap_or_else(|_| RustAllocatedStrPtr::null())
         .to_auto_drop();
-    event_loop.fire(window, InputLanguageChangedEvent { hkl, locale_name });
+    let _ = event_loop.handle_event(window, InputLanguageChangedEvent { hkl, locale_name });
     None
 }
 
 // BCP-47 name for the locale (e.g. "ja-JP"); empty if the LCID has no name.
 fn resolve_locale_name(langid: u32) -> String {
-    let mut buf = [0u16; 85]; // LOCALE_NAME_MAX_LENGTH
-    // SAFETY: buf is writable for LOCALE_NAME_MAX_LENGTH UTF-16 units; langid is used as a
-    // SORT_DEFAULT LCID, whose high word is zero.
-    let n = unsafe { LCIDToLocaleName(langid, Some(&mut buf), 0) };
-    if n > 1 {
-        String::from_utf16_lossy(&buf[..(n as usize - 1)]) // n counts the terminating NUL
+    let mut buffer = [0u16; LOCALE_NAME_MAX_LENGTH as usize];
+    // SAFETY: the buffer is writable for LOCALE_NAME_MAX_LENGTH UTF-16 units; a LANGID is a
+    // valid SORT_DEFAULT LCID because its high word is zero.
+    let length = unsafe { LCIDToLocaleName(langid, Some(buffer.as_mut_slice()), 0) };
+    // The returned length counts the trailing NUL.
+    if let Ok(length) = usize::try_from(length)
+        && length > 1
+    {
+        String::from_utf16_lossy(&buffer[..length - 1])
     } else {
         String::new()
     }
-}
-```
-
-`fire` is a small `pub(crate)` method on `EventLoop` (in `event_loop.rs`, beside `handle_event`) that
-invokes the handler and discards its result — for events (like this one) that must always fall
-through to `DefWindowProcW`:
-
-```rust
-pub(crate) fn fire<T: Into<Event>>(&self, window: &Window, event: T) {
-    let _ = self.handle_event(window, event);
 }
 ```
 
@@ -1199,23 +1198,19 @@ observed to send the result after END.
 
 ```rust
 fn on_ime_startcomposition(window: &Window) -> Option<LRESULT> {
-    if window.enabled_client().is_none() {
-        return None; // Phase-1 fallback: the IME draws its own composition
-    }
-    window.ime_start(false);
+    window.enabled_client()?; // Phase-1 fallback: the IME draws its own composition
+    window.ime_start();
     window.update_ime_windows();
     Some(LRESULT(0)) // own it: suppress inline drawing
 }
 
 fn on_ime_endcomposition(window: &Window) -> Option<LRESULT> {
-    if window.enabled_client().is_none() {
-        return None;
-    }
+    window.enabled_client()?;
     if window.ime_is_finalizing() {
         return Some(LRESULT(0)); // reentrant result of our own CPS_CANCEL
     }
     if window.ime_end() { // true when app_has_marked_text was still set
-        let _ = window.with_enabled_client(|client| client.discard_marked_text());
+        let _ = window.with_enabled_client(TextInputClient::discard_marked_text);
     }
     Some(LRESULT(0))
 }
@@ -1237,7 +1232,7 @@ fn on_ime_composition(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
         // Reentry from our own CPS_CANCEL: the client already unmarked, so consume without an edit.
         return Some(LRESULT(0));
     }
-    let Some(ctx) = ImmContext::get(window.hwnd()) else {
+    let Some(context) = ImmContext::get(window.hwnd()) else {
         log::warn!("enabled IME client has no input context; keeping composition ownership");
         return Some(LRESULT(0));
     };
@@ -1247,22 +1242,10 @@ fn on_ime_composition(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
     };
     if finalizing {
         // Reentry from our own CPS_COMPLETE: deliver the result to the client synchronously.
-        apply_finalizing_composition(window, &ctx, gcs);
+        apply_finalizing_composition(window, &context, gcs);
         return Some(LRESULT(0));
     }
-
-    // Read every required value before the first callback. Once START/SETCONTEXT have suppressed the
-    // system preedit, default processing cannot restore a coherent fallback mid-composition.
-    let snapshot = match CompositionSnapshot::read(&ctx, gcs) {
-        Ok(snapshot) => snapshot,
-        Err(err) => {
-            log::warn!("reading IME composition failed; keeping ownership until the next update or END: {err:#}");
-            return Some(LRESULT(0));
-        }
-    };
-
-    apply_composition_actions(window, reduce_composition(snapshot));
-
+    apply_owned_composition(window, &context, gcs);
     Some(LRESULT(0))
 }
 
@@ -1277,27 +1260,64 @@ const GCS_PREEDIT_UPDATE: u32 = GCS_COMPSTR.0 | GCS_COMPATTR.0 | GCS_COMPCLAUSE.
     | GCS_CURSORPOS.0 | GCS_DELTASTART.0;
 ```
 
-The reducer sets `app_has_marked_text` before `setMarkedText` and clears all composition state before
-a cancellation discard. Commit and empty-preedit callbacks deliberately keep the previous marked
+`apply_owned_composition` reads every required value into one `CompositionSnapshot` **before** the
+first callback (once START/SETCONTEXT have suppressed the system preedit, default processing
+cannot restore a coherent fallback mid-composition; a failed core read logs, keeps ownership, and
+recovers on the next update or END), then `apply_composition` delivers the snapshot with direct
+calls in a fixed order — commit first, then the new preedit, then positioning. It sets
+`app_has_marked_text` before `setMarkedText` and clears all composition state before a
+cancellation discard. Commit and empty-preedit callbacks deliberately keep the previous marked
 state during the callback, so a nested focus loss still takes the Phase-2 cancel path rather than
-re-emitting native text; their state is cleared only after the callback returns unchanged. The
-action driver records `composition_revision`, checks it after every callback (including positioning
-queries), and stops a stale outer batch before any post-callback state action if a nested START/END
-or focus transition changed the revision. Tasks 11–12 give the exact reducer, injectable sink, and
-tests.
+re-emitting native text; their state is cleared only after the callback returns unchanged.
+`apply_composition` records `composition_revision`, checks it after every client callback, and
+abandons the remaining stale steps if a nested START/END or focus transition changed the revision.
+Tasks 11–12 give the exact apply function, injectable sink, and tests.
 
 ### 7.3 `GCS_*` readers and underline conversion (`ime.rs`)
 
 `ImmGetCompositionStringW` returns a **byte** length for buffers and a signed count that can be
 `IMM_ERROR_NODATA` (`-1`) or `IMM_ERROR_GENERAL` (`-2`). Empty data is a successful zero, not an
 error. Build a complete snapshot before any client callback, and treat attributes/clauses as
-optional decoration while result/preedit strings are core data:
+optional decoration while result/preedit strings are core data.
+
+The transport is injectable so snapshot logic tests run without Win32. UTF-16 payloads are read
+directly into `Vec<u16>` (the generic `composition_payload` transport from §5.1 sizes the buffer
+in the payload's natural element type), so string data is never round-tripped through bytes:
 
 ```rust
-struct PreeditSnapshot {
-    text: String,
-    selected: TextRange,
-    underlines: Vec<UnderlineSegment>,
+pub(crate) trait CompositionSource {
+    /// Raw byte payloads (`GCS_COMPATTR`, `GCS_COMPCLAUSE`).
+    fn bytes(&self, which: IME_COMPOSITION_STRING) -> anyhow::Result<Vec<u8>>;
+    /// UTF-16 string payloads (`GCS_COMPSTR`, `GCS_RESULTSTR`).
+    fn utf16(&self, which: IME_COMPOSITION_STRING) -> anyhow::Result<Vec<u16>>;
+    /// `None` when the IME shows no composition cursor.
+    fn cursor(&self) -> Option<usize>;
+}
+
+impl CompositionSource for ImmContext {
+    fn bytes(&self, which: IME_COMPOSITION_STRING) -> anyhow::Result<Vec<u8>> {
+        self.composition_payload(which)
+    }
+
+    fn utf16(&self, which: IME_COMPOSITION_STRING) -> anyhow::Result<Vec<u16>> {
+        self.composition_payload(which)
+    }
+
+    // GCS_CURSORPOS is the function's return value (null buffer). A negative value is the
+    // documented "cursor not present" state — some IMEs hide the composition cursor — not an IMM
+    // error; render such a preedit without a selection instead of failing the whole snapshot.
+    fn cursor(&self) -> Option<usize> {
+        // SAFETY: this guard owns a valid HIMC; GCS_CURSORPOS returns its scalar in the result.
+        let cursor = unsafe { ImmGetCompositionStringW(self.himc, GCS_CURSORPOS, None, 0) };
+        usize::try_from(cursor).ok()
+    }
+}
+
+pub(crate) struct PreeditSnapshot {
+    pub(crate) text: String,
+    /// `TextRange::none()` when the IME shows no composition cursor.
+    pub(crate) selected: TextRange,
+    pub(crate) underlines: Vec<UnderlineSegment>,
 }
 
 struct CompositionSnapshot {
@@ -1307,19 +1327,28 @@ struct CompositionSnapshot {
 }
 
 impl CompositionSnapshot {
-    fn read(ctx: &ImmContext, gcs: u32) -> anyhow::Result<Self> {
+    fn read(source: &impl CompositionSource, gcs: u32) -> anyhow::Result<Self> {
         let result = (gcs & GCS_RESULTSTR.0 != 0)
-            .then(|| read_comp_string(ctx, GCS_RESULTSTR))
+            .then(|| source.utf16(GCS_RESULTSTR).map(|units| String::from_utf16_lossy(&units)))
             .transpose()?;
         let preedit = if gcs & GCS_PREEDIT_UPDATE != 0 {
-            let text = read_comp_string(ctx, GCS_COMPSTR)?;
-            let len = text.encode_utf16().count();
-            let selected = read_comp_cursor(ctx)
-                .map_or_else(TextRange::none, |cursor| TextRange { location: cursor.min(len), length: 0 });
-            let underlines = read_underlines(ctx, len).unwrap_or_else(|err| {
-                log::warn!("reading IME underline data failed: {err:#}");
-                fallback_underlines(len)
+            let units = source.utf16(GCS_COMPSTR)?;
+            let length = units.len();
+            let text = String::from_utf16_lossy(&units);
+            let selected = source.cursor().map_or_else(TextRange::none, |cursor| TextRange {
+                location: cursor.min(length),
+                length: 0,
             });
+            let underlines = match (
+                source.bytes(GCS_COMPATTR),
+                source.bytes(GCS_COMPCLAUSE).and_then(|bytes| decode_u32_bytes(&bytes)),
+            ) {
+                (Ok(attrs), Ok(clauses)) => underlines_from_parts(&attrs, &clauses, length),
+                (Err(err), _) | (_, Err(err)) => {
+                    log::warn!("reading IME underline data failed: {err:#}");
+                    fallback_underlines(length)
+                }
+            };
             Some(PreeditSnapshot { text, selected, underlines })
         } else {
             None
@@ -1327,101 +1356,58 @@ impl CompositionSnapshot {
         Ok(Self { result, preedit, cancelled: gcs & GCS_ANY == 0 })
     }
 }
-
-fn read_comp_bytes(ctx: &ImmContext, which: IME_COMPOSITION_STRING) -> anyhow::Result<Vec<u8>> {
-    // SAFETY: ctx owns a valid HIMC; null buffer + zero size is the documented size probe.
-    let bytes = unsafe { ImmGetCompositionStringW(ctx.himc(), which, None, 0) };
-    anyhow::ensure!(bytes >= 0, "ImmGetCompositionStringW({which:?}) probe failed: {bytes}");
-    if bytes == 0 {
-        return Ok(Vec::new());
-    }
-    let capacity = usize::try_from(bytes)?;
-    let capacity_u32 = u32::try_from(capacity)?;
-    let mut buf = vec![0u8; capacity];
-    // SAFETY: buf is writable for exactly capacity bytes and ctx owns a valid HIMC.
-    let written = unsafe {
-        ImmGetCompositionStringW(ctx.himc(), which, Some(buf.as_mut_ptr().cast()), capacity_u32)
-    };
-    anyhow::ensure!(written >= 0, "ImmGetCompositionStringW({which:?}) fill failed: {written}");
-    let written = usize::try_from(written)?;
-    anyhow::ensure!(written <= capacity, "ImmGetCompositionStringW({which:?}) returned {written} > {capacity}");
-    buf.truncate(written);
-    Ok(buf)
-}
-
-fn read_comp_string(ctx: &ImmContext, which: IME_COMPOSITION_STRING) -> anyhow::Result<String> {
-    let bytes = read_comp_bytes(ctx, which)?;
-    anyhow::ensure!(bytes.len() % size_of::<u16>() == 0, "odd UTF-16 byte count: {}", bytes.len());
-    let units = bytes
-        .chunks_exact(size_of::<u16>())
-        .map(|bytes| u16::from_ne_bytes([bytes[0], bytes[1]]))
-        .collect::<Vec<_>>();
-    Ok(String::from_utf16_lossy(&units))
-}
-
-// GCS_CURSORPOS is the function's return value (null buffer). A negative value is the documented
-// "cursor not present" state — some IMEs hide the composition cursor — not an IMM error; render
-// such a preedit without a selection instead of failing the whole snapshot.
-fn read_comp_cursor(ctx: &ImmContext) -> Option<usize> {
-    // SAFETY: ctx owns a valid HIMC; GCS_CURSORPOS returns its scalar in the function result.
-    let pos = unsafe { ImmGetCompositionStringW(ctx.himc(), GCS_CURSORPOS, None, 0) };
-    usize::try_from(pos).ok()
-}
 ```
 
-`read_underlines` reads `GCS_COMPATTR` (one `ATTR_*` byte per preedit UTF-16 unit) and
-`GCS_COMPCLAUSE` (ascending clause-boundary offsets, `u32`) with the same probe-then-fill shape, then
-emits one `UnderlineSegment` per clause. **All emitted ranges are preedit-relative.** A valid clause
-array starts at zero, ends at the preedit UTF-16 length, stays in bounds, and is non-descending.
+`underlines_from_parts` converts `GCS_COMPATTR` (one `ATTR_*` byte per preedit UTF-16 unit) and
+the decoded `GCS_COMPCLAUSE` offsets (ascending clause boundaries, `u32`) into one
+`UnderlineSegment` per clause. **All emitted ranges are preedit-relative.** A valid clause array
+starts at zero, ends at the preedit UTF-16 length, stays in bounds, and is non-descending.
 Malformed or missing clause data falls back to one dotted segment spanning the whole preedit:
 
 ```rust
-fn read_comp_u32s(ctx: &ImmContext, which: IME_COMPOSITION_STRING) -> anyhow::Result<Vec<u32>> {
-    let bytes = read_comp_bytes(ctx, which)?;
-    anyhow::ensure!(bytes.len() % size_of::<u32>() == 0, "unaligned u32 byte count: {}", bytes.len());
+fn decode_u32_bytes(bytes: &[u8]) -> anyhow::Result<Vec<u32>> {
+    anyhow::ensure!(bytes.len().is_multiple_of(size_of::<u32>()), "unaligned u32 byte count: {}", bytes.len());
     Ok(bytes
         .chunks_exact(size_of::<u32>())
-        .map(|bytes| u32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+        .map(|part| u32::from_ne_bytes([part[0], part[1], part[2], part[3]]))
         .collect())
 }
 
-fn read_underlines(ctx: &ImmContext, preedit_len: usize) -> anyhow::Result<Vec<UnderlineSegment>> {
-    let attrs = read_comp_bytes(ctx, GCS_COMPATTR)?;    // one byte per preedit UTF-16 unit
-    let clauses = read_comp_u32s(ctx, GCS_COMPCLAUSE)?; // UTF-16/TCHAR boundary offsets
-
-    let bounds = clauses.iter().map(|&c| c as usize).collect::<Vec<_>>();
-    let bounds = if bounds.len() >= 2
-        && bounds.first() == Some(&0)
-        && bounds.last() == Some(&preedit_len)
-        && bounds.iter().all(|&value| value <= preedit_len)
-        && bounds.windows(2).all(|pair| pair[0] <= pair[1])
-    {
-        bounds
-    } else {
-        return Ok(fallback_underlines(preedit_len));
+fn underlines_from_parts(attrs: &[u8], clauses: &[u32], preedit_len: usize) -> Vec<UnderlineSegment> {
+    let bounds = clauses.iter().map(|value| usize::try_from(*value)).collect::<Result<Vec<_>, _>>();
+    let Ok(bounds) = bounds else {
+        return fallback_underlines(preedit_len);
     };
-
-    let mut out = Vec::new();
-    for pair in bounds.windows(2) {
-        let start = pair[0];
-        let end = pair[1];
-        if start >= end {
-            continue;
-        }
-        let attribute = attrs.get(start).copied().map_or(ATTR_INPUT, u32::from);
-        let (style, target_clause) = match attribute {
-            ATTR_TARGET_CONVERTED => (UnderlineStyle::Thick, true),
-            ATTR_TARGET_NOTCONVERTED => (UnderlineStyle::Dotted, true),
-            ATTR_CONVERTED | ATTR_FIXEDCONVERTED => (UnderlineStyle::Solid, false),
-            _ => (UnderlineStyle::Dotted, false), // ATTR_INPUT / ATTR_INPUT_ERROR
-        };
-        out.push(UnderlineSegment {
-            range: TextRange { location: start, length: end - start },
-            style,
-            target_clause,
-        });
+    if bounds.len() < 2
+        || bounds.first() != Some(&0)
+        || bounds.last() != Some(&preedit_len)
+        || bounds.iter().any(|value| *value > preedit_len)
+        || bounds.windows(2).any(|pair| pair[0] > pair[1])
+    {
+        return fallback_underlines(preedit_len);
     }
-    Ok(out)
+
+    bounds
+        .windows(2)
+        .filter_map(|pair| {
+            let (start, end) = (pair[0], pair[1]);
+            if start >= end {
+                return None;
+            }
+            let attribute = attrs.get(start).copied().map_or(ATTR_INPUT, u32::from);
+            let (style, target_clause) = match attribute {
+                ATTR_TARGET_CONVERTED => (UnderlineStyle::Thick, true),
+                ATTR_TARGET_NOTCONVERTED => (UnderlineStyle::Dotted, true),
+                ATTR_CONVERTED | ATTR_FIXEDCONVERTED => (UnderlineStyle::Solid, false),
+                _ => (UnderlineStyle::Dotted, false), // ATTR_INPUT / ATTR_INPUT_ERROR
+            };
+            Some(UnderlineSegment {
+                range: TextRange { location: start, length: end - start },
+                style,
+                target_clause,
+            })
+        })
+        .collect()
 }
 
 fn fallback_underlines(preedit_len: usize) -> Vec<UnderlineSegment> {
@@ -1487,10 +1473,10 @@ wrappers are authored.
 no-client behavior, supports a system-drawn Phase-1 vertical slice, then atomically enables
 self-drawn Phase-2 preedit.
 
-**Architecture:** `ime.rs` owns the IMM32 transport, callback ABI, pure decoders, and composition
-reducer. `Window` owns one copyable state record and the HWND-bound lifecycle; `event_loop.rs`
-remains a thin message dispatcher. Kotlin owns all document text through one stable, window-owned
-callback holder and Arena.
+**Architecture:** `text_input_client.rs` is the pure FFI callback ABI. `ime.rs` owns the IMM32
+transport, per-window IME state, pure decoders, and the composition-apply logic. `Window` owns the
+state cell and the HWND-bound lifecycle; `event_loop.rs` remains a thin message dispatcher. Kotlin
+owns all document text through one stable, window-owned callback holder and Arena.
 
 **Tech stack:** Rust 2024, `windows` 0.62.2 (`Win32_UI_Input_Ime`), cbindgen, JExtract/Panama,
 Kotlin/JVM, JUnit 5, Skiko/Skia, PowerShell/Gradle.
@@ -1531,10 +1517,11 @@ Kotlin/JVM, JUnit 5, Skiko/Skia, PowerShell/Gradle.
 
 | File | Responsibility after implementation |
 |---|---|
-| `native/desktop-win32/src/win32/ime.rs` | Callback ABI, IMM guard/transport, positioning, readers, pure reducer, IME handlers, unit tests. |
+| `native/desktop-win32/src/win32/text_input_client.rs` | Pure FFI callback ABI: `TextRange`, args structs, `UnderlineSegment`/`UnderlineStyle`, callback aliases, the `TextInputClient` table and its safe wrappers. No imports from `ime.rs`/`window.rs`. |
+| `native/desktop-win32/src/win32/ime.rs` | `ImmContext` guard as sole `HIMC` owner (transport, positioning, notify), `ImeState` + `ClientCallbackGuard`, `GCS_*` readers/decoders, `CompositionSnapshot`, `CompositionSink` trait, composition-apply functions, unit tests. |
 | `native/desktop-win32/src/win32/ime_api.rs` | Five exported window downcalls only. |
-| `native/desktop-win32/src/win32/window.rs` | Private `ImeState`, callback reentrancy guard, lifecycle, surrogate state, teardown. |
-| `native/desktop-win32/src/win32/event_loop.rs` | Message arms, existing character fallback, DPI/focus dispatch. |
+| `native/desktop-win32/src/win32/window.rs` | The `ime` state cell and its `Window` helpers, HWND-bound lifecycle (client/enable/focus/teardown, caret), `CompositionSink` impl, caret-rect scaling. |
+| `native/desktop-win32/src/win32/event_loop.rs` | Message arms (`WM_IME_*` handlers, `WM_INPUTLANGCHANGE`), existing character fallback, DPI/focus dispatch. |
 | `native/desktop-win32/src/win32/events.rs` | Append-only `InputLanguageChanged` push event ABI. |
 | `kotlin-desktop-toolkit/.../win32/TextInputClient.kt` | Public Win32 client model, borrowed-value decoders, stable holder/upcall stubs. |
 | `kotlin-desktop-toolkit/.../win32/Window.kt` | Holder ownership, five public methods, ordered idempotent close. |
@@ -1548,6 +1535,7 @@ Kotlin/JVM, JUnit 5, Skiko/Skia, PowerShell/Gradle.
 **Files:**
 - Modify: `native/desktop-win32/Cargo.toml`
 - Modify: `native/desktop-win32/src/win32/mod.rs`
+- Create: `native/desktop-win32/src/win32/text_input_client.rs`
 - Create: `native/desktop-win32/src/win32/ime.rs`
 
 **Interfaces:**
@@ -1557,23 +1545,21 @@ Kotlin/JVM, JUnit 5, Skiko/Skia, PowerShell/Gradle.
   `SetMarkedTextArgs`, `CaretRectArgs`, `TextInputClient`, `ImmContext::get(HWND)`, and safe
   callback wrapper methods used by Tasks 2–13.
 
-- [ ] **Step 1: Add the Windows feature and module declaration**
+- [ ] **Step 1: Add the Windows feature and module declarations**
 
 Add `"Win32_UI_Input_Ime",` immediately before `"Win32_UI_Input_KeyboardAndMouse",` in
-`Cargo.toml`. Add `pub mod ime;` between `geometry` and `global_data` in `mod.rs`. Do not declare
+`Cargo.toml`. Add `pub mod ime;` between `geometry` and `global_data` and
+`pub mod text_input_client;` between `system_menu` and `utils` in `mod.rs`. Do not declare
 `ime_api` yet; its exports consume methods that do not exist until Task 7.
 
 - [ ] **Step 2: Write the sentinel test first**
 
-Create `ime.rs` with the imports, `TextRange`, and this test. Leave `TextRange::none` and
-`into_option` absent for the red run:
+Create `text_input_client.rs` with the imports, `TextRange`, and this test. Leave
+`TextRange::none` and `into_option` absent for the red run. This module is the pure callback ABI:
+it never imports from `ime.rs` or `window.rs` and touches no Win32 API:
 
 ```rust
 use desktop_common::ffi_utils::{BorrowedArray, BorrowedUtf8};
-use windows::Win32::{
-    Foundation::HWND,
-    UI::Input::Ime::{HIMC, ImmGetContext, ImmReleaseContext},
-};
 
 use super::geometry::{LogicalPoint, LogicalRect, LogicalSize};
 
@@ -1602,15 +1588,18 @@ mod tests {
 Run:
 
 ```powershell
-cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::ime::tests::none_range_round_trips
+cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::text_input_client::tests::none_range_round_trips
 ```
 
 Expected: compilation fails because `none` and `into_option` are not defined.
 
 - [ ] **Step 3: Add the complete ABI foundation**
 
-Insert the following above the test module. Use aliases for every function pointer so cbindgen and
-JExtract generate stable callback helper names:
+Insert the following above the test module in `text_input_client.rs`. Use aliases for every
+function pointer so cbindgen and JExtract generate stable callback helper names. The full struct
+and wrapper bodies are in §5.3; `set_marked_text` takes the sentinel-carrying `TextRange`
+directly (`none` = the IME shows no composition cursor), and only the query direction maps the
+sentinel to `Option`:
 
 ```rust
 impl TextRange {
@@ -1618,15 +1607,13 @@ impl TextRange {
         Self { location: NOT_FOUND, length: 0 }
     }
 
-    pub(crate) const fn into_option(self) -> Option<Self> {
+    const fn into_option(self) -> Option<Self> {
         if self.location == NOT_FOUND { None } else { Some(self) }
     }
 }
 
 #[repr(C)]
-pub struct InsertTextArgs<'a> {
-    pub text: BorrowedUtf8<'a>,
-}
+pub struct InsertTextArgs<'a> { ... }
 
 #[repr(C)]
 pub struct SetMarkedTextArgs<'a> {
@@ -1636,26 +1623,15 @@ pub struct SetMarkedTextArgs<'a> {
 }
 
 #[repr(C)]
-pub struct CaretRectArgs {
-    pub range_in: TextRange,
-    pub rect_out: LogicalRect,
-}
+pub struct CaretRectArgs { ... }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct UnderlineSegment {
-    pub range: TextRange,
-    pub style: UnderlineStyle,
-    pub target_clause: bool,
-}
+pub struct UnderlineSegment { ... }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum UnderlineStyle {
-    Solid,
-    Dotted,
-    Thick,
-}
+pub enum UnderlineStyle { Solid, Dotted, Thick }
 
 pub type SelectedRangeCallback = extern "C" fn(range_out: &mut TextRange);
 pub type CaretRectCallback = extern "C" fn(args: &mut CaretRectArgs);
@@ -1666,59 +1642,26 @@ pub type DiscardMarkedTextCallback = extern "C" fn();
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct TextInputClient {
-    pub selected_range: SelectedRangeCallback,
-    pub caret_rect: CaretRectCallback,
-    pub insert_text: InsertTextCallback,
-    pub set_marked_text: SetMarkedTextCallback,
-    pub unmark_text: UnmarkTextCallback,
-    pub discard_marked_text: DiscardMarkedTextCallback,
-}
+pub struct TextInputClient { ... }
 
 impl TextInputClient {
-    pub(crate) fn selected_range(self) -> Option<TextRange> {
-        let mut out = TextRange::none();
-        (self.selected_range)(&mut out);
-        out.into_option()
-    }
-
-    pub(crate) fn caret_rect(self, range: TextRange) -> LogicalRect {
-        let mut args = CaretRectArgs {
-            range_in: range,
-            rect_out: LogicalRect {
-                origin: LogicalPoint::new(0.0, 0.0),
-                size: LogicalSize::new(0.0, 0.0),
-            },
-        };
-        (self.caret_rect)(&mut args);
-        args.rect_out
-    }
-
-    pub(crate) fn insert_text(self, text: &str) {
-        (self.insert_text)(InsertTextArgs { text: BorrowedUtf8::new(text) });
-    }
-
-    pub(crate) fn set_marked_text(
-        self,
-        text: &str,
-        selected_range: Option<TextRange>,
-        underlines: &[UnderlineSegment],
-    ) {
-        (self.set_marked_text)(SetMarkedTextArgs {
-            text: BorrowedUtf8::new(text),
-            selected_range: selected_range.unwrap_or_else(TextRange::none),
-            underlines: BorrowedArray::from_slice(underlines),
-        });
-    }
-
-    pub(crate) fn unmark_text(self) {
-        (self.unmark_text)();
-    }
-
-    pub(crate) fn discard_marked_text(self) {
-        (self.discard_marked_text)();
-    }
+    pub(crate) fn selected_range(self) -> Option<TextRange> { ... }
+    pub(crate) fn caret_rect(self, range: TextRange) -> LogicalRect { ... }
+    pub(crate) fn insert_text(self, text: &str) { ... }
+    /// A `none` `selected_range` means the IME shows no composition cursor.
+    pub(crate) fn set_marked_text(self, text: &str, selected_range: TextRange, underlines: &[UnderlineSegment]) { ... }
+    pub(crate) fn unmark_text(self) { ... }
+    pub(crate) fn discard_marked_text(self) { ... }
 }
+```
+
+Create `ime.rs` with the RAII context guard from §5.1. The raw `HIMC` stays private to the guard:
+
+```rust
+use windows::Win32::{
+    Foundation::HWND,
+    UI::Input::Ime::{HIMC, ImmGetContext, ImmReleaseContext},
+};
 
 pub(crate) struct ImmContext {
     hwnd: HWND,
@@ -1731,10 +1674,6 @@ impl ImmContext {
         // context against the same handle.
         let himc = unsafe { ImmGetContext(hwnd) };
         (!himc.is_invalid()).then_some(Self { hwnd, himc })
-    }
-
-    pub(crate) const fn himc(&self) -> HIMC {
-        self.himc
     }
 }
 
@@ -1753,7 +1692,7 @@ impl Drop for ImmContext {
 Run:
 
 ```powershell
-cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::ime::tests::none_range_round_trips
+cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::text_input_client::tests::none_range_round_trips
 cargo check --manifest-path native/Cargo.toml -p desktop-win32
 ```
 
@@ -1762,7 +1701,7 @@ Expected: the focused test passes and `cargo check` ends with `Finished`.
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add native/desktop-win32/Cargo.toml native/desktop-win32/src/win32/mod.rs native/desktop-win32/src/win32/ime.rs
+git add native/desktop-win32/Cargo.toml native/desktop-win32/src/win32/mod.rs native/desktop-win32/src/win32/text_input_client.rs native/desktop-win32/src/win32/ime.rs
 git commit -m "feat(win32): add IME callback ABI"
 ```
 
@@ -1771,18 +1710,19 @@ git commit -m "feat(win32): add IME callback ABI"
 ### Task 2: Per-window IME state and callback guard
 
 **Files:**
+- Modify: `native/desktop-win32/src/win32/ime.rs`
 - Modify: `native/desktop-win32/src/win32/window.rs`
 
 **Interfaces:**
-- Consumes: `ime::TextInputClient` from Task 1.
-- Produces: private `ImeState`; `Window::{ime_client, enabled_client, active_client,
-  with_enabled_client, with_active_client, ime_start, ime_end, ime_is_finalizing,
-  ime_revision, ime_set_app_marked, clear_composition_state}` and
-  `ImeState::reset_pending_surrogate` for later tasks.
+- Consumes: `text_input_client::TextInputClient` from Task 1.
+- Produces: `ImeState` (private fields, accessor + transition methods) and `ClientCallbackGuard`
+  in `ime.rs`; `Window::{enabled_client, active_client, with_enabled_client, with_active_client,
+  ime_start, ime_end, ime_is_finalizing, ime_revision, ime_set_app_marked,
+  clear_composition_state}` for later tasks.
 
 - [ ] **Step 1: Add red state tests**
 
-At the end of `window.rs`, add a `#[cfg(test)] mod ime_state_tests` containing:
+At the end of `ime.rs`, add a `#[cfg(test)] mod ime_state_tests` containing:
 
 ```rust
 #[cfg(test)]
@@ -1818,72 +1758,24 @@ mod ime_state_tests {
 Run:
 
 ```powershell
-cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::window::ime_state_tests::
+cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::ime::ime_state_tests::
 ```
 
 Expected: compilation fails because `ImeState` and `ClientCallbackGuard` do not exist.
 
 - [ ] **Step 2: Add the state and field**
 
-Import `ime::TextInputClient`, add `ime: Cell<ImeState>` as the final mutable-state field before
-`event_loop`, initialize it with `Cell::new(ImeState::new())`, and add this code before `Window`:
+Add the `ImeState` record, accessors, and transition methods from §5.2 plus the guard to `ime.rs`.
+In `window.rs`, import `ime::{ClientCallbackGuard, ImeState}`, add `ime: Cell<ImeState>` as the
+final mutable-state field before `event_loop`, and initialize it with `Cell::new(ImeState::new())`:
 
 ```rust
-#[derive(Clone, Copy)]
-struct ImeState {
-    client: Option<TextInputClient>,
-    enabled: bool,
-    focused: bool,
-    composition_active: bool,
-    app_has_marked_text: bool,
-    finalizing: bool,
-    composition_revision: u64,
-    callback_depth: u32,
-    pending_high_surrogate: u16,
-}
-
-impl ImeState {
-    const fn new() -> Self {
-        Self {
-            client: None,
-            enabled: true,
-            focused: false,
-            composition_active: false,
-            app_has_marked_text: false,
-            finalizing: false,
-            composition_revision: 0,
-            callback_depth: 0,
-            pending_high_surrogate: 0,
-        }
-    }
-
-    const fn detached() -> Self {
-        Self { enabled: false, ..Self::new() }
-    }
-
-    const fn is_active(self) -> bool {
-        self.focused && self.enabled && self.client.is_some()
-    }
-
-    fn advance_composition_revision(&mut self) -> u64 {
-        self.composition_revision = self
-            .composition_revision
-            .checked_add(1)
-            .expect("IME composition revision overflow");
-        self.composition_revision
-    }
-
-    fn reset_pending_surrogate(&mut self) {
-        self.pending_high_surrogate = 0;
-    }
-}
-
-struct ClientCallbackGuard<'a>(&'a Cell<ImeState>);
+pub(crate) struct ClientCallbackGuard<'a>(&'a Cell<ImeState>);
 
 impl<'a> ClientCallbackGuard<'a> {
-    fn enter(state: &'a Cell<ImeState>) -> Self {
+    pub(crate) fn enter(state: &'a Cell<ImeState>) -> Self {
         let mut ime = state.get();
-        ime.callback_depth = ime.callback_depth.checked_add(1).expect("text input callback depth overflow");
+        ime.callback_depth += 1;
         state.set(ime);
         Self(state)
     }
@@ -1900,21 +1792,16 @@ impl Drop for ClientCallbackGuard<'_> {
 
 - [ ] **Step 3: Add the narrow `Window` helpers**
 
-Add these methods inside `impl Window`:
+Add these methods inside `impl Window`. Each is a thin get/transition/set wrapper; the `ImeState`
+transitions themselves own the revision invariant:
 
 ```rust
-pub(crate) fn ime_client(&self) -> Option<TextInputClient> {
-    self.ime.get().client
+pub(crate) const fn enabled_client(&self) -> Option<TextInputClient> {
+    self.ime.get().enabled_client()
 }
 
-pub(crate) fn enabled_client(&self) -> Option<TextInputClient> {
-    let ime = self.ime.get();
-    (ime.enabled).then_some(ime.client).flatten()
-}
-
-pub(crate) fn active_client(&self) -> Option<TextInputClient> {
-    let ime = self.ime.get();
-    (ime.focused && ime.enabled).then_some(ime.client).flatten()
+pub(crate) const fn active_client(&self) -> Option<TextInputClient> {
+    self.ime.get().active_client()
 }
 
 pub(crate) fn with_enabled_client<R>(&self, f: impl FnOnce(TextInputClient) -> R) -> Option<R> {
@@ -1929,55 +1816,49 @@ pub(crate) fn with_active_client<R>(&self, f: impl FnOnce(TextInputClient) -> R)
     Some(f(client))
 }
 
-pub(crate) fn ime_revision(&self) -> u64 {
-    self.ime.get().composition_revision
+pub(crate) const fn ime_revision(&self) -> u64 {
+    self.ime.get().revision()
 }
 
-pub(crate) fn ime_start(&self, app_has_marked_text: bool) -> u64 {
+pub(crate) fn ime_start(&self) {
     let mut ime = self.ime.get();
-    ime.composition_active = true;
-    ime.app_has_marked_text = app_has_marked_text;
-    ime.reset_pending_surrogate();
-    let revision = ime.advance_composition_revision();
+    ime.start_composition();
     self.ime.set(ime);
-    revision
 }
 
 pub(crate) fn ime_end(&self) -> bool {
-    let had_marked_text = self.ime.get().app_has_marked_text;
+    let had_marked_text = self.ime.get().app_has_marked_text();
     self.clear_composition_state();
     had_marked_text
 }
 
-pub(crate) fn ime_is_finalizing(&self) -> bool {
-    self.ime.get().finalizing
+pub(crate) const fn ime_is_finalizing(&self) -> bool {
+    self.ime.get().is_finalizing()
 }
 
-pub(crate) fn ime_set_app_marked(&self, value: bool) -> u64 {
+pub(crate) const fn ime_app_has_marked_text(&self) -> bool {
+    self.ime.get().app_has_marked_text()
+}
+
+fn ime_set_app_marked(&self, value: bool) -> u64 {
     let mut ime = self.ime.get();
-    ime.app_has_marked_text = value;
-    let revision = ime.advance_composition_revision();
+    let revision = ime.set_app_marked(value);
     self.ime.set(ime);
     revision
 }
 
 pub(crate) fn clear_composition_state(&self) -> u64 {
     let mut ime = self.ime.get();
-    ime.composition_active = false;
-    ime.app_has_marked_text = false;
-    ime.finalizing = false;
-    ime.reset_pending_surrogate();
-    let revision = ime.advance_composition_revision();
+    let revision = ime.clear_composition_state();
     self.ime.set(ime);
     revision
 }
-
 ```
 
 - [ ] **Step 4: Run focused and crate checks**
 
 ```powershell
-cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::window::ime_state_tests::
+cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::ime::ime_state_tests::
 cargo check --manifest-path native/Cargo.toml -p desktop-win32
 ```
 
@@ -1986,7 +1867,7 @@ Expected: two focused tests pass and `cargo check` ends with `Finished`.
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add native/desktop-win32/src/win32/window.rs
+git add native/desktop-win32/src/win32/ime.rs native/desktop-win32/src/win32/window.rs
 git commit -m "feat(win32): track per-window IME state"
 ```
 
@@ -2029,40 +1910,38 @@ fn surrogate_joiner_drops_an_interrupted_high_unit() {
 #[test]
 fn pending_surrogate_reset_is_idempotent() {
     let mut ime = ImeState::new();
-    ime.pending_high_surrogate = 0xD83D;
+    ime.pending_high_surrogate = Some(0xD83D);
     ime.reset_pending_surrogate();
-    assert_eq!(ime.pending_high_surrogate, 0);
+    assert_eq!(ime.pending_high_surrogate, None);
     ime.reset_pending_surrogate();
-    assert_eq!(ime.pending_high_surrogate, 0);
+    assert_eq!(ime.pending_high_surrogate, None);
 }
 ```
 
 Run:
 
 ```powershell
-cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::window::ime_state_tests::surrogate_joiner
+cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::ime::ime_state_tests::surrogate_joiner
 ```
 
 Expected: compilation fails because `ImeState::join_surrogate` does not exist.
 
 - [ ] **Step 2: Implement the pure joiner and `Window` wrapper**
 
-Add to `impl ImeState`:
+Add to `impl ImeState` (the §6.2 joiner):
 
 ```rust
-fn join_surrogate(&mut self, unit: u16) -> Option<String> {
-    let pending = self.pending_high_surrogate;
+pub(crate) fn join_surrogate(&mut self, unit: u16) -> Option<String> {
+    let pending = self.pending_high_surrogate.take();
     if (0xD800..=0xDBFF).contains(&unit) {
-        self.pending_high_surrogate = unit;
+        self.pending_high_surrogate = Some(unit);
         return None;
     }
-    self.pending_high_surrogate = 0;
     if (0xDC00..=0xDFFF).contains(&unit) {
-        return (pending != 0).then(|| String::from_utf16_lossy(&[pending, unit]));
+        return pending.map(|high| String::from_utf16_lossy(&[high, unit]));
     }
     Some(String::from_utf16_lossy(&[unit]))
 }
-
 ```
 
 Add to `impl Window`:
@@ -2083,10 +1962,10 @@ pub(crate) fn clear_pending_surrogate(&self) {
 }
 ```
 
-Use `reset_pending_surrogate()` rather than assigning zero in the later client-switch, disable,
-focus-loss, and composition-clear paths. Task 5 routes client replacement, focus changes, and
-composition clearing through separately tested pure `ImeState` transitions; its disable path calls
-the shared reset directly after a successful detach.
+Use `reset_pending_surrogate()` rather than assigning the field in the later client-switch,
+disable, focus-loss, and composition-clear paths. Task 5 routes client replacement, focus changes,
+enable changes, and composition clearing through separately tested pure `ImeState` transitions,
+each of which owns its surrogate reset.
 
 - [ ] **Step 3: Preserve the old path under a new helper, then route text**
 
@@ -2104,7 +1983,9 @@ fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lp
     }
 
     let unit = LOWORD!(wparam.0);
-    if unit <= 0x1F || (0x7F..=0x9F).contains(&unit) {
+    // Control units (Enter, Tab, Backspace, ...) must still reach the app as CharacterReceived,
+    // never as an insertText edit.
+    if matches!(unit, 0x00..=0x1F | 0x7F..=0x9F) {
         window.clear_pending_surrogate();
         return character_received(event_loop, window, msg, wparam, lparam);
     }
@@ -2138,7 +2019,7 @@ Do not change the pump or `on_keyevent`: its existing `VK_PROCESSKEY` translatio
 - [ ] **Step 4: Run focused and crate checks**
 
 ```powershell
-cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::window::ime_state_tests::surrogate_joiner
+cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::ime::ime_state_tests::surrogate_joiner
 cargo check --manifest-path native/Cargo.toml -p desktop-win32
 ```
 
@@ -2147,7 +2028,7 @@ Expected: two surrogate tests pass and `cargo check` ends with `Finished`.
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add native/desktop-win32/src/win32/window.rs native/desktop-win32/src/win32/event_loop.rs
+git add native/desktop-win32/src/win32/ime.rs native/desktop-win32/src/win32/window.rs native/desktop-win32/src/win32/event_loop.rs
 git commit -m "feat(win32): route text through IME client"
 ```
 
@@ -2162,13 +2043,14 @@ git commit -m "feat(win32): route text through IME client"
 
 **Interfaces:**
 - Consumes: `Window::{active_client, with_active_client, ime_revision, hwnd, get_scale}` and
-  `ImmContext::{get, himc}`.
-- Produces: `client_logical_to_physical_rect(LogicalRect, f32) -> RECT` and
+  `ImmContext::get`.
+- Produces: `ImmContext::{set_composition_window, set_candidate_window}`,
+  `client_logical_to_physical_rect(LogicalRect, f32) -> RECT`, and
   `Window::{update_ime_windows, create_caret, destroy_caret}`.
 
 - [ ] **Step 1: Write the failing corner-scaling test**
 
-Append to `ime.rs::tests`:
+Add a `#[cfg(test)] mod tests` at the end of `window.rs`:
 
 ```rust
 #[test]
@@ -2183,32 +2065,21 @@ fn logical_caret_rect_scales_both_corners() {
 ```
 
 Run `cargo test --manifest-path native/Cargo.toml -p desktop-win32
-win32::ime::tests::logical_caret_rect_scales_both_corners`.
+win32::window::tests::logical_caret_rect_scales_both_corners`.
 
 Expected: compilation fails because the converter is missing.
 
 - [ ] **Step 2: Implement positioning**
 
-Add these imports to the existing grouped imports, without replacing unrelated imports:
+Add the `CANDIDATEFORM`/`COMPOSITIONFORM` imports to `ime.rs` and
+`WindowsAndMessaging::{CreateCaret, DestroyCaret, SetCaretPos}` to `window.rs`, without replacing
+unrelated imports. Add the `ImmContext::{set_composition_window, set_candidate_window}` inherent
+methods from §5.1 to `ime.rs` — the raw `HIMC` never crosses the module boundary.
+
+Add next to its sole caller in `window.rs`:
 
 ```rust
-use windows::Win32::{
-    Foundation::{POINT, RECT},
-    UI::{
-        Input::Ime::{
-            CANDIDATEFORM, CFS_EXCLUDE, CFS_POINT, COMPOSITIONFORM,
-            ImmSetCandidateWindow, ImmSetCompositionWindow,
-        },
-        WindowsAndMessaging::{CreateCaret, DestroyCaret, SetCaretPos},
-    },
-};
-use super::ime::{ImmContext, TextInputClient, client_logical_to_physical_rect};
-```
-
-Add to `ime.rs`:
-
-```rust
-pub(crate) fn client_logical_to_physical_rect(rect: LogicalRect, scale: f32) -> RECT {
+fn client_logical_to_physical_rect(rect: LogicalRect, scale: f32) -> RECT {
     let top_left = rect.origin.to_physical(scale);
     let bottom_right = LogicalPoint::new(
         rect.origin.x.0 + rect.size.width.0,
@@ -2224,21 +2095,20 @@ pub(crate) fn client_logical_to_physical_rect(rect: LogicalRect, scale: f32) -> 
 }
 ```
 
-Add to `impl Window`:
+Add the §6.3 `update_ime_windows` to `impl Window`: one `with_active_client` cycle pulls
+`selected_range` and `caret_rect` together, the revision check after the cycle catches reentrant
+composition/focus transitions, and positioning goes through the `ImmContext` methods:
 
 ```rust
 pub(crate) fn update_ime_windows(&self) {
     let revision = self.ime_revision();
-    let Some(range) = self.with_active_client(|client| client.selected_range()).flatten() else {
+    let caret_rect = self
+        .with_active_client(|client| client.selected_range().map(|range| client.caret_rect(range)))
+        .flatten();
+    let Some(caret_rect) = caret_rect else {
         return;
     };
     if self.ime_revision() != revision {
-        return;
-    }
-    let Some(caret_rect) = self.with_active_client(|client| client.caret_rect(range)) else {
-        return;
-    };
-    if self.ime_revision() != revision || self.active_client().is_none() {
         return;
     }
     let Some(context) = ImmContext::get(self.hwnd()) else {
@@ -2248,26 +2118,8 @@ pub(crate) fn update_ime_windows(&self) {
 
     let caret = client_logical_to_physical_rect(caret_rect, self.get_scale());
     let origin = POINT { x: caret.left, y: caret.top };
-    let composition = COMPOSITIONFORM {
-        dwStyle: CFS_POINT,
-        ptCurrentPos: origin,
-        ..Default::default()
-    };
-    // SAFETY: `context` owns a valid HIMC and `composition` is live for the synchronous call.
-    if !unsafe { ImmSetCompositionWindow(context.himc(), &raw const composition) }.as_bool() {
-        log::warn!("ImmSetCompositionWindow failed");
-    }
-
-    let candidate = CANDIDATEFORM {
-        dwIndex: 0,
-        dwStyle: CFS_EXCLUDE,
-        ptCurrentPos: origin,
-        rcArea: caret,
-    };
-    // SAFETY: `context` owns a valid HIMC and `candidate` is live for the synchronous call.
-    if !unsafe { ImmSetCandidateWindow(context.himc(), &raw const candidate) }.as_bool() {
-        log::warn!("ImmSetCandidateWindow failed");
-    }
+    context.set_composition_window(origin);
+    context.set_candidate_window(origin, caret);
 
     // SAFETY: active-client gating requires focus; lifecycle code attempted to create this caret.
     if let Err(err) = unsafe { SetCaretPos(origin.x, origin.y) } {
@@ -2297,7 +2149,7 @@ Add `window.update_ime_windows();` after the existing scale event and custom-tit
 - [ ] **Step 4: Verify and commit**
 
 ```powershell
-cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::ime::tests::logical_caret_rect_scales_both_corners
+cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::window::tests::logical_caret_rect_scales_both_corners
 cargo check --manifest-path native/Cargo.toml -p desktop-win32
 git add native/desktop-win32/src/win32/ime.rs native/desktop-win32/src/win32/window.rs native/desktop-win32/src/win32/event_loop.rs
 git commit -m "feat(win32): position IME UI at caret"
@@ -2317,7 +2169,8 @@ Expected: focused test passes; `cargo check` ends with `Finished`.
 
 **Interfaces:**
 - Consumes: Tasks 2–4 state, callbacks, positioning, and caret helpers.
-- Produces: `ImeState::{replace_client, set_focused, clear_composition_state}`;
+- Produces: `ImeState::{replace_client, set_enabled, set_focused, start_composition,
+  begin_finalizing, clear_composition_state}`; `ImmContext::notify_composition`;
   `Window::{set_text_input_client, set_ime_enabled, ime_focus_gained, ime_focus_lost,
   finalize_composition, ime_teardown}`; guarded `Window::destroy`; Phase-1 START/END forwarding.
 
@@ -2338,30 +2191,35 @@ fn callback_depth_rejects_lifetime_mutation() {
 }
 
 #[test]
-fn detached_state_is_terminal_and_disabled() {
-    let ime = ImeState::detached();
-    assert!(!ime.enabled);
-    assert!(!ime.composition_active);
-    assert!(ime.client.is_none());
-}
-
-#[test]
 fn client_replacement_clears_pending_surrogate() {
     let mut ime = ImeState::new();
-    ime.pending_high_surrogate = 0xD83D;
+    ime.pending_high_surrogate = Some(0xD83D);
     ime.replace_client(None);
-    assert_eq!(ime.pending_high_surrogate, 0);
+    assert_eq!(ime.pending_high_surrogate, None);
 }
 
 #[test]
 fn focus_loss_clears_pending_surrogate() {
     let mut ime = ImeState::new();
     ime.focused = true;
-    ime.pending_high_surrogate = 0xD83D;
+    ime.pending_high_surrogate = Some(0xD83D);
     let revision = ime.composition_revision;
     ime.set_focused(false);
     assert!(!ime.focused);
-    assert_eq!(ime.pending_high_surrogate, 0);
+    assert_eq!(ime.pending_high_surrogate, None);
+    assert_eq!(ime.composition_revision, revision + 1);
+}
+
+#[test]
+fn composition_start_marks_active_and_advances_revision() {
+    let mut ime = ImeState::new();
+    ime.app_has_marked_text = true;
+    ime.pending_high_surrogate = Some(0xD83D);
+    let revision = ime.composition_revision;
+    ime.start_composition();
+    assert!(ime.composition_active);
+    assert!(!ime.app_has_marked_text);
+    assert_eq!(ime.pending_high_surrogate, None);
     assert_eq!(ime.composition_revision, revision + 1);
 }
 
@@ -2371,20 +2229,20 @@ fn composition_end_clears_pending_surrogate() {
     ime.composition_active = true;
     ime.app_has_marked_text = true;
     ime.finalizing = true;
-    ime.pending_high_surrogate = 0xD83D;
+    ime.pending_high_surrogate = Some(0xD83D);
     let revision = ime.composition_revision;
     assert_eq!(ime.clear_composition_state(), revision + 1);
     assert!(!ime.composition_active);
     assert!(!ime.app_has_marked_text);
     assert!(!ime.finalizing);
-    assert_eq!(ime.pending_high_surrogate, 0);
+    assert_eq!(ime.pending_high_surrogate, None);
 }
 ```
 
 Run:
 
 ```powershell
-cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::window::ime_state_tests::
+cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::ime::ime_state_tests::
 ```
 
 Expected: compilation fails because `ensure_mutation_allowed`, `replace_client`, `set_focused`, and
@@ -2392,32 +2250,12 @@ the `ImeState` form of `clear_composition_state` are missing.
 
 - [ ] **Step 2: Implement the pure lifecycle transitions and mutation gate**
 
-Add these methods to `impl ImeState`:
+Add the §5.2 transition methods (`replace_client`, `set_enabled`, `set_focused`,
+`start_composition`, `begin_finalizing`, `clear_composition_state`) to `impl ImeState`, plus the
+mutation gate:
 
 ```rust
-fn replace_client(&mut self, client: Option<TextInputClient>) {
-    self.client = client;
-    self.reset_pending_surrogate();
-}
-
-fn set_focused(&mut self, focused: bool) {
-    let changed = self.focused != focused;
-    self.focused = focused;
-    self.reset_pending_surrogate();
-    if changed {
-        self.advance_composition_revision();
-    }
-}
-
-fn clear_composition_state(&mut self) -> u64 {
-    self.composition_active = false;
-    self.app_has_marked_text = false;
-    self.finalizing = false;
-    self.reset_pending_surrogate();
-    self.advance_composition_revision()
-}
-
-fn ensure_mutation_allowed(self, operation: &str) -> anyhow::Result<()> {
+pub(crate) fn ensure_mutation_allowed(self, operation: &str) -> anyhow::Result<()> {
     anyhow::ensure!(
         self.callback_depth == 0,
         "{operation} is not allowed during a text input callback"
@@ -2457,7 +2295,7 @@ Add these methods to `impl Window`:
 pub(crate) fn set_text_input_client(&self, client: Option<TextInputClient>) -> anyhow::Result<()> {
     let current = self.ime.get();
     current.ensure_mutation_allowed("text input client change")?;
-    if current.composition_active {
+    if current.is_composition_active() {
         self.finalize_composition()?;
     }
 
@@ -2472,10 +2310,11 @@ pub(crate) fn set_text_input_client(&self, client: Option<TextInputClient>) -> a
         if let Err(err) = self.destroy_caret() {
             log::warn!("DestroyCaret failed after clearing text input client: {err}");
         }
-    } else if !was_active && is_active {
-        if let Err(err) = self.create_caret() {
-            log::warn!("CreateCaret failed after registering text input client: {err}");
-        }
+    } else if !was_active
+        && is_active
+        && let Err(err) = self.create_caret()
+    {
+        log::warn!("CreateCaret failed after registering text input client: {err}");
     }
     if is_active {
         self.update_ime_windows();
@@ -2486,7 +2325,7 @@ pub(crate) fn set_text_input_client(&self, client: Option<TextInputClient>) -> a
 pub(crate) fn set_ime_enabled(&self, enabled: bool) -> anyhow::Result<()> {
     let current = self.ime.get();
     current.ensure_mutation_allowed("IME enablement change")?;
-    if current.enabled == enabled {
+    if current.is_enabled() == enabled {
         return Ok(());
     }
 
@@ -2498,7 +2337,7 @@ pub(crate) fn set_ime_enabled(&self, enabled: bool) -> anyhow::Result<()> {
             "ImmAssociateContextEx(IACE_DEFAULT) failed"
         );
         let mut ime = self.ime.get();
-        ime.enabled = true;
+        ime.set_enabled(true);
         self.ime.set(ime);
         if ime.is_active() {
             if let Err(err) = self.create_caret() {
@@ -2517,13 +2356,10 @@ pub(crate) fn set_ime_enabled(&self, enabled: bool) -> anyhow::Result<()> {
         );
         let mut ime = self.ime.get();
         let destroy_caret = ime.is_active();
-        ime.enabled = false;
-        ime.reset_pending_surrogate();
+        ime.set_enabled(false);
         self.ime.set(ime);
-        if destroy_caret {
-            if let Err(err) = self.destroy_caret() {
-                log::warn!("DestroyCaret failed after disabling IME: {err}");
-            }
+        if destroy_caret && let Err(err) = self.destroy_caret() {
+            log::warn!("DestroyCaret failed after disabling IME: {err}");
         }
     }
     Ok(())
@@ -2531,38 +2367,29 @@ pub(crate) fn set_ime_enabled(&self, enabled: bool) -> anyhow::Result<()> {
 
 fn finalize_composition(&self) -> anyhow::Result<()> {
     let current = self.ime.get();
-    if current.finalizing || !current.composition_active {
+    if current.is_finalizing() || !current.is_composition_active() {
         return Ok(());
     }
     let context = ImmContext::get(self.hwnd()).context("window has no input context")?;
-    let mut finalizing = self.ime.get();
-    finalizing.finalizing = true;
-    finalizing.advance_composition_revision();
-    self.ime.set(finalizing);
-    if current.app_has_marked_text {
-        let _ = self.with_enabled_client(|client| client.unmark_text());
-        // SAFETY: `context` owns the live window's valid HIMC.
-        let notified = unsafe {
-            ImmNotifyIME(context.himc(), NI_COMPOSITIONSTR, CPS_CANCEL, 0)
-        }
-        .as_bool();
-        self.clear_composition_state();
-        anyhow::ensure!(notified, "ImmNotifyIME(CPS_CANCEL) failed");
+    let mut ime = current;
+    ime.begin_finalizing();
+    self.ime.set(ime);
+    // CPS_CANCEL: the app renders the preedit — accept it app-side, then discard the IME's copy.
+    // CPS_COMPLETE synchronously reenters WM_IME_COMPOSITION with GCS_RESULTSTR; the finalizing
+    // arm of on_ime_composition routes it to insert_text.
+    let (action, action_name) = if current.app_has_marked_text() {
+        let _ = self.with_enabled_client(TextInputClient::unmark_text);
+        (CPS_CANCEL, "CPS_CANCEL")
     } else {
-        // CPS_COMPLETE synchronously reenters WM_IME_COMPOSITION with GCS_RESULTSTR; the
-        // finalizing arm of on_ime_composition routes it to insert_text.
-        // SAFETY: `context` owns the live window's valid HIMC.
-        let notified = unsafe {
-            ImmNotifyIME(context.himc(), NI_COMPOSITIONSTR, CPS_COMPLETE, 0)
-        }
-        .as_bool();
-        self.clear_composition_state();
-        anyhow::ensure!(notified, "ImmNotifyIME(CPS_COMPLETE) failed");
-    }
+        (CPS_COMPLETE, "CPS_COMPLETE")
+    };
+    let notified = context.notify_composition(action);
+    self.clear_composition_state();
+    anyhow::ensure!(notified, "ImmNotifyIME({action_name}) failed");
     Ok(())
 }
 
-pub(crate) fn ime_focus_gained(&self) -> anyhow::Result<()> {
+pub(crate) fn ime_focus_gained(&self) {
     let mut ime = self.ime.get();
     ime.set_focused(true);
     self.ime.set(ime);
@@ -2572,7 +2399,6 @@ pub(crate) fn ime_focus_gained(&self) -> anyhow::Result<()> {
         }
         self.update_ime_windows();
     }
-    Ok(())
 }
 
 pub(crate) fn ime_focus_lost(&self) -> anyhow::Result<()> {
@@ -2586,35 +2412,34 @@ pub(crate) fn ime_focus_lost(&self) -> anyhow::Result<()> {
     let destroy_caret = ime.is_active() && !focused;
     ime.set_focused(focused);
     self.ime.set(ime);
-    if destroy_caret {
-        if let Err(err) = self.destroy_caret() {
-            log::warn!("DestroyCaret failed after focus loss: {err}");
-        }
+    if destroy_caret && let Err(err) = self.destroy_caret() {
+        log::warn!("DestroyCaret failed after focus loss: {err}");
     }
     finalization
 }
 
 pub(crate) fn ime_teardown(&self) {
-    if self.ime.get().composition_active {
-        if let Err(err) = self.finalize_composition() {
-            log::warn!("finalizing IME during teardown failed: {err:#}");
-        }
+    if self.ime.get().is_composition_active()
+        && let Err(err) = self.finalize_composition()
+    {
+        log::warn!("finalizing IME during teardown failed: {err:#}");
     }
     let ime = self.ime.get();
-    if ime.enabled {
+    if ime.is_enabled() {
         // Null HIMC + flags 0 is the de-facto detach idiom (winit, GLFW); Learn documents
         // only the IACE_* flags.
         // SAFETY: teardown runs before `WM_NCDESTROY` releases the live HWND.
         if !unsafe { ImmAssociateContextEx(self.hwnd(), HIMC::default(), 0) }.as_bool() {
             log::warn!("ImmAssociateContextEx(detach during teardown) failed");
         }
-        if ime.is_active() {
-            if let Err(err) = self.destroy_caret() {
-                log::warn!("DestroyCaret during IME teardown failed: {err}");
-            }
+        if ime.is_active()
+            && let Err(err) = self.destroy_caret()
+        {
+            log::warn!("DestroyCaret during IME teardown failed: {err}");
         }
     }
-    self.ime.set(ImeState::detached());
+    // No state reset afterwards: WM_NCDESTROY removes the window property right after this
+    // returns, so nothing can observe the record again.
 }
 ```
 
@@ -2662,18 +2487,18 @@ propagates the callback-depth error.
 
 - [ ] **Step 5: Wire focus and Phase-1 forwarding**
 
-Add to `ime.rs`:
+Add to `event_loop.rs`:
 
 ```rust
-pub(crate) fn on_ime_startcomposition_phase1(window: &Window) -> Option<LRESULT> {
+fn on_ime_startcomposition_phase1(window: &Window) -> Option<LRESULT> {
     if window.active_client().is_some() {
-        window.ime_start(false);
+        window.ime_start();
         window.update_ime_windows();
     }
     None
 }
 
-pub(crate) fn on_ime_endcomposition_phase1(window: &Window) -> Option<LRESULT> {
+fn on_ime_endcomposition_phase1(window: &Window) -> Option<LRESULT> {
     window.clear_composition_state();
     None
 }
@@ -2695,9 +2520,7 @@ Add both helpers; they log lifecycle failure, then deliver the existing keyboard
 
 ```rust
 fn on_setfocus(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
-    if let Err(err) = window.ime_focus_gained() {
-        log::warn!("IME focus-gain update failed: {err:#}");
-    }
+    window.ime_focus_gained();
     event_loop.handle_event(window, Event::WindowKeyboardEnter)
 }
 
@@ -2712,7 +2535,7 @@ fn on_killfocus(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
 - [ ] **Step 6: Verify and commit**
 
 ```powershell
-cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::window::ime_state_tests::
+cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::ime::ime_state_tests::
 cargo check --manifest-path native/Cargo.toml -p desktop-win32
 git add native/desktop-win32/src/win32/ime.rs native/desktop-win32/src/win32/window.rs native/desktop-win32/src/win32/window_api.rs native/desktop-win32/src/win32/event_loop.rs
 git commit -m "feat(win32): manage IME lifecycle"
@@ -2727,11 +2550,10 @@ Expected: state tests pass; `cargo check` ends with `Finished`.
 **Files:**
 - Modify: `native/desktop-win32/src/win32/events.rs`
 - Modify: `native/desktop-win32/src/win32/event_loop.rs`
-- Modify: `native/desktop-win32/src/win32/ime.rs`
 
 **Interfaces:**
 - Consumes: `AutoDropStrPtr`, `RustAllocatedStrPtr`, and `EventLoop::handle_event`.
-- Produces: appended `Event::InputLanguageChanged`, `EventLoop::fire`, locale resolution, and a
+- Produces: appended `Event::InputLanguageChanged`, locale resolution, and a
   `WM_INPUTLANGCHANGE` handler that always falls through.
 
 - [ ] **Step 1: Append the ABI event**
@@ -2761,66 +2583,46 @@ impl From<InputLanguageChangedEvent> for Event {
 
 - [ ] **Step 2: Add dispatch and resolver code**
 
-Merge these imports into `ime.rs`:
+Merge `desktop_common::ffi_utils::RustAllocatedStrPtr`,
+`Globalization::LCIDToLocaleName`, and `System::SystemServices::LOCALE_NAME_MAX_LENGTH` into the
+`event_loop.rs` imports, then add the §6.5 handler and resolver to `event_loop.rs`:
 
 ```rust
-use desktop_common::ffi_utils::RustAllocatedStrPtr;
-use windows::Win32::{Foundation::{LPARAM, LRESULT}, Globalization::LCIDToLocaleName};
-use super::{
-    event_loop::EventLoop,
-    events::InputLanguageChangedEvent,
-    window::Window,
-};
-```
-
-Add beside `EventLoop::handle_event`:
-
-```rust
-pub(crate) fn fire<T: Into<Event>>(&self, window: &Window, event: T) {
-    let _ = self.handle_event(window, event);
+fn on_inputlangchange(event_loop: &EventLoop, window: &Window, lparam: LPARAM) -> Option<LRESULT> {
+    let hkl = lparam.0.cast_unsigned();
+    let langid = u32::from(LOWORD!(hkl));
+    let locale_name = RustAllocatedStrPtr::allocate(resolve_locale_name(langid))
+        .inspect_err(|err| log::error!("Failed to allocate the locale name: {err:?}"))
+        .unwrap_or_else(|_| RustAllocatedStrPtr::null())
+        .to_auto_drop();
+    let _ = event_loop.handle_event(window, InputLanguageChangedEvent { hkl, locale_name });
+    None
 }
-```
 
-Add to `ime.rs`:
-
-```rust
 fn resolve_locale_name(langid: u32) -> String {
-    let mut buffer = [0u16; 85];
+    let mut buffer = [0u16; LOCALE_NAME_MAX_LENGTH as usize];
     // SAFETY: the buffer is writable for `LOCALE_NAME_MAX_LENGTH` UTF-16 units; a LANGID is a
     // valid SORT_DEFAULT LCID because its high word is zero.
     let length = unsafe { LCIDToLocaleName(langid, Some(buffer.as_mut_slice()), 0) };
-    if length > 1 {
-        let content_length = usize::try_from(length - 1).unwrap_or_default();
-        String::from_utf16_lossy(&buffer[..content_length])
+    // The returned length counts the trailing NUL.
+    if let Ok(length) = usize::try_from(length)
+        && length > 1
+    {
+        String::from_utf16_lossy(&buffer[..length - 1])
     } else {
         String::new()
     }
 }
-
-pub(crate) fn on_inputlangchange(
-    event_loop: &EventLoop,
-    window: &Window,
-    lparam: LPARAM,
-) -> Option<LRESULT> {
-    let hkl = lparam.0 as usize;
-    let langid = u32::try_from(hkl & 0xFFFF).unwrap_or_default();
-    let locale_name = RustAllocatedStrPtr::allocate(resolve_locale_name(langid))
-        .unwrap_or_else(|_| RustAllocatedStrPtr::null())
-        .to_auto_drop();
-    event_loop.fire(window, InputLanguageChangedEvent { hkl, locale_name });
-    None
-}
 ```
 
-In `event_loop.rs`, merge `WM_INPUTLANGCHANGE` into the existing `WindowsAndMessaging` import and
-`on_inputlangchange` into the existing `ime::{...}` entry in the `use super::{...}` group. Then add
+Merge `WM_INPUTLANGCHANGE` into the existing `WindowsAndMessaging` import, then add
 `WM_INPUTLANGCHANGE => on_inputlangchange(self, window, lparam),` to the dispatch table.
 
 - [ ] **Step 3: Verify and commit**
 
 ```powershell
 cargo check --manifest-path native/Cargo.toml -p desktop-win32
-git add native/desktop-win32/src/win32/events.rs native/desktop-win32/src/win32/event_loop.rs native/desktop-win32/src/win32/ime.rs
+git add native/desktop-win32/src/win32/events.rs native/desktop-win32/src/win32/event_loop.rs
 git commit -m "feat(win32): report input language changes"
 ```
 
@@ -2835,7 +2637,8 @@ Expected: `cargo check` ends with `Finished`; the new event is the last enum tag
 - Modify: `native/desktop-win32/src/win32/mod.rs`
 
 **Interfaces:**
-- Consumes: `window_api::{with_window, WindowPtr}`, `ime::TextInputClient`, and Task-5 methods.
+- Consumes: `window_api::{with_window, WindowPtr}`, `text_input_client::TextInputClient`, and
+  Task-5 methods.
 - Produces: all five C exports consumed by Task 8.
 
 - [ ] **Step 1: Create the complete API module**
@@ -2844,7 +2647,7 @@ Create the complete file:
 
 ```rust
 use super::{
-    ime::TextInputClient,
+    text_input_client::TextInputClient,
     window_api::{WindowPtr, with_window},
 };
 
@@ -2992,8 +2795,7 @@ class TextInputClientTests {
     @Test
     fun `selected range callback writes caller storage`() = Arena.ofConfined().use { arena ->
         val holder = TextInputClientHolder()
-        val client = RecordingClient()
-        holder.replace(client) { assertSame(TextInputClient.Noop, holder.textInputClient) }
+        holder.textInputClient = RecordingClient()
         val native = NativeTextRange.allocate(arena)
         holder.selectedRangeCallback(native)
         assertEquals(TextRange(3, 0), TextRange.fromNative(native))
@@ -3003,7 +2805,7 @@ class TextInputClientTests {
     @Test
     fun `caret callback reads range and writes inline rect`() = Arena.ofConfined().use { arena ->
         val holder = TextInputClientHolder()
-        holder.replace(RecordingClient()) {}
+        holder.textInputClient = RecordingClient()
         val args = NativeCaretRectArgs.allocate(arena)
         TextRange(9, 0).toNative(NativeCaretRectArgs.range_in(args))
         holder.caretRectCallback(args)
@@ -3042,25 +2844,19 @@ class TextInputClientTests {
     }
 
     @Test
-    fun `replace and clear switch recipient only after native success`() {
+    fun `holder starts with the noop recipient`() {
         val holder = TextInputClientHolder()
-        val first = RecordingClient()
-        val second = RecordingClient()
-        holder.replace(first) { assertSame(TextInputClient.Noop, holder.textInputClient) }
-        holder.replace(second) { assertSame(first, holder.textInputClient) }
-        holder.clear { assertSame(second, holder.textInputClient) }
         assertSame(TextInputClient.Noop, holder.textInputClient)
         holder.close()
     }
 
     @Test
-    fun `holder owns one table until idempotent close`() {
+    fun `holder owns one table until close`() {
         val holder = TextInputClientHolder()
         val table = holder.native
         assertTrue(table.scope().isAlive)
         holder.close()
         assertFalse(table.scope().isAlive)
-        holder.close()
     }
 
     @Test
@@ -3212,7 +3008,6 @@ internal fun readUnderlines(native: MemorySegment): List<UnderlineSegment> {
 
 internal class TextInputClientHolder : AutoCloseable {
     private val arena: Arena = Arena.ofShared()
-    private var closed: Boolean = false
     internal var textInputClient: TextInputClient = TextInputClient.Noop
 
     internal val native: MemorySegment = NativeTextInputClient.allocate(arena).also { table ->
@@ -3225,16 +3020,6 @@ internal class TextInputClientHolder : AutoCloseable {
             table,
             NativeDiscardMarkedTextCallback.allocate(this::discardMarkedTextCallback, arena),
         )
-    }
-
-    internal fun replace(client: TextInputClient, registerNative: (MemorySegment) -> Unit) {
-        registerNative(native)
-        textInputClient = client
-    }
-
-    internal fun clear(clearNative: () -> Unit) {
-        clearNative()
-        textInputClient = TextInputClient.Noop
     }
 
     internal fun selectedRangeCallback(rangeOut: MemorySegment) = ffiUpCall {
@@ -3262,12 +3047,13 @@ internal class TextInputClientHolder : AutoCloseable {
     internal fun discardMarkedTextCallback() = ffiUpCall { textInputClient.discardMarkedText() }
 
     override fun close() {
-        if (closed) return
-        closed = true
         arena.close()
     }
 }
 ```
+
+The holder is a dumb table: sequencing (native downcall first, recipient swap after) lives at the
+call sites in `Window`, and `Window.closed` already guards double close.
 
 - [ ] **Step 5: Make `Window` own the holder and expose the five operations**
 
@@ -3276,15 +3062,15 @@ Add `private val textInputClientHolder = TextInputClientHolder()` and
 
 ```kotlin
 public fun setTextInputClient(client: TextInputClient) {
-    textInputClientHolder.replace(client) { native ->
-        ffiDownCall { desktop_win32_h.window_set_text_input_client(ptr, native) }
-    }
+    // The downcall can finalize a live composition, which calls back into the previous
+    // client; swap the recipient only after the native side has switched over.
+    ffiDownCall { desktop_win32_h.window_set_text_input_client(ptr, textInputClientHolder.native) }
+    textInputClientHolder.textInputClient = client
 }
 
 public fun clearTextInputClient() {
-    textInputClientHolder.clear {
-        ffiDownCall { desktop_win32_h.window_clear_text_input_client(ptr) }
-    }
+    ffiDownCall { desktop_win32_h.window_clear_text_input_client(ptr) }
+    textInputClientHolder.textInputClient = TextInputClient.Noop
 }
 
 public fun setImeEnabled(enabled: Boolean) {
@@ -3305,9 +3091,7 @@ Replace `close` with this idempotent order. Do not close the holder from `clearT
 ```kotlin
 override fun close() {
     if (closed) return
-    textInputClientHolder.clear {
-        ffiDownCall { desktop_win32_h.window_clear_text_input_client(ptr) }
-    }
+    clearTextInputClient()
     ffiDownCall { desktop_win32_h.window_drop(ptr) }
     closed = true
     textInputClientHolder.close()
@@ -3821,8 +3605,8 @@ git commit -m "feat(win32): add editable IME sample"
 - Modify: `native/desktop-win32/src/win32/ime.rs`
 
 **Interfaces:**
-- Consumes: IMM constants, `ImmContext::himc`, and Task-1 range/underline types.
-- Produces: injectable `CompositionSource`, pure byte decoders, `PreeditSnapshot`, and
+- Consumes: IMM constants, the private `ImmContext` transport, and Task-1 range/underline types.
+- Produces: injectable `CompositionSource`, the `u32` clause decoder, `PreeditSnapshot`, and
   `CompositionSnapshot::read` for Tasks 11–12.
 
 - [ ] **Step 1: Write failing decoder/source tests**
@@ -3830,8 +3614,8 @@ git commit -m "feat(win32): add editable IME sample"
 Append to `ime.rs::tests`:
 
 ```rust
-fn utf16_bytes(value: &str) -> Vec<u8> {
-    value.encode_utf16().flat_map(u16::to_ne_bytes).collect()
+fn utf16_units(value: &str) -> Vec<u16> {
+    value.encode_utf16().collect()
 }
 
 fn u32_bytes(values: &[u32]) -> Vec<u8> {
@@ -3840,24 +3624,36 @@ fn u32_bytes(values: &[u32]) -> Vec<u8> {
 
 #[derive(Default)]
 struct FakeSource {
-    result: Vec<u8>,
-    composition: Vec<u8>,
+    result: Vec<u16>,
+    composition: Vec<u16>,
     attributes: Vec<u8>,
     clauses: Vec<u8>,
     cursor: Option<usize>,
     fail_on: Option<IME_COMPOSITION_STRING>,
 }
 
+impl FakeSource {
+    fn ensure_available(&self, which: IME_COMPOSITION_STRING) -> anyhow::Result<()> {
+        anyhow::ensure!(self.fail_on != Some(which), "injected {which:?} failure");
+        Ok(())
+    }
+}
+
 impl CompositionSource for FakeSource {
     fn bytes(&self, which: IME_COMPOSITION_STRING) -> anyhow::Result<Vec<u8>> {
-        if self.fail_on == Some(which) {
-            anyhow::bail!("injected {which:?} failure");
-        }
+        self.ensure_available(which)?;
+        Ok(match which {
+            GCS_COMPATTR => self.attributes.clone(),
+            GCS_COMPCLAUSE => self.clauses.clone(),
+            _ => Vec::new(),
+        })
+    }
+
+    fn utf16(&self, which: IME_COMPOSITION_STRING) -> anyhow::Result<Vec<u16>> {
+        self.ensure_available(which)?;
         Ok(match which {
             GCS_RESULTSTR => self.result.clone(),
             GCS_COMPSTR => self.composition.clone(),
-            GCS_COMPATTR => self.attributes.clone(),
-            GCS_COMPCLAUSE => self.clauses.clone(),
             _ => Vec::new(),
         })
     }
@@ -3868,8 +3664,7 @@ impl CompositionSource for FakeSource {
 }
 
 #[test]
-fn byte_decoders_reject_misaligned_data() {
-    assert!(decode_utf16_bytes(&[1]).is_err());
+fn u32_decoder_rejects_misaligned_data() {
     assert!(decode_u32_bytes(&[0, 0, 0]).is_err());
 }
 
@@ -3913,7 +3708,7 @@ fn malformed_clauses_fall_back_to_whole_preedit() {
 #[test]
 fn partial_preedit_flags_refetch_complete_preedit() {
     let source = FakeSource {
-        composition: utf16_bytes("かな"),
+        composition: utf16_units("かな"),
         attributes: vec![u8::try_from(ATTR_INPUT).unwrap(), u8::try_from(ATTR_INPUT).unwrap()],
         clauses: u32_bytes(&[0, 2]),
         cursor: Some(1),
@@ -3930,8 +3725,8 @@ fn partial_preedit_flags_refetch_complete_preedit() {
 #[test]
 fn snapshot_reads_result_and_new_preedit_together() {
     let source = FakeSource {
-        result: utf16_bytes("確定"),
-        composition: utf16_bytes("つぎ"),
+        result: utf16_units("確定"),
+        composition: utf16_units("つぎ"),
         cursor: Some(1),
         ..Default::default()
     };
@@ -3947,7 +3742,7 @@ fn empty_preedit_is_present_and_cursor_is_clamped() {
     assert!(!empty.cancelled);
 
     let source = FakeSource {
-        composition: utf16_bytes("かな"),
+        composition: utf16_units("かな"),
         cursor: Some(99),
         ..Default::default()
     };
@@ -3958,7 +3753,7 @@ fn empty_preedit_is_present_and_cursor_is_clamped() {
 #[test]
 fn hidden_cursor_renders_preedit_without_selection() {
     let source = FakeSource {
-        composition: utf16_bytes("かな"),
+        composition: utf16_units("かな"),
         cursor: None,
         ..Default::default()
     };
@@ -3977,7 +3772,7 @@ fn status_only_mask_is_cancellation() {
 #[test]
 fn optional_decoration_failure_uses_fallback() {
     let source = FakeSource {
-        composition: utf16_bytes("かな"),
+        composition: utf16_units("かな"),
         fail_on: Some(GCS_COMPATTR),
         ..Default::default()
     };
@@ -3992,74 +3787,63 @@ fn core_read_failure_is_returned_before_any_action() {
 }
 ```
 
-Run `cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::ime::tests::byte_decoders`.
+Run `cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::ime::tests::u32_decoder`.
 
-Expected: compilation fails because the source, decoders, and snapshots are missing.
+Expected: compilation fails because the source, decoder, and snapshots are missing.
 
 - [ ] **Step 2: Add the source abstraction and production transport**
 
-Add `use std::mem::size_of;` and merge these symbols into the existing IMM import:
+Merge these symbols into the existing IMM import:
 
 ```rust
 use windows::Win32::UI::Input::Ime::{
     ATTR_CONVERTED, ATTR_FIXEDCONVERTED, ATTR_INPUT, ATTR_TARGET_CONVERTED,
-    ATTR_TARGET_NOTCONVERTED, CS_INSERTCHAR, CS_NOMOVECARET, GCS_COMPATTR, GCS_COMPCLAUSE, GCS_COMPREADATTR,
+    ATTR_TARGET_NOTCONVERTED, GCS_COMPATTR, GCS_COMPCLAUSE, GCS_COMPREADATTR,
     GCS_COMPREADCLAUSE, GCS_COMPREADSTR, GCS_COMPSTR, GCS_CURSORPOS, GCS_DELTASTART,
     GCS_RESULTCLAUSE, GCS_RESULTREADCLAUSE, GCS_RESULTREADSTR, GCS_RESULTSTR,
     IME_COMPOSITION_STRING, ImmGetCompositionStringW,
 };
 ```
 
-```rust
-trait CompositionSource {
-    fn bytes(&self, which: IME_COMPOSITION_STRING) -> anyhow::Result<Vec<u8>>;
-    /// `None` when the IME shows no composition cursor.
-    fn cursor(&self) -> Option<usize>;
-}
+Add the generic two-call transport as a private `ImmContext` method — the payload buffer is sized
+in its natural element type, so UTF-16 strings are read directly into `Vec<u16>`:
 
-impl CompositionSource for ImmContext {
-    fn bytes(&self, which: IME_COMPOSITION_STRING) -> anyhow::Result<Vec<u8>> {
+```rust
+impl ImmContext {
+    /// Two-call `ImmGetCompositionStringW` transport: probe for the byte size, then fill.
+    fn composition_payload<T: Copy + Default>(&self, which: IME_COMPOSITION_STRING) -> anyhow::Result<Vec<T>> {
         // SAFETY: this guard owns a valid HIMC; null buffer and zero size is the documented probe.
-        let required = unsafe { ImmGetCompositionStringW(self.himc(), which, None, 0) };
+        let required = unsafe { ImmGetCompositionStringW(self.himc, which, None, 0) };
         anyhow::ensure!(required >= 0, "ImmGetCompositionStringW({which:?}) probe failed: {required}");
-        if required == 0 {
+        let byte_count = usize::try_from(required)?;
+        anyhow::ensure!(
+            byte_count.is_multiple_of(size_of::<T>()),
+            "ImmGetCompositionStringW({which:?}) returned a misaligned byte count: {byte_count}"
+        );
+        if byte_count == 0 {
             return Ok(Vec::new());
         }
-        let capacity = usize::try_from(required)?;
-        let capacity_u32 = u32::try_from(capacity)?;
-        let mut bytes = vec![0u8; capacity];
-        // SAFETY: `bytes` is writable for exactly `capacity_u32` bytes and this guard owns the HIMC.
-        let written = unsafe {
-            ImmGetCompositionStringW(self.himc(), which, Some(bytes.as_mut_ptr().cast()), capacity_u32)
-        };
+        let mut payload = vec![T::default(); byte_count / size_of::<T>()];
+        // SAFETY: `payload` is writable for exactly `byte_count` bytes and this guard owns the HIMC.
+        let written = unsafe { ImmGetCompositionStringW(self.himc, which, Some(payload.as_mut_ptr().cast()), u32::try_from(byte_count)?) };
         anyhow::ensure!(written >= 0, "ImmGetCompositionStringW({which:?}) fill failed: {written}");
         let written = usize::try_from(written)?;
-        anyhow::ensure!(written <= capacity, "ImmGetCompositionStringW({which:?}) returned {written} > {capacity}");
-        bytes.truncate(written);
-        Ok(bytes)
-    }
-
-    fn cursor(&self) -> Option<usize> {
-        // SAFETY: this guard owns a valid HIMC; `GCS_CURSORPOS` returns the scalar as the result.
-        let cursor = unsafe { ImmGetCompositionStringW(self.himc(), GCS_CURSORPOS, None, 0) };
-        // A negative value is the documented "no visible cursor" state, not an IMM error.
-        usize::try_from(cursor).ok()
+        anyhow::ensure!(
+            written <= byte_count,
+            "ImmGetCompositionStringW({which:?}) returned {written} > {byte_count}"
+        );
+        payload.truncate(written / size_of::<T>());
+        Ok(payload)
     }
 }
 ```
 
-- [ ] **Step 3: Add pure decoders and underline mapping**
+Add the `CompositionSource` trait and its `ImmContext` impl from §7.3 (`bytes`, `utf16`, and
+`cursor`; the first two delegate to `composition_payload`).
+
+- [ ] **Step 3: Add the clause decoder and underline mapping**
 
 ```rust
-fn decode_utf16_bytes(bytes: &[u8]) -> anyhow::Result<String> {
-    anyhow::ensure!(bytes.len() % size_of::<u16>() == 0, "odd UTF-16 byte count: {}", bytes.len());
-    let units = bytes
-        .chunks_exact(size_of::<u16>())
-        .map(|pair| u16::from_ne_bytes([pair[0], pair[1]]))
-        .collect::<Vec<_>>();
-    Ok(String::from_utf16_lossy(&units))
-}
-
 fn decode_u32_bytes(bytes: &[u8]) -> anyhow::Result<Vec<u32>> {
     anyhow::ensure!(bytes.len() % size_of::<u32>() == 0, "unaligned u32 byte count: {}", bytes.len());
     Ok(bytes
@@ -4137,10 +3921,11 @@ const GCS_PREEDIT_UPDATE: u32 = GCS_COMPSTR.0
 
 ```rust
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct PreeditSnapshot {
-    text: String,
-    selected: TextRange,
-    underlines: Vec<UnderlineSegment>,
+pub(crate) struct PreeditSnapshot {
+    pub(crate) text: String,
+    /// `TextRange::none()` when the IME shows no composition cursor.
+    pub(crate) selected: TextRange,
+    pub(crate) underlines: Vec<UnderlineSegment>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -4153,12 +3938,16 @@ struct CompositionSnapshot {
 impl CompositionSnapshot {
     fn read(source: &impl CompositionSource, gcs: u32) -> anyhow::Result<Self> {
         let result = (gcs & GCS_RESULTSTR.0 != 0)
-            .then(|| source.bytes(GCS_RESULTSTR).and_then(|bytes| decode_utf16_bytes(&bytes)))
+            .then(|| source.utf16(GCS_RESULTSTR).map(|units| String::from_utf16_lossy(&units)))
             .transpose()?;
         let preedit = if gcs & GCS_PREEDIT_UPDATE != 0 {
-            let text = decode_utf16_bytes(&source.bytes(GCS_COMPSTR)?)?;
-            let length = text.encode_utf16().count();
-            let cursor = source.cursor()?.min(length);
+            let units = source.utf16(GCS_COMPSTR)?;
+            let length = units.len();
+            let text = String::from_utf16_lossy(&units);
+            let selected = source.cursor().map_or_else(TextRange::none, |cursor| TextRange {
+                location: cursor.min(length),
+                length: 0,
+            });
             let underlines = match (
                 source.bytes(GCS_COMPATTR),
                 source.bytes(GCS_COMPCLAUSE).and_then(|bytes| decode_u32_bytes(&bytes)),
@@ -4169,11 +3958,7 @@ impl CompositionSnapshot {
                     fallback_underlines(length)
                 }
             };
-            Some(PreeditSnapshot {
-                text,
-                selected: TextRange { location: cursor, length: 0 },
-                underlines,
-            })
+            Some(PreeditSnapshot { text, selected, underlines })
         } else {
             None
         };
@@ -4195,124 +3980,140 @@ Expected: decoder/source tests pass; `cargo check` ends with `Finished`.
 
 ---
 
-### Task 11: Pure composition reducer
+### Task 11: Revision-guarded composition apply
 
 **Files:**
 - Modify: `native/desktop-win32/src/win32/ime.rs`
 
 **Interfaces:**
 - Consumes: `CompositionSnapshot` from Task 10.
-- Produces: ordered `CompositionAction` values and `reduce_composition`, testable without Win32 or
+- Produces: injectable `CompositionSink` and `apply_composition` — one function that delivers a
+  snapshot with direct, revision-checked calls in a fixed order — testable without Win32 or
   Kotlin callbacks.
 
-- [ ] **Step 1: Write failing reducer tests**
+- [ ] **Step 1: Write failing apply-order tests**
+
+The `FakeSink` records every callback in order (Task 12 extends it with reentrancy injection):
 
 ```rust
 #[test]
-fn reducer_commits_before_starting_next_preedit() {
-    let preedit = PreeditSnapshot {
-        text: "つぎ".to_owned(),
-        selected: TextRange { location: 1, length: 0 },
-        underlines: fallback_underlines(2),
+fn apply_commits_result_before_starting_next_preedit() {
+    let sink = FakeSink::default();
+    let source = FakeSource {
+        result: utf16_units("確定"),
+        composition: utf16_units("つぎ"),
+        cursor: Some(1),
+        ..Default::default()
     };
-    let actions = reduce_composition(CompositionSnapshot {
-        result: Some("確定".to_owned()),
-        preedit: Some(preedit.clone()),
-        cancelled: false,
-    });
-    assert_eq!(
-        actions,
-        vec![
-            CompositionAction::Insert("確定".to_owned()),
-            CompositionAction::SetAppMarked(false),
-            CompositionAction::SetAppMarked(true),
-            CompositionAction::SetMarked(preedit),
-            CompositionAction::UpdateWindows,
-        ],
-    );
+    apply_owned_composition(&sink, &source, GCS_RESULTSTR.0 | GCS_COMPSTR.0);
+    assert_eq!(&*sink.callbacks.borrow(), &["insert", "set_marked", "update_windows"]);
+    assert_eq!(&*sink.inserted.borrow(), &["確定"]);
+    assert!(sink.app_marked.get());
 }
 
 #[test]
-fn reducer_distinguishes_empty_preedit_and_cancel() {
-    let empty = PreeditSnapshot {
-        text: String::new(),
-        selected: TextRange { location: 0, length: 0 },
-        underlines: Vec::new(),
-    };
-    assert_eq!(
-        reduce_composition(CompositionSnapshot { result: None, preedit: Some(empty), cancelled: false }),
-        vec![CompositionAction::DiscardMarked, CompositionAction::SetAppMarked(false), CompositionAction::UpdateWindows],
-    );
-    assert_eq!(
-        reduce_composition(CompositionSnapshot { result: None, preedit: None, cancelled: true }),
-        vec![CompositionAction::ClearComposition, CompositionAction::DiscardMarked],
-    );
+fn apply_distinguishes_empty_preedit_and_cancel() {
+    let empty_preedit = FakeSink::default();
+    empty_preedit.app_marked.set(true);
+    apply_owned_composition(&empty_preedit, &FakeSource::default(), GCS_COMPSTR.0);
+    assert_eq!(&*empty_preedit.callbacks.borrow(), &["discard", "update_windows"]);
+    assert!(!empty_preedit.app_marked.get());
+
+    let cancel = FakeSink::default();
+    cancel.composition_active.set(true);
+    cancel.app_marked.set(true);
+    apply_owned_composition(&cancel, &FakeSource::default(), 0);
+    assert_eq!(&*cancel.callbacks.borrow(), &["discard"]);
+    assert!(!cancel.composition_active.get());
+    assert!(!cancel.app_marked.get());
 }
 
 #[test]
-fn reducer_accepts_post_end_result_without_active_composition() {
-    assert_eq!(
-        reduce_composition(CompositionSnapshot {
-            result: Some("한".to_owned()),
-            preedit: None,
-            cancelled: false,
-        }),
-        vec![CompositionAction::Insert("한".to_owned()), CompositionAction::SetAppMarked(false)],
-    );
+fn owned_post_end_result_is_still_applied() {
+    let sink = FakeSink::default();
+    let source = FakeSource { result: utf16_units("한"), ..Default::default() };
+    apply_owned_composition(&sink, &source, GCS_RESULTSTR.0);
+    assert_eq!(&*sink.callbacks.borrow(), &["insert"]);
 }
 ```
 
 Run `cargo test --manifest-path native/Cargo.toml -p desktop-win32
-win32::ime::tests::reducer_commits_before_starting_next_preedit`.
+win32::ime::tests::apply_commits_result_before_starting_next_preedit`.
 
-Expected: compilation fails because the action/reducer types are missing.
+Expected: compilation fails because the sink trait and apply functions are missing.
 
-- [ ] **Step 2: Implement the reducer**
+- [ ] **Step 2: Implement the sink and the apply function**
 
 ```rust
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum CompositionAction {
-    Insert(String),
-    SetMarked(PreeditSnapshot),
-    DiscardMarked,
-    SetAppMarked(bool),
-    ClearComposition,
-    UpdateWindows,
+pub(crate) trait CompositionSink {
+    fn revision(&self) -> u64;
+    fn set_app_marked(&self, value: bool) -> u64;
+    fn clear_composition(&self) -> u64;
+    fn insert_text(&self, text: &str);
+    fn set_marked_text(&self, preedit: &PreeditSnapshot);
+    fn discard_marked_text(&self);
+    fn update_windows(&self);
 }
 
-fn reduce_composition(snapshot: CompositionSnapshot) -> Vec<CompositionAction> {
-    let mut actions = Vec::new();
+/// Deliver one composition snapshot to the sink. Every client callback can synchronously reenter
+/// composition teardown (a nested END or focus loss); comparing the revision after each callback
+/// against the last state transition this function made detects that and abandons the remaining,
+/// now-stale steps.
+fn apply_composition(sink: &impl CompositionSink, snapshot: CompositionSnapshot) {
+    let mut expected_revision = sink.revision();
     if let Some(result) = snapshot.result.filter(|text| !text.is_empty()) {
-        actions.push(CompositionAction::Insert(result));
-        actions.push(CompositionAction::SetAppMarked(false));
+        sink.insert_text(&result);
+        if sink.revision() != expected_revision {
+            return;
+        }
+        expected_revision = sink.set_app_marked(false);
     }
     if let Some(preedit) = snapshot.preedit {
         if preedit.text.is_empty() {
-            actions.push(CompositionAction::DiscardMarked);
-            actions.push(CompositionAction::SetAppMarked(false));
+            sink.discard_marked_text();
+            if sink.revision() != expected_revision {
+                return;
+            }
+            sink.set_app_marked(false);
         } else {
-            actions.push(CompositionAction::SetAppMarked(true));
-            actions.push(CompositionAction::SetMarked(preedit));
+            expected_revision = sink.set_app_marked(true);
+            sink.set_marked_text(&preedit);
+            if sink.revision() != expected_revision {
+                return;
+            }
         }
-        actions.push(CompositionAction::UpdateWindows);
+        sink.update_windows();
     } else if snapshot.cancelled {
-        actions.push(CompositionAction::ClearComposition);
-        actions.push(CompositionAction::DiscardMarked);
+        sink.clear_composition();
+        sink.discard_marked_text();
     }
-    actions
+}
+
+pub(crate) fn apply_owned_composition(sink: &impl CompositionSink, source: &impl CompositionSource, gcs: u32) {
+    match CompositionSnapshot::read(source, gcs) {
+        Ok(snapshot) => apply_composition(sink, snapshot),
+        Err(err) => log::warn!("reading IME composition failed; keeping ownership until next update or END: {err:#}"),
+    }
 }
 ```
+
+State transitions land *before* their corresponding client mutation (`set_app_marked(true)` before
+`set_marked_text`), and commit / empty-preedit callbacks keep the previous marked state during the
+callback so a nested focus loss still takes the Phase-2 cancel path. No revision check follows the
+final call of a branch — there is nothing left to abort. `apply_owned_composition` returns nothing:
+a failed core read logs, keeps message ownership, and recovers on the next update or END, and no
+caller distinguishes that from the applied case.
 
 - [ ] **Step 3: Verify and commit**
 
 ```powershell
-cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::ime::tests::reducer_
+cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::ime::tests::apply_
 cargo check --manifest-path native/Cargo.toml -p desktop-win32
 git add native/desktop-win32/src/win32/ime.rs
 git commit -m "feat(win32): reduce IME composition updates"
 ```
 
-Expected: all reducer tests pass; `cargo check` ends with `Finished`.
+Expected: all apply tests pass; `cargo check` ends with `Finished`.
 
 ---
 
@@ -4323,11 +4124,12 @@ Expected: all reducer tests pass; `cargo check` ends with `Finished`.
 - Modify: `native/desktop-win32/src/win32/event_loop.rs`
 
 **Interfaces:**
-- Consumes: Task-10 snapshot reader, Task-11 reducer, and Task-2 enabled-client/state helpers.
-- Produces: injectable `CompositionSink`, revision-guarded action application, and gated
+- Consumes: Task-10 snapshot reader, the Task-11 apply function, and Task-2 enabled-client/state
+  helpers.
+- Produces: the `Window` sink impl, the finalizing delivery path, and gated
   SETCONTEXT/START/COMPOSITION/END ownership with inline preedit and owned read-error recovery.
 
-- [ ] **Step 1: Write failing action-driver and owned-read tests**
+- [ ] **Step 1: Write failing reentrancy and owned-read tests**
 
 ```rust
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -4342,12 +4144,13 @@ struct FakeSink {
     composition_active: Cell<bool>,
     app_marked: Cell<bool>,
     callbacks: RefCell<Vec<&'static str>>,
+    inserted: RefCell<Vec<String>>,
     reenter_on: Option<ReenterOn>,
 }
 
 impl FakeSink {
     fn advance_revision(&self) -> u64 {
-        let next = self.revision.get().checked_add(1).expect("fake revision overflow");
+        let next = self.revision.get() + 1;
         self.revision.set(next);
         next
     }
@@ -4374,42 +4177,44 @@ impl CompositionSink for FakeSink {
         self.app_marked.set(false);
         self.advance_revision()
     }
-    fn insert_text(&self, _text: &str) { self.callback("insert", ReenterOn::Insert); }
+    fn insert_text(&self, text: &str) {
+        self.inserted.borrow_mut().push(text.to_owned());
+        self.callback("insert", ReenterOn::Insert);
+    }
     fn set_marked_text(&self, _preedit: &PreeditSnapshot) { self.callback("set_marked", ReenterOn::SetMarked); }
     fn discard_marked_text(&self) { self.callbacks.borrow_mut().push("discard"); }
     fn update_windows(&self) { self.callbacks.borrow_mut().push("update_windows"); }
 }
 
 #[test]
-fn action_driver_stops_after_reentrant_end_during_insert() {
+fn apply_stops_after_reentrant_end_during_insert() {
     let sink = FakeSink { reenter_on: Some(ReenterOn::Insert), ..Default::default() };
     sink.app_marked.set(true);
-    apply_composition_actions(&sink, vec![
-        CompositionAction::Insert("commit".to_owned()),
-        CompositionAction::SetAppMarked(false),
-        CompositionAction::SetAppMarked(true),
-        CompositionAction::SetMarked(PreeditSnapshot {
+    apply_composition(&sink, CompositionSnapshot {
+        result: Some("commit".to_owned()),
+        preedit: Some(PreeditSnapshot {
             text: "stale".to_owned(),
             selected: TextRange { location: 0, length: 0 },
             underlines: Vec::new(),
         }),
-    ]);
+        cancelled: false,
+    });
     assert_eq!(&*sink.callbacks.borrow(), &["insert"]);
     assert!(!sink.app_marked.get());
 }
 
 #[test]
-fn action_driver_stops_before_positioning_after_reentrant_focus_loss() {
+fn apply_stops_before_positioning_after_reentrant_focus_loss() {
     let sink = FakeSink { reenter_on: Some(ReenterOn::SetMarked), ..Default::default() };
-    apply_composition_actions(&sink, vec![
-        CompositionAction::SetAppMarked(true),
-        CompositionAction::SetMarked(PreeditSnapshot {
+    apply_composition(&sink, CompositionSnapshot {
+        result: None,
+        preedit: Some(PreeditSnapshot {
             text: "preedit".to_owned(),
             selected: TextRange { location: 0, length: 0 },
             underlines: Vec::new(),
         }),
-        CompositionAction::UpdateWindows,
-    ]);
+        cancelled: false,
+    });
     assert_eq!(&*sink.callbacks.borrow(), &["set_marked"]);
     assert!(!sink.app_marked.get());
 }
@@ -4421,48 +4226,26 @@ fn owned_core_read_failure_preserves_sink_state() {
     sink.composition_active.set(true);
     sink.app_marked.set(true);
     let source = FakeSource { fail_on: Some(GCS_COMPSTR), ..Default::default() };
-    assert_eq!(
-        apply_owned_composition(&sink, &source, GCS_COMPSTR.0),
-        OwnedCompositionResult::ReadFailed,
-    );
+    apply_owned_composition(&sink, &source, GCS_COMPSTR.0);
     assert_eq!(sink.revision.get(), 7);
     assert!(sink.composition_active.get());
     assert!(sink.app_marked.get());
     assert!(sink.callbacks.borrow().is_empty());
 }
-
-#[test]
-fn owned_post_end_result_is_still_applied() {
-    let sink = FakeSink::default();
-    let source = FakeSource { result: utf16_bytes("한"), ..Default::default() };
-    assert_eq!(
-        apply_owned_composition(&sink, &source, GCS_RESULTSTR.0),
-        OwnedCompositionResult::Applied,
-    );
-    assert_eq!(&*sink.callbacks.borrow(), &["insert"]);
-}
 ```
 
 Add `use std::cell::{Cell, RefCell};` inside `ime.rs::tests`, then run
 `cargo test --manifest-path native/Cargo.toml -p desktop-win32
-win32::ime::tests::action_driver_stops_after_reentrant_end_during_insert`.
+win32::ime::tests::apply_stops_after_reentrant_end_during_insert`.
 
-Expected: compilation fails because `CompositionSink`, `OwnedCompositionResult`, and the action
-driver do not exist.
+Expected: the reentrancy tests fail until the `Window` sink impl and handlers below exist (the
+apply function itself landed in Task 11).
 
-- [ ] **Step 2: Add revision-aware action application**
+- [ ] **Step 2: Give `Window` the sink impl and the finalizing delivery path**
+
+Add to `window.rs` (this is where every callee lives):
 
 ```rust
-trait CompositionSink {
-    fn revision(&self) -> u64;
-    fn set_app_marked(&self, value: bool) -> u64;
-    fn clear_composition(&self) -> u64;
-    fn insert_text(&self, text: &str);
-    fn set_marked_text(&self, preedit: &PreeditSnapshot);
-    fn discard_marked_text(&self);
-    fn update_windows(&self);
-}
-
 impl CompositionSink for Window {
     fn revision(&self) -> u64 { self.ime_revision() }
     fn set_app_marked(&self, value: bool) -> u64 { self.ime_set_app_marked(value) }
@@ -4472,69 +4255,28 @@ impl CompositionSink for Window {
     }
     fn set_marked_text(&self, preedit: &PreeditSnapshot) {
         let _ = self.with_enabled_client(|client| {
-            client.set_marked_text(&preedit.text, Some(preedit.selected), &preedit.underlines);
+            client.set_marked_text(&preedit.text, preedit.selected, &preedit.underlines);
         });
     }
     fn discard_marked_text(&self) {
-        let _ = self.with_enabled_client(|client| client.discard_marked_text());
+        let _ = self.with_enabled_client(TextInputClient::discard_marked_text);
     }
     fn update_windows(&self) { self.update_ime_windows(); }
 }
+```
 
-fn apply_composition_actions(sink: &impl CompositionSink, actions: Vec<CompositionAction>) {
-    let mut expected_revision = sink.revision();
-    for action in actions {
-        let called_client = match action {
-            CompositionAction::Insert(text) => { sink.insert_text(&text); true }
-            CompositionAction::SetMarked(preedit) => { sink.set_marked_text(&preedit); true }
-            CompositionAction::DiscardMarked => { sink.discard_marked_text(); true }
-            CompositionAction::SetAppMarked(value) => {
-                expected_revision = sink.set_app_marked(value);
-                false
-            }
-            CompositionAction::ClearComposition => {
-                expected_revision = sink.clear_composition();
-                false
-            }
-            CompositionAction::UpdateWindows => { sink.update_windows(); true }
-        };
-        if called_client && sink.revision() != expected_revision {
-            return;
-        }
-    }
-}
+Add to `ime.rs`:
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum OwnedCompositionResult {
-    Applied,
-    ReadFailed,
-}
-
-fn apply_owned_composition(
-    sink: &impl CompositionSink,
-    source: &impl CompositionSource,
-    gcs: u32,
-) -> OwnedCompositionResult {
-    let snapshot = match CompositionSnapshot::read(source, gcs) {
-        Ok(snapshot) => snapshot,
-        Err(err) => {
-            log::warn!("reading IME composition failed; keeping ownership until next update or END: {err:#}");
-            return OwnedCompositionResult::ReadFailed;
-        }
-    };
-    apply_composition_actions(sink, reduce_composition(snapshot));
-    OwnedCompositionResult::Applied
-}
-
+```rust
 /// Deliver the result of this window's own `CPS_COMPLETE` finalization. The reentrant
 /// `WM_IME_COMPOSITION` arrives while composition state is being torn down, so only
 /// `GCS_RESULTSTR` matters — preedit flags describe a composition that no longer exists.
-fn apply_finalizing_composition(sink: &impl CompositionSink, source: &impl CompositionSource, gcs: u32) {
+pub(crate) fn apply_finalizing_composition(sink: &impl CompositionSink, source: &impl CompositionSource, gcs: u32) {
     if gcs & GCS_RESULTSTR.0 == 0 {
         return;
     }
-    match source.bytes(GCS_RESULTSTR).and_then(|bytes| decode_utf16_bytes(&bytes)) {
-        Ok(text) if !text.is_empty() => sink.insert_text(&text),
+    match source.utf16(GCS_RESULTSTR) {
+        Ok(units) if !units.is_empty() => sink.insert_text(&String::from_utf16_lossy(&units)),
         Ok(_) => {}
         Err(err) => log::warn!("reading the finalized IME result failed: {err:#}"),
     }
@@ -4543,30 +4285,25 @@ fn apply_finalizing_composition(sink: &impl CompositionSink, source: &impl Compo
 
 - [ ] **Step 3: Replace Phase-1 handlers with the full owned handlers**
 
-Merge `ISC_SHOWUICOMPOSITIONWINDOW` into the IMM import and `DefWindowProcW` into the
-`WindowsAndMessaging` import. `WPARAM`, `LPARAM`, and `LRESULT` come from `Foundation`.
+In `event_loop.rs`, merge `ISC_SHOWUICOMPOSITIONWINDOW` into the IMM import. `WPARAM`, `LPARAM`,
+and `LRESULT` come from `Foundation`.
 
 ```rust
-pub(crate) fn on_ime_setcontext(
-    window: &Window,
-    msg: u32,
-    wparam: WPARAM,
-    lparam: LPARAM,
-) -> Option<LRESULT> {
+fn on_ime_setcontext(window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     window.enabled_client()?;
     let adjusted = LPARAM(lparam.0 & !(ISC_SHOWUICOMPOSITIONWINDOW as isize));
     // SAFETY: arguments came from this live wndproc; only the documented composition-UI bit changed.
     Some(unsafe { DefWindowProcW(window.hwnd(), msg, wparam, adjusted) })
 }
 
-pub(crate) fn on_ime_startcomposition(window: &Window) -> Option<LRESULT> {
+fn on_ime_startcomposition(window: &Window) -> Option<LRESULT> {
     window.enabled_client()?;
-    window.ime_start(false);
+    window.ime_start();
     window.update_ime_windows();
     Some(LRESULT(0))
 }
 
-pub(crate) fn on_ime_composition(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
+fn on_ime_composition(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
     window.enabled_client()?;
     let finalizing = window.ime_is_finalizing();
     if finalizing && window.ime_app_has_marked_text() {
@@ -4583,20 +4320,22 @@ pub(crate) fn on_ime_composition(window: &Window, lparam: LPARAM) -> Option<LRES
     };
     if finalizing {
         // Reentry from our own CPS_COMPLETE: deliver the result to the client synchronously.
+        // Owning the message keeps the IME from re-emitting it as WM_IME_CHAR/WM_CHAR later,
+        // when the client may already be swapped, disabled, or unfocused.
         apply_finalizing_composition(window, &context, gcs);
         return Some(LRESULT(0));
     }
-    let _ = apply_owned_composition(window, &context, gcs);
+    apply_owned_composition(window, &context, gcs);
     Some(LRESULT(0))
 }
 
-pub(crate) fn on_ime_endcomposition(window: &Window) -> Option<LRESULT> {
+fn on_ime_endcomposition(window: &Window) -> Option<LRESULT> {
     window.enabled_client()?;
     if window.ime_is_finalizing() {
         return Some(LRESULT(0));
     }
     if window.ime_end() {
-        let _ = window.with_enabled_client(|client| client.discard_marked_text());
+        let _ = window.with_enabled_client(TextInputClient::discard_marked_text);
     }
     Some(LRESULT(0))
 }
@@ -4605,11 +4344,8 @@ pub(crate) fn on_ime_endcomposition(window: &Window) -> Option<LRESULT> {
 - [ ] **Step 4: Switch all four message arms in one edit**
 
 In `event_loop.rs`, merge `WM_IME_SETCONTEXT` and `WM_IME_COMPOSITION` into the existing
-`WindowsAndMessaging` import. Inside the existing `ime::{...}` import, replace only
-`on_ime_endcomposition_phase1` / `on_ime_startcomposition_phase1` with `on_ime_composition`,
-`on_ime_endcomposition`, `on_ime_setcontext`, and `on_ime_startcomposition`; retain
-`on_inputlangchange` and any unrelated imports. Then replace the two Phase-1 arms and add the other
-two:
+`WindowsAndMessaging` import and `apply_finalizing_composition` / `apply_owned_composition` into
+the `ime::{...}` import. Then replace the two Phase-1 arms and add the other two:
 
 ```rust
 WM_IME_SETCONTEXT => on_ime_setcontext(window, msg, wparam, lparam),
@@ -4626,11 +4362,11 @@ With no enabled client, every handler returns `None`, preserving default system 
 ```powershell
 cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::ime::tests::
 cargo check --manifest-path native/Cargo.toml -p desktop-win32
-git add native/desktop-win32/src/win32/ime.rs native/desktop-win32/src/win32/event_loop.rs
+git add native/desktop-win32/src/win32/ime.rs native/desktop-win32/src/win32/window.rs native/desktop-win32/src/win32/event_loop.rs
 git commit -m "feat(win32): render IME preedit inline"
 ```
 
-Expected: all reader, reducer, action-driver, and owned-read tests pass; `cargo check` ends with
+Expected: all reader, apply, and owned-read tests pass; `cargo check` ends with
 `Finished`; no commit state exists where system preedit is suppressed without self-drawn callbacks.
 
 ---
@@ -4775,7 +4511,7 @@ IME message delivery itself is not scriptable, but the reducer and parsing logic
   preserving ownership and client/native state; and reentrant finalize.
 
 **Kotlin unit tests** cover only the managed boundary: `NOT_FOUND` ↔ `null`, callback argument
-decoding, holder replacement/clear ordering, arena lifetime, and `InputLanguageChanged` decoding.
+decoding, the holder's recipient and arena lifetime, and `InputLanguageChanged` decoding.
 They do not duplicate private Rust algorithms. Run the focused class after it is added:
 
 ```powershell

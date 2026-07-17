@@ -99,7 +99,6 @@ internal fun readUnderlines(native: MemorySegment): List<UnderlineSegment> {
 
 internal class TextInputClientHolder : AutoCloseable {
     private val arena: Arena = Arena.ofShared()
-    private var closed: Boolean = false
     internal var textInputClient: TextInputClient = TextInputClient.Noop
 
     internal val native: MemorySegment = NativeTextInputClient.allocate(arena).also { table ->
@@ -112,16 +111,6 @@ internal class TextInputClientHolder : AutoCloseable {
             table,
             NativeDiscardMarkedTextCallback.allocate(this::discardMarkedTextCallback, arena),
         )
-    }
-
-    internal fun replace(client: TextInputClient, registerNative: (MemorySegment) -> Unit) {
-        registerNative(native)
-        textInputClient = client
-    }
-
-    internal fun clear(clearNative: () -> Unit) {
-        clearNative()
-        textInputClient = TextInputClient.Noop
     }
 
     internal fun selectedRangeCallback(rangeOut: MemorySegment) = ffiUpCall {
@@ -149,8 +138,6 @@ internal class TextInputClientHolder : AutoCloseable {
     internal fun discardMarkedTextCallback() = ffiUpCall { textInputClient.discardMarkedText() }
 
     override fun close() {
-        if (closed) return
-        closed = true
         arena.close()
     }
 }

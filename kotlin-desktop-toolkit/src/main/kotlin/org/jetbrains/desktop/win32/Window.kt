@@ -238,15 +238,15 @@ public class Window internal constructor(
     }
 
     public fun setTextInputClient(client: TextInputClient) {
-        textInputClientHolder.replace(client) { native ->
-            ffiDownCall { desktop_win32_h.window_set_text_input_client(ptr, native) }
-        }
+        // The downcall can finalize a live composition, which calls back into the previous
+        // client; swap the recipient only after the native side has switched over.
+        ffiDownCall { desktop_win32_h.window_set_text_input_client(ptr, textInputClientHolder.native) }
+        textInputClientHolder.textInputClient = client
     }
 
     public fun clearTextInputClient() {
-        textInputClientHolder.clear {
-            ffiDownCall { desktop_win32_h.window_clear_text_input_client(ptr) }
-        }
+        ffiDownCall { desktop_win32_h.window_clear_text_input_client(ptr) }
+        textInputClientHolder.textInputClient = TextInputClient.Noop
     }
 
     public fun setImeEnabled(enabled: Boolean) {
@@ -287,9 +287,7 @@ public class Window internal constructor(
 
     override fun close() {
         if (closed) return
-        textInputClientHolder.clear {
-            ffiDownCall { desktop_win32_h.window_clear_text_input_client(ptr) }
-        }
+        clearTextInputClient()
         ffiDownCall { desktop_win32_h.window_drop(ptr) }
         closed = true
         textInputClientHolder.close()

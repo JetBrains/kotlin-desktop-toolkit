@@ -13,6 +13,7 @@ use windows::Win32::{
         Dwm::DwmDefWindowProc,
         Gdi::{BeginPaint, EndPaint, GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow, PAINTSTRUCT},
     },
+    System::SystemServices::LOCALE_NAME_MAX_LENGTH,
     UI::{
         HiDpi::{AdjustWindowRectExForDpi, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext},
         Input::{
@@ -45,11 +46,11 @@ use super::{
         WindowResizeEvent, WindowScaleChangedEvent, WindowTitleChangedEvent,
     },
     geometry::{PhysicalPoint, PhysicalSize},
-    ime::ImmContext,
+    ime::{ImmContext, apply_finalizing_composition, apply_owned_composition},
     keyboard::{PhysicalKeyStatus, VirtualKey},
     pointer::{PointerButton, PointerButtonChangeKind, PointerClickCounter, PointerInfo},
     strings::copy_from_wide_string,
-    text_input_client::{TextInputClient, apply_finalizing_composition, apply_owned_composition},
+    text_input_client::TextInputClient,
     utils::{GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
     window::Window,
 };
@@ -738,7 +739,7 @@ fn on_ime_setcontext(window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) 
 
 fn on_ime_startcomposition(window: &Window) -> Option<LRESULT> {
     window.enabled_client()?;
-    window.ime_start(false);
+    window.ime_start();
     window.update_ime_windows();
     Some(LRESULT(0))
 }
@@ -765,7 +766,7 @@ fn on_ime_composition(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
         apply_finalizing_composition(window, &context, gcs);
         return Some(LRESULT(0));
     }
-    let _ = apply_owned_composition(window, &context, gcs);
+    apply_owned_composition(window, &context, gcs);
     Some(LRESULT(0))
 }
 
@@ -782,8 +783,9 @@ fn on_ime_endcomposition(window: &Window) -> Option<LRESULT> {
 
 fn on_inputlangchange(event_loop: &EventLoop, window: &Window, lparam: LPARAM) -> Option<LRESULT> {
     let hkl = lparam.0.cast_unsigned();
-    let langid = u32::try_from(hkl & 0xFFFF).unwrap_or_default();
+    let langid = u32::from(LOWORD!(hkl));
     let locale_name = RustAllocatedStrPtr::allocate(resolve_locale_name(langid))
+        .inspect_err(|err| log::error!("Failed to allocate the locale name: {err:?}"))
         .unwrap_or_else(|_| RustAllocatedStrPtr::null())
         .to_auto_drop();
     let _ = event_loop.handle_event(window, InputLanguageChangedEvent { hkl, locale_name });
@@ -791,13 +793,15 @@ fn on_inputlangchange(event_loop: &EventLoop, window: &Window, lparam: LPARAM) -
 }
 
 fn resolve_locale_name(langid: u32) -> String {
-    let mut buffer = [0u16; 85];
+    let mut buffer = [0u16; LOCALE_NAME_MAX_LENGTH as usize];
     // SAFETY: the buffer is writable for `LOCALE_NAME_MAX_LENGTH` UTF-16 units; a LANGID is a
     // valid SORT_DEFAULT LCID because its high word is zero.
     let length = unsafe { LCIDToLocaleName(langid, Some(buffer.as_mut_slice()), 0) };
-    if length > 1 {
-        let content_length = usize::try_from(length - 1).unwrap_or_default();
-        String::from_utf16_lossy(&buffer[..content_length])
+    // The returned length counts the trailing NUL.
+    if let Ok(length) = usize::try_from(length)
+        && length > 1
+    {
+        String::from_utf16_lossy(&buffer[..length - 1])
     } else {
         String::new()
     }
@@ -812,8 +816,9 @@ fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lp
         return character_received(event_loop, window, msg, wparam, lparam);
     }
     let unit = LOWORD!(wparam.0);
-    // Control characters (in ranges 0x0-0x1F and 0x7F-0x9F)
-    if unit <= 0x1F || (0x7F..=0x9F).contains(&unit) {
+    // Control units (Enter, Tab, Backspace, ...) must still reach the app as CharacterReceived,
+    // never as an insertText edit.
+    if matches!(unit, 0x00..=0x1F | 0x7F..=0x9F) {
         window.clear_pending_surrogate();
         return character_received(event_loop, window, msg, wparam, lparam);
     }

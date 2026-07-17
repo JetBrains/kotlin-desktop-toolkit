@@ -62,8 +62,7 @@ class TextInputClientTests {
     @Test
     fun `selected range callback writes caller storage`() = Arena.ofConfined().use { arena ->
         val holder = TextInputClientHolder()
-        val client = RecordingClient()
-        holder.replace(client) { assertSame(TextInputClient.Noop, holder.textInputClient) }
+        holder.textInputClient = RecordingClient()
         val native = NativeTextRange.allocate(arena)
         holder.selectedRangeCallback(native)
         assertEquals(TextRange(3, 0), TextRange.fromNative(native))
@@ -73,7 +72,7 @@ class TextInputClientTests {
     @Test
     fun `caret callback reads range and writes inline rect`() = Arena.ofConfined().use { arena ->
         val holder = TextInputClientHolder()
-        holder.replace(RecordingClient()) {}
+        holder.textInputClient = RecordingClient()
         val args = NativeCaretRectArgs.allocate(arena)
         TextRange(9, 0).toNative(NativeCaretRectArgs.range_in(args))
         holder.caretRectCallback(args)
@@ -112,25 +111,19 @@ class TextInputClientTests {
     }
 
     @Test
-    fun `replace and clear switch recipient only after native success`() {
+    fun `holder starts with the noop recipient`() {
         val holder = TextInputClientHolder()
-        val first = RecordingClient()
-        val second = RecordingClient()
-        holder.replace(first) { assertSame(TextInputClient.Noop, holder.textInputClient) }
-        holder.replace(second) { assertSame(first, holder.textInputClient) }
-        holder.clear { assertSame(second, holder.textInputClient) }
         assertSame(TextInputClient.Noop, holder.textInputClient)
         holder.close()
     }
 
     @Test
-    fun `holder owns one table until idempotent close`() {
+    fun `holder owns one table until close`() {
         val holder = TextInputClientHolder()
         val table = holder.native
         assertTrue(table.scope().isAlive)
         holder.close()
         assertFalse(table.scope().isAlive)
-        holder.close()
     }
 
     @Test

@@ -30,10 +30,7 @@ use windows::{
             Controls::MARGINS,
             HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
             Input::{
-                Ime::{
-                    CANDIDATEFORM, CFS_EXCLUDE, CFS_POINT, COMPOSITIONFORM, CPS_CANCEL, CPS_COMPLETE, HIMC, IACE_DEFAULT,
-                    ImmAssociateContextEx, ImmNotifyIME, ImmSetCandidateWindow, ImmSetCompositionWindow, NI_COMPOSITIONSTR,
-                },
+                Ime::{CPS_CANCEL, CPS_COMPLETE, HIMC, IACE_DEFAULT, ImmAssociateContextEx},
                 KeyboardAndMouse::{GetFocus, SetActiveWindow},
             },
             WindowsAndMessaging::{
@@ -57,12 +54,12 @@ use super::{
     cursor::{Cursor, CursorIcon},
     event_loop::EventLoop,
     geometry::{LogicalPoint, LogicalRect, LogicalSize, PhysicalPoint},
-    ime::{ClientCallbackGuard, ImeState, ImmContext},
+    ime::{ClientCallbackGuard, CompositionSink, ImeState, ImmContext, PreeditSnapshot},
     pointer::{PointerButton, PointerClickCounter},
     screen::{self, ScreenInfo},
     strings::copy_from_utf8_string,
     system_menu::{seed_system_menu, sync_system_menu_state},
-    text_input_client::{TextInputClient, client_logical_to_physical_rect},
+    text_input_client::TextInputClient,
     utils,
     window_api::{WindowParams, WindowStyle, WindowTitleBarKind},
 };
@@ -726,14 +723,12 @@ impl Window {
         Ok(())
     }
 
-    pub(crate) fn enabled_client(&self) -> Option<TextInputClient> {
-        let ime = self.ime.get();
-        (ime.enabled).then_some(ime.client).flatten()
+    pub(crate) const fn enabled_client(&self) -> Option<TextInputClient> {
+        self.ime.get().enabled_client()
     }
 
-    pub(crate) fn active_client(&self) -> Option<TextInputClient> {
-        let ime = self.ime.get();
-        (ime.focused && ime.enabled).then_some(ime.client).flatten()
+    pub(crate) const fn active_client(&self) -> Option<TextInputClient> {
+        self.ime.get().active_client()
     }
 
     pub(crate) fn with_enabled_client<R>(&self, f: impl FnOnce(TextInputClient) -> R) -> Option<R> {
@@ -749,37 +744,32 @@ impl Window {
     }
 
     pub(crate) const fn ime_revision(&self) -> u64 {
-        self.ime.get().composition_revision
+        self.ime.get().revision()
     }
 
-    pub(crate) fn ime_start(&self, app_has_marked_text: bool) -> u64 {
+    pub(crate) fn ime_start(&self) {
         let mut ime = self.ime.get();
-        ime.composition_active = true;
-        ime.app_has_marked_text = app_has_marked_text;
-        ime.reset_pending_surrogate();
-        let revision = ime.advance_composition_revision();
+        ime.start_composition();
         self.ime.set(ime);
-        revision
     }
 
     pub(crate) fn ime_end(&self) -> bool {
-        let had_marked_text = self.ime.get().app_has_marked_text;
+        let had_marked_text = self.ime.get().app_has_marked_text();
         self.clear_composition_state();
         had_marked_text
     }
 
     pub(crate) const fn ime_is_finalizing(&self) -> bool {
-        self.ime.get().finalizing
+        self.ime.get().is_finalizing()
     }
 
     pub(crate) const fn ime_app_has_marked_text(&self) -> bool {
-        self.ime.get().app_has_marked_text
+        self.ime.get().app_has_marked_text()
     }
 
-    pub(crate) fn ime_set_app_marked(&self, value: bool) -> u64 {
+    fn ime_set_app_marked(&self, value: bool) -> u64 {
         let mut ime = self.ime.get();
-        ime.app_has_marked_text = value;
-        let revision = ime.advance_composition_revision();
+        let revision = ime.set_app_marked(value);
         self.ime.set(ime);
         revision
     }
@@ -806,19 +796,13 @@ impl Window {
 
     pub(crate) fn update_ime_windows(&self) {
         let revision = self.ime_revision();
-        let Some(range) = self
-            .with_active_client(super::text_input_client::TextInputClient::selected_range)
-            .flatten()
-        else {
+        let caret_rect = self
+            .with_active_client(|client| client.selected_range().map(|range| client.caret_rect(range)))
+            .flatten();
+        let Some(caret_rect) = caret_rect else {
             return;
         };
         if self.ime_revision() != revision {
-            return;
-        }
-        let Some(caret_rect) = self.with_active_client(|client| client.caret_rect(range)) else {
-            return;
-        };
-        if self.ime_revision() != revision || self.active_client().is_none() {
             return;
         }
         let Some(context) = ImmContext::get(self.hwnd()) else {
@@ -831,26 +815,8 @@ impl Window {
             x: caret.left,
             y: caret.top,
         };
-        let composition = COMPOSITIONFORM {
-            dwStyle: CFS_POINT,
-            ptCurrentPos: origin,
-            ..Default::default()
-        };
-        // SAFETY: `context` owns a valid HIMC and `composition` is live for the synchronous call.
-        if !unsafe { ImmSetCompositionWindow(context.himc(), &raw const composition) }.as_bool() {
-            log::warn!("ImmSetCompositionWindow failed");
-        }
-
-        let candidate = CANDIDATEFORM {
-            dwIndex: 0,
-            dwStyle: CFS_EXCLUDE,
-            ptCurrentPos: origin,
-            rcArea: caret,
-        };
-        // SAFETY: `context` owns a valid HIMC and `candidate` is live for the synchronous call.
-        if !unsafe { ImmSetCandidateWindow(context.himc(), &raw const candidate) }.as_bool() {
-            log::warn!("ImmSetCandidateWindow failed");
-        }
+        context.set_composition_window(origin);
+        context.set_candidate_window(origin, caret);
 
         // SAFETY: active-client gating requires focus; lifecycle code attempted to create this caret.
         if let Err(err) = unsafe { SetCaretPos(origin.x, origin.y) } {
@@ -872,7 +838,7 @@ impl Window {
     pub(crate) fn set_text_input_client(&self, client: Option<TextInputClient>) -> anyhow::Result<()> {
         let current = self.ime.get();
         current.ensure_mutation_allowed("text input client change")?;
-        if current.composition_active {
+        if current.is_composition_active() {
             self.finalize_composition()?;
         }
 
@@ -902,7 +868,7 @@ impl Window {
     pub(crate) fn set_ime_enabled(&self, enabled: bool) -> anyhow::Result<()> {
         let current = self.ime.get();
         current.ensure_mutation_allowed("IME enablement change")?;
-        if current.enabled == enabled {
+        if current.is_enabled() == enabled {
             return Ok(());
         }
 
@@ -914,7 +880,7 @@ impl Window {
                 "ImmAssociateContextEx(IACE_DEFAULT) failed"
             );
             let mut ime = self.ime.get();
-            ime.enabled = true;
+            ime.set_enabled(true);
             self.ime.set(ime);
             if ime.is_active() {
                 if let Err(err) = self.create_caret() {
@@ -933,8 +899,7 @@ impl Window {
             );
             let mut ime = self.ime.get();
             let destroy_caret = ime.is_active();
-            ime.enabled = false;
-            ime.reset_pending_surrogate();
+            ime.set_enabled(false);
             self.ime.set(ime);
             if destroy_caret && let Err(err) = self.destroy_caret() {
                 log::warn!("DestroyCaret failed after disabling IME: {err}");
@@ -945,26 +910,22 @@ impl Window {
 
     fn finalize_composition(&self) -> anyhow::Result<()> {
         let current = self.ime.get();
-        if current.finalizing || !current.composition_active {
+        if current.is_finalizing() || !current.is_composition_active() {
             return Ok(());
         }
         let context = ImmContext::get(self.hwnd()).context("window has no input context")?;
-        let mut finalizing = self.ime.get();
-        finalizing.finalizing = true;
-        finalizing.advance_composition_revision();
-        self.ime.set(finalizing);
-        if current.app_has_marked_text {
-            let _ = self.with_enabled_client(super::text_input_client::TextInputClient::unmark_text);
-            // SAFETY: `context` owns the live window's valid HIMC.
-            let notified = unsafe { ImmNotifyIME(context.himc(), NI_COMPOSITIONSTR, CPS_CANCEL, 0) }.as_bool();
-            self.clear_composition_state();
-            anyhow::ensure!(notified, "ImmNotifyIME(CPS_CANCEL) failed");
+        let mut ime = current;
+        ime.begin_finalizing();
+        self.ime.set(ime);
+        let (action, action_name) = if current.app_has_marked_text() {
+            let _ = self.with_enabled_client(TextInputClient::unmark_text);
+            (CPS_CANCEL, "CPS_CANCEL")
         } else {
-            // SAFETY: `context` owns the live window's valid HIMC.
-            let notified = unsafe { ImmNotifyIME(context.himc(), NI_COMPOSITIONSTR, CPS_COMPLETE, 0) }.as_bool();
-            self.clear_composition_state();
-            anyhow::ensure!(notified, "ImmNotifyIME(CPS_COMPLETE) failed");
-        }
+            (CPS_COMPLETE, "CPS_COMPLETE")
+        };
+        let notified = context.notify_composition(action);
+        self.clear_composition_state();
+        anyhow::ensure!(notified, "ImmNotifyIME({action_name}) failed");
         Ok(())
     }
 
@@ -998,13 +959,13 @@ impl Window {
     }
 
     pub(crate) fn ime_teardown(&self) {
-        if self.ime.get().composition_active
+        if self.ime.get().is_composition_active()
             && let Err(err) = self.finalize_composition()
         {
             log::warn!("finalizing IME during teardown failed: {err:#}");
         }
         let ime = self.ime.get();
-        if ime.enabled {
+        if ime.is_enabled() {
             // Null HIMC + flags 0 is the de-facto detach idiom (winit, GLFW); Learn documents
             // only the IACE_* flags.
             // SAFETY: teardown runs before `WM_NCDESTROY` releases the live HWND.
@@ -1017,7 +978,43 @@ impl Window {
                 log::warn!("DestroyCaret during IME teardown failed: {err}");
             }
         }
-        self.ime.set(ImeState::detached());
+    }
+}
+
+impl CompositionSink for Window {
+    fn revision(&self) -> u64 {
+        self.ime_revision()
+    }
+    fn set_app_marked(&self, value: bool) -> u64 {
+        self.ime_set_app_marked(value)
+    }
+    fn clear_composition(&self) -> u64 {
+        self.clear_composition_state()
+    }
+    fn insert_text(&self, text: &str) {
+        let _ = self.with_enabled_client(|client| client.insert_text(text));
+    }
+    fn set_marked_text(&self, preedit: &PreeditSnapshot) {
+        let _ = self.with_enabled_client(|client| {
+            client.set_marked_text(&preedit.text, preedit.selected, &preedit.underlines);
+        });
+    }
+    fn discard_marked_text(&self) {
+        let _ = self.with_enabled_client(TextInputClient::discard_marked_text);
+    }
+    fn update_windows(&self) {
+        self.update_ime_windows();
+    }
+}
+
+fn client_logical_to_physical_rect(rect: LogicalRect, scale: f32) -> RECT {
+    let top_left = rect.origin.to_physical(scale);
+    let bottom_right = LogicalPoint::new(rect.origin.x.0 + rect.size.width.0, rect.origin.y.0 + rect.size.height.0).to_physical(scale);
+    RECT {
+        left: top_left.x.0,
+        top: top_left.y.0,
+        right: bottom_right.x.0,
+        bottom: bottom_right.y.0,
     }
 }
 
@@ -1156,4 +1153,19 @@ fn initialize_content(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     window.backdrop_layer.replace(Some(backdrop_layer));
     window.content_layer.replace(Some(content_layer));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn logical_caret_rect_scales_both_corners() {
+        let rect = LogicalRect {
+            origin: LogicalPoint::new(10.25, 5.25),
+            size: LogicalSize::new(3.5, 4.5),
+        };
+        let physical = client_logical_to_physical_rect(rect, 1.5);
+        assert_eq!((physical.left, physical.top, physical.right, physical.bottom), (15, 8, 21, 15));
+    }
 }
