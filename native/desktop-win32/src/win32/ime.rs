@@ -1,11 +1,11 @@
 use std::cell::Cell;
 
 use windows::Win32::{
-    Foundation::HWND,
+    Foundation::{HWND, LRESULT},
     UI::Input::Ime::{HIMC, ImmGetContext, ImmReleaseContext},
 };
 
-use super::text_input_client::TextInputClient;
+use super::{text_input_client::TextInputClient, window::Window};
 
 pub(crate) struct ImmContext {
     hwnd: HWND,
@@ -94,6 +94,33 @@ impl ImeState {
     pub(crate) const fn reset_pending_surrogate(&mut self) {
         self.pending_high_surrogate = 0;
     }
+
+    pub(crate) const fn replace_client(&mut self, client: Option<TextInputClient>) {
+        self.client = client;
+        self.reset_pending_surrogate();
+    }
+
+    pub(crate) const fn set_focused(&mut self, focused: bool) {
+        let changed = self.focused != focused;
+        self.focused = focused;
+        self.reset_pending_surrogate();
+        if changed {
+            self.advance_composition_revision();
+        }
+    }
+
+    pub(crate) const fn clear_composition_state(&mut self) -> u64 {
+        self.composition_active = false;
+        self.app_has_marked_text = false;
+        self.finalizing = false;
+        self.reset_pending_surrogate();
+        self.advance_composition_revision()
+    }
+
+    pub(crate) fn ensure_mutation_allowed(self, operation: &str) -> anyhow::Result<()> {
+        anyhow::ensure!(self.callback_depth == 0, "{operation} is not allowed during a text input callback");
+        Ok(())
+    }
 }
 
 pub(crate) struct ClientCallbackGuard<'a>(&'a Cell<ImeState>);
@@ -113,6 +140,19 @@ impl Drop for ClientCallbackGuard<'_> {
         ime.callback_depth = ime.callback_depth.checked_sub(1).expect("text input callback depth underflow");
         self.0.set(ime);
     }
+}
+
+pub(crate) fn on_ime_startcomposition_phase1(window: &Window) -> Option<LRESULT> {
+    if window.active_client().is_some() {
+        window.ime_start(false);
+        window.update_ime_windows();
+    }
+    None
+}
+
+pub(crate) fn on_ime_endcomposition_phase1(window: &Window) -> Option<LRESULT> {
+    window.clear_composition_state();
+    None
 }
 
 #[cfg(test)]
@@ -167,6 +207,60 @@ mod ime_state_tests {
         ime.reset_pending_surrogate();
         assert_eq!(ime.pending_high_surrogate, 0);
         ime.reset_pending_surrogate();
+        assert_eq!(ime.pending_high_surrogate, 0);
+    }
+
+    #[test]
+    fn callback_depth_rejects_lifetime_mutation() {
+        let mut ime = ImeState::new();
+        assert!(ime.ensure_mutation_allowed("client change").is_ok());
+        ime.callback_depth = 1;
+        assert_eq!(
+            ime.ensure_mutation_allowed("client change").unwrap_err().to_string(),
+            "client change is not allowed during a text input callback",
+        );
+    }
+
+    #[test]
+    fn detached_state_is_terminal_and_disabled() {
+        let ime = ImeState::detached();
+        assert!(!ime.enabled);
+        assert!(!ime.composition_active);
+        assert!(ime.client.is_none());
+    }
+
+    #[test]
+    fn client_replacement_clears_pending_surrogate() {
+        let mut ime = ImeState::new();
+        ime.pending_high_surrogate = 0xD83D;
+        ime.replace_client(None);
+        assert_eq!(ime.pending_high_surrogate, 0);
+    }
+
+    #[test]
+    fn focus_loss_clears_pending_surrogate() {
+        let mut ime = ImeState::new();
+        ime.focused = true;
+        ime.pending_high_surrogate = 0xD83D;
+        let revision = ime.composition_revision;
+        ime.set_focused(false);
+        assert!(!ime.focused);
+        assert_eq!(ime.pending_high_surrogate, 0);
+        assert_eq!(ime.composition_revision, revision + 1);
+    }
+
+    #[test]
+    fn composition_end_clears_pending_surrogate() {
+        let mut ime = ImeState::new();
+        ime.composition_active = true;
+        ime.app_has_marked_text = true;
+        ime.finalizing = true;
+        ime.pending_high_surrogate = 0xD83D;
+        let revision = ime.composition_revision;
+        assert_eq!(ime.clear_composition_state(), revision + 1);
+        assert!(!ime.composition_active);
+        assert!(!ime.app_has_marked_text);
+        assert!(!ime.finalizing);
         assert_eq!(ime.pending_high_surrogate, 0);
     }
 }

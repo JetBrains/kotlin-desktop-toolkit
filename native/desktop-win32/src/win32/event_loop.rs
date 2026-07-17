@@ -25,12 +25,12 @@ use windows::Win32::{
             GetWindowLongPtrW, GetWindowRect, HMENU, HTCAPTION, HTCLIENT, HTCLOSE, HTMAXBUTTON, HTMINBUTTON, HTTOP, MINMAXINFO, MSG,
             NCCALCSIZE_PARAMS, SC_KEYMENU, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
             TranslateMessage, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_CANCELMODE,
-            WM_CAPTURECHANGED, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_INITMENUPOPUP,
-            WM_INPUTLANGCHANGE, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCLBUTTONDOWN, WM_NCMOUSELEAVE,
-            WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_NCRBUTTONUP, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN,
-            WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT,
-            WM_SETTINGCHANGE, WM_SYSCHAR, WM_SYSCOLORCHANGE, WM_SYSCOMMAND, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP,
-            WM_WINDOWPOSCHANGED,
+            WM_CAPTURECHANGED, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO,
+            WM_IME_ENDCOMPOSITION, WM_IME_STARTCOMPOSITION, WM_INITMENUPOPUP, WM_INPUTLANGCHANGE, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS,
+            WM_NCCALCSIZE, WM_NCHITTEST, WM_NCLBUTTONDOWN, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE,
+            WM_NCRBUTTONUP, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP,
+            WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE, WM_SYSCHAR, WM_SYSCOLORCHANGE,
+            WM_SYSCOMMAND, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
         },
     },
 };
@@ -44,6 +44,7 @@ use super::{
         WindowResizeEvent, WindowScaleChangedEvent, WindowTitleChangedEvent,
     },
     geometry::{PhysicalPoint, PhysicalSize},
+    ime::{on_ime_endcomposition_phase1, on_ime_startcomposition_phase1},
     keyboard::{PhysicalKeyStatus, VirtualKey},
     pointer::{PointerButton, PointerButtonChangeKind, PointerClickCounter, PointerInfo},
     strings::copy_from_wide_string,
@@ -132,9 +133,13 @@ impl EventLoop {
 
             WM_KEYDOWN | WM_SYSKEYDOWN | WM_KEYUP | WM_SYSKEYUP => on_keyevent(self, window, msg, wparam, lparam),
 
-            WM_SETFOCUS => self.handle_event(window, Event::WindowKeyboardEnter),
+            WM_SETFOCUS => on_setfocus(self, window),
 
-            WM_KILLFOCUS => self.handle_event(window, Event::WindowKeyboardLeave),
+            WM_KILLFOCUS => on_killfocus(self, window),
+
+            WM_IME_STARTCOMPOSITION => on_ime_startcomposition_phase1(window),
+
+            WM_IME_ENDCOMPOSITION => on_ime_endcomposition_phase1(window),
 
             WM_INPUTLANGCHANGE => on_inputlangchange(self, window, lparam),
 
@@ -152,6 +157,7 @@ impl EventLoop {
             WM_POINTERLEAVE => on_pointerleave(self, window, wparam),
 
             WM_POINTERCAPTURECHANGED => on_pointercapturechanged(window, wparam),
+
             // Pointer event end
             WM_CANCELMODE => on_cancelmode(window),
 
@@ -167,11 +173,10 @@ impl EventLoop {
             // see https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/nf-dwmapi-dwmdefwindowproc
             WM_NCMOUSELEAVE => on_ncmouseleave(self, window, wparam, lparam),
 
-            // NC
             WM_NCLBUTTONDOWN => on_nclbuttondown(window, wparam, lparam),
 
             WM_NCRBUTTONUP => on_ncrbuttonup(window, wparam, lparam),
-            // NC
+
             WM_SETCURSOR => on_setcursor(window, lparam),
 
             WM_SETTEXT => on_settext(self, window, wparam, lparam),
@@ -704,6 +709,20 @@ fn on_keyevent(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM
     let result = event_loop.handle_event(window, event);
     KEYEVENT_MESSAGES.with_borrow_mut(|map| map.remove(&original_msg_id));
     result
+}
+
+fn on_setfocus(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
+    if let Err(err) = window.ime_focus_gained() {
+        log::warn!("IME focus-gain update failed: {err:#}");
+    }
+    event_loop.handle_event(window, Event::WindowKeyboardEnter)
+}
+
+fn on_killfocus(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
+    if let Err(err) = window.ime_focus_lost() {
+        log::warn!("IME focus-loss update failed: {err:#}");
+    }
+    event_loop.handle_event(window, Event::WindowKeyboardLeave)
 }
 
 fn on_inputlangchange(event_loop: &EventLoop, window: &Window, lparam: LPARAM) -> Option<LRESULT> {

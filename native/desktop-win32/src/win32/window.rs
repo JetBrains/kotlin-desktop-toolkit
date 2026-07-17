@@ -30,8 +30,11 @@ use windows::{
             Controls::MARGINS,
             HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
             Input::{
-                Ime::{CANDIDATEFORM, CFS_EXCLUDE, CFS_POINT, COMPOSITIONFORM, ImmSetCandidateWindow, ImmSetCompositionWindow},
-                KeyboardAndMouse::SetActiveWindow,
+                Ime::{
+                    CANDIDATEFORM, CFS_EXCLUDE, CFS_POINT, COMPOSITIONFORM, CPS_CANCEL, CPS_COMPLETE, HIMC, IACE_DEFAULT,
+                    ImmAssociateContextEx, ImmNotifyIME, ImmSetCandidateWindow, ImmSetCompositionWindow, NI_COMPOSITIONSTR,
+                },
+                KeyboardAndMouse::{GetFocus, SetActiveWindow},
             },
             WindowsAndMessaging::{
                 BringWindowToTop, CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateCaret, CreateIconFromResourceEx, CreateWindowExW,
@@ -698,8 +701,11 @@ impl Window {
         unsafe { PostMessageW(Some(self.hwnd()), WM_CLOSE, WPARAM::default(), LPARAM::default()) }
     }
 
-    pub fn destroy(&self) -> WinResult<()> {
-        unsafe { DestroyWindow(self.hwnd()) }
+    pub fn destroy(&self) -> anyhow::Result<()> {
+        self.ime.get().ensure_mutation_allowed("window destruction")?;
+        // SAFETY: this is the live HWND owned by `Window`; `WM_NCDESTROY` performs terminal teardown.
+        unsafe { DestroyWindow(self.hwnd()) }?;
+        Ok(())
     }
 
     pub fn set_icon(&self, bytes: &[u8]) -> anyhow::Result<()> {
@@ -780,11 +786,7 @@ impl Window {
 
     pub(crate) fn clear_composition_state(&self) -> u64 {
         let mut ime = self.ime.get();
-        ime.composition_active = false;
-        ime.app_has_marked_text = false;
-        ime.finalizing = false;
-        ime.reset_pending_surrogate();
-        let revision = ime.advance_composition_revision();
+        let revision = ime.clear_composition_state();
         self.ime.set(ime);
         revision
     }
@@ -865,6 +867,154 @@ impl Window {
         // SAFETY: callers use this only while this window owns the GUI thread's caret.
         unsafe { DestroyCaret() }
     }
+
+    pub(crate) fn set_text_input_client(&self, client: Option<TextInputClient>) -> anyhow::Result<()> {
+        let current = self.ime.get();
+        current.ensure_mutation_allowed("text input client change")?;
+        if current.composition_active {
+            self.finalize_composition()?;
+        }
+
+        let current = self.ime.get();
+        let was_active = current.is_active();
+        let mut ime = current;
+        ime.replace_client(client);
+        self.ime.set(ime);
+
+        let is_active = ime.is_active();
+        if was_active && !is_active {
+            if let Err(err) = self.destroy_caret() {
+                log::warn!("DestroyCaret failed after clearing text input client: {err}");
+            }
+        } else if !was_active
+            && is_active
+            && let Err(err) = self.create_caret()
+        {
+            log::warn!("CreateCaret failed after registering text input client: {err}");
+        }
+        if is_active {
+            self.update_ime_windows();
+        }
+        Ok(())
+    }
+
+    pub(crate) fn set_ime_enabled(&self, enabled: bool) -> anyhow::Result<()> {
+        let current = self.ime.get();
+        current.ensure_mutation_allowed("IME enablement change")?;
+        if current.enabled == enabled {
+            return Ok(());
+        }
+
+        let hwnd = self.hwnd();
+        if enabled {
+            anyhow::ensure!(
+                // SAFETY: `hwnd` is live; null HIMC plus `IACE_DEFAULT` restores the thread default.
+                unsafe { ImmAssociateContextEx(hwnd, HIMC::default(), IACE_DEFAULT) }.as_bool(),
+                "ImmAssociateContextEx(IACE_DEFAULT) failed"
+            );
+            let mut ime = self.ime.get();
+            ime.enabled = true;
+            self.ime.set(ime);
+            if ime.is_active() {
+                if let Err(err) = self.create_caret() {
+                    log::warn!("CreateCaret failed after enabling IME: {err}");
+                }
+                self.update_ime_windows();
+            }
+        } else {
+            self.finalize_composition()?;
+            anyhow::ensure!(
+                // SAFETY: `hwnd` is live; null HIMC and zero flags detach this HWND's input context.
+                unsafe { ImmAssociateContextEx(hwnd, HIMC::default(), 0) }.as_bool(),
+                "ImmAssociateContextEx(detach) failed"
+            );
+            let mut ime = self.ime.get();
+            let destroy_caret = ime.is_active();
+            ime.enabled = false;
+            ime.reset_pending_surrogate();
+            self.ime.set(ime);
+            if destroy_caret && let Err(err) = self.destroy_caret() {
+                log::warn!("DestroyCaret failed after disabling IME: {err}");
+            }
+        }
+        Ok(())
+    }
+
+    fn finalize_composition(&self) -> anyhow::Result<()> {
+        let current = self.ime.get();
+        if current.finalizing || !current.composition_active {
+            return Ok(());
+        }
+        let context = ImmContext::get(self.hwnd()).context("window has no input context")?;
+        let mut finalizing = self.ime.get();
+        finalizing.finalizing = true;
+        finalizing.advance_composition_revision();
+        self.ime.set(finalizing);
+        if current.app_has_marked_text {
+            let _ = self.with_enabled_client(super::text_input_client::TextInputClient::unmark_text);
+            // SAFETY: `context` owns the live window's valid HIMC.
+            let notified = unsafe { ImmNotifyIME(context.himc(), NI_COMPOSITIONSTR, CPS_CANCEL, 0) }.as_bool();
+            self.clear_composition_state();
+            anyhow::ensure!(notified, "ImmNotifyIME(CPS_CANCEL) failed");
+        } else {
+            // SAFETY: `context` owns the live window's valid HIMC.
+            let notified = unsafe { ImmNotifyIME(context.himc(), NI_COMPOSITIONSTR, CPS_COMPLETE, 0) }.as_bool();
+            self.clear_composition_state();
+            anyhow::ensure!(notified, "ImmNotifyIME(CPS_COMPLETE) failed");
+        }
+        Ok(())
+    }
+
+    pub(crate) fn ime_focus_gained(&self) -> anyhow::Result<()> {
+        let mut ime = self.ime.get();
+        ime.set_focused(true);
+        self.ime.set(ime);
+        if ime.is_active() {
+            if let Err(err) = self.create_caret() {
+                log::warn!("CreateCaret failed after focus gain: {err}");
+            }
+            self.update_ime_windows();
+        }
+        Ok(())
+    }
+
+    pub(crate) fn ime_focus_lost(&self) -> anyhow::Result<()> {
+        // Keep `focused` true during Phase-1 `CPS_COMPLETE`: its synchronous `WM_CHAR` must still
+        // route to the active client. The call can reenter and regain focus, so query the final OS
+        // focus owner before committing local state.
+        let finalization = self.finalize_composition();
+        // SAFETY: `GetFocus` has no pointer/lifetime preconditions and returns this GUI thread's owner.
+        let focused = unsafe { GetFocus() } == self.hwnd();
+        let mut ime = self.ime.get();
+        let destroy_caret = ime.is_active() && !focused;
+        ime.set_focused(focused);
+        self.ime.set(ime);
+        if destroy_caret && let Err(err) = self.destroy_caret() {
+            log::warn!("DestroyCaret failed after focus loss: {err}");
+        }
+        finalization
+    }
+
+    pub(crate) fn ime_teardown(&self) {
+        if self.ime.get().composition_active
+            && let Err(err) = self.finalize_composition()
+        {
+            log::warn!("finalizing IME during teardown failed: {err:#}");
+        }
+        let ime = self.ime.get();
+        if ime.enabled {
+            // SAFETY: teardown runs before `WM_NCDESTROY` releases the live HWND.
+            if !unsafe { ImmAssociateContextEx(self.hwnd(), HIMC::default(), 0) }.as_bool() {
+                log::warn!("ImmAssociateContextEx(detach during teardown) failed");
+            }
+            if ime.is_active()
+                && let Err(err) = self.destroy_caret()
+            {
+                log::warn!("DestroyCaret during IME teardown failed: {err}");
+            }
+        }
+        self.ime.set(ImeState::detached());
+    }
 }
 
 impl Drop for Window {
@@ -891,9 +1041,21 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
 
     // WM_NCDESTROY is a special case: this is when we must clean up the extra resources used by the window
     if msg == WM_NCDESTROY {
+        // SAFETY: this is the property installed by `on_nccreate`; it remains installed through IME
+        // teardown so any synchronous finalization message can recover the same `Window`.
+        let raw = unsafe { GetPropW(hwnd, WINDOW_PTR_PROP_NAME).0.cast::<Window>() };
+        if !raw.is_null() {
+            // SAFETY: `raw` is the leaked `Weak<Window>`; `ManuallyDrop` only borrows it here because
+            // `RemovePropW` below performs the unique reclamation.
+            let weak = ManuallyDrop::new(unsafe { Weak::from_raw(raw) });
+            if let Some(window) = weak.upgrade() {
+                window.ime_teardown();
+            }
+        }
+        // SAFETY: teardown is complete and this terminal message removes the property exactly once.
         if let Ok(raw) = unsafe { RemovePropW(hwnd, WINDOW_PTR_PROP_NAME) } {
-            // Reclaim and drop the `Weak` leaked via `into_raw` in `on_nccreate`,
-            // before the HWND is recycled.
+            // SAFETY: property removal transfers the single `Weak<Window>` leaked by `on_nccreate`
+            // back for exactly one reconstruction and drop.
             drop(unsafe { Weak::from_raw(raw.0.cast::<Window>()) });
         }
         return LRESULT(0);
