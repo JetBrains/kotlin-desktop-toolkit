@@ -49,7 +49,7 @@ use super::{
     keyboard::{PhysicalKeyStatus, VirtualKey},
     pointer::{PointerButton, PointerButtonChangeKind, PointerClickCounter, PointerInfo},
     strings::copy_from_wide_string,
-    text_input_client::{TextInputClient, apply_owned_composition},
+    text_input_client::{TextInputClient, apply_finalizing_composition, apply_owned_composition},
     utils::{GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
     window::Window,
 };
@@ -745,7 +745,9 @@ fn on_ime_startcomposition(window: &Window) -> Option<LRESULT> {
 
 fn on_ime_composition(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
     window.enabled_client()?;
-    if window.ime_is_finalizing() {
+    let finalizing = window.ime_is_finalizing();
+    if finalizing && window.ime_app_has_marked_text() {
+        // Reentry from our own CPS_CANCEL: the client already unmarked, so consume without an edit.
         return Some(LRESULT(0));
     }
     let Some(context) = ImmContext::get(window.hwnd()) else {
@@ -756,6 +758,13 @@ fn on_ime_composition(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
         log::warn!("WM_IME_COMPOSITION carried an invalid negative or oversized lParam");
         return Some(LRESULT(0));
     };
+    if finalizing {
+        // Reentry from our own CPS_COMPLETE: deliver the result to the client synchronously.
+        // Owning the message keeps the IME from re-emitting it as WM_IME_CHAR/WM_CHAR later,
+        // when the client may already be swapped, disabled, or unfocused.
+        apply_finalizing_composition(window, &context, gcs);
+        return Some(LRESULT(0));
+    }
     let _ = apply_owned_composition(window, &context, gcs);
     Some(LRESULT(0))
 }

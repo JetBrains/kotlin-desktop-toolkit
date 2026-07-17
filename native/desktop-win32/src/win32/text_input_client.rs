@@ -145,7 +145,8 @@ pub(crate) fn client_logical_to_physical_rect(rect: LogicalRect, scale: f32) -> 
 
 pub(crate) trait CompositionSource {
     fn bytes(&self, which: IME_COMPOSITION_STRING) -> anyhow::Result<Vec<u8>>;
-    fn cursor(&self) -> anyhow::Result<usize>;
+    /// `None` when the IME shows no composition cursor.
+    fn cursor(&self) -> Option<usize>;
 }
 
 impl CompositionSource for ImmContext {
@@ -171,11 +172,11 @@ impl CompositionSource for ImmContext {
         Ok(bytes)
     }
 
-    fn cursor(&self) -> anyhow::Result<usize> {
+    fn cursor(&self) -> Option<usize> {
         // SAFETY: this guard owns a valid HIMC; `GCS_CURSORPOS` returns the scalar as the result.
         let cursor = unsafe { ImmGetCompositionStringW(self.himc(), GCS_CURSORPOS, None, 0) };
-        anyhow::ensure!(cursor >= 0, "ImmGetCompositionStringW(GCS_CURSORPOS) failed: {cursor}");
-        Ok(usize::try_from(cursor)?)
+        // A negative value is the documented "no visible cursor" state, not an IMM error.
+        usize::try_from(cursor).ok()
     }
 }
 
@@ -297,7 +298,10 @@ impl CompositionSnapshot {
         let preedit = if gcs & GCS_PREEDIT_UPDATE != 0 {
             let text = decode_utf16_bytes(&source.bytes(GCS_COMPSTR)?)?;
             let length = text.encode_utf16().count();
-            let cursor = source.cursor()?.min(length);
+            let selected = source.cursor().map_or_else(TextRange::none, |cursor| TextRange {
+                location: cursor.min(length),
+                length: 0,
+            });
             let underlines = match (
                 source.bytes(GCS_COMPATTR),
                 source.bytes(GCS_COMPCLAUSE).and_then(|bytes| decode_u32_bytes(&bytes)),
@@ -310,10 +314,7 @@ impl CompositionSnapshot {
             };
             Some(PreeditSnapshot {
                 text,
-                selected: TextRange {
-                    location: cursor,
-                    length: 0,
-                },
+                selected,
                 underlines,
             })
         } else {
@@ -448,6 +449,20 @@ pub(crate) fn apply_owned_composition(sink: &impl CompositionSink, source: &impl
     OwnedCompositionResult::Applied
 }
 
+/// Deliver the result of this window's own `CPS_COMPLETE` finalization. The reentrant
+/// `WM_IME_COMPOSITION` arrives while composition state is being torn down, so only
+/// `GCS_RESULTSTR` matters — preedit flags describe a composition that no longer exists.
+pub(crate) fn apply_finalizing_composition(sink: &impl CompositionSink, source: &impl CompositionSource, gcs: u32) {
+    if gcs & GCS_RESULTSTR.0 == 0 {
+        return;
+    }
+    match source.bytes(GCS_RESULTSTR).and_then(|bytes| decode_utf16_bytes(&bytes)) {
+        Ok(text) if !text.is_empty() => sink.insert_text(&text),
+        Ok(_) => {}
+        Err(err) => log::warn!("reading the finalized IME result failed: {err:#}"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::cell::{Cell, RefCell};
@@ -490,7 +505,7 @@ mod tests {
         composition: Vec<u8>,
         attributes: Vec<u8>,
         clauses: Vec<u8>,
-        cursor: usize,
+        cursor: Option<usize>,
         fail_on: Option<IME_COMPOSITION_STRING>,
     }
 
@@ -508,8 +523,8 @@ mod tests {
             })
         }
 
-        fn cursor(&self) -> anyhow::Result<usize> {
-            Ok(self.cursor)
+        fn cursor(&self) -> Option<usize> {
+            self.cursor
         }
     }
 
@@ -559,7 +574,7 @@ mod tests {
             composition: utf16_bytes("かな"),
             attributes: vec![u8::try_from(ATTR_INPUT).unwrap(), u8::try_from(ATTR_INPUT).unwrap()],
             clauses: u32_bytes(&[0, 2]),
-            cursor: 1,
+            cursor: Some(1),
             ..Default::default()
         };
         for flag in [GCS_COMPATTR, GCS_COMPCLAUSE, GCS_CURSORPOS, GCS_DELTASTART] {
@@ -575,7 +590,7 @@ mod tests {
         let source = FakeSource {
             result: utf16_bytes("確定"),
             composition: utf16_bytes("つぎ"),
-            cursor: 1,
+            cursor: Some(1),
             ..Default::default()
         };
         let snapshot = CompositionSnapshot::read(&source, GCS_RESULTSTR.0 | GCS_COMPSTR.0).unwrap();
@@ -591,11 +606,22 @@ mod tests {
 
         let source = FakeSource {
             composition: utf16_bytes("かな"),
-            cursor: 99,
+            cursor: Some(99),
             ..Default::default()
         };
         let clamped = CompositionSnapshot::read(&source, GCS_COMPSTR.0).unwrap();
         assert_eq!(clamped.preedit.unwrap().selected, TextRange { location: 2, length: 0 });
+    }
+
+    #[test]
+    fn hidden_cursor_renders_preedit_without_selection() {
+        let source = FakeSource {
+            composition: utf16_bytes("かな"),
+            cursor: None,
+            ..Default::default()
+        };
+        let snapshot = CompositionSnapshot::read(&source, GCS_COMPSTR.0).unwrap();
+        assert_eq!(snapshot.preedit.unwrap().selected, TextRange::none());
     }
 
     #[test]
@@ -703,6 +729,7 @@ mod tests {
         composition_active: Cell<bool>,
         app_marked: Cell<bool>,
         callbacks: RefCell<Vec<&'static str>>,
+        inserted: RefCell<Vec<String>>,
         reenter_on: Option<ReenterOn>,
     }
 
@@ -737,7 +764,8 @@ mod tests {
             self.app_marked.set(false);
             self.advance_revision()
         }
-        fn insert_text(&self, _text: &str) {
+        fn insert_text(&self, text: &str) {
+            self.inserted.borrow_mut().push(text.to_owned());
             self.callback("insert", ReenterOn::Insert);
         }
         fn set_marked_text(&self, _preedit: &PreeditSnapshot) {
@@ -829,5 +857,48 @@ mod tests {
             OwnedCompositionResult::Applied,
         );
         assert_eq!(&*sink.callbacks.borrow(), &["insert"]);
+    }
+
+    #[test]
+    fn finalizing_result_routes_to_insert_only() {
+        let sink = FakeSink::default();
+        let source = FakeSource {
+            result: utf16_bytes("確定"),
+            composition: utf16_bytes("つぎ"),
+            cursor: Some(1),
+            ..Default::default()
+        };
+        apply_finalizing_composition(&sink, &source, GCS_RESULTSTR.0 | GCS_COMPSTR.0);
+        assert_eq!(&*sink.callbacks.borrow(), &["insert"]);
+        assert_eq!(&*sink.inserted.borrow(), &["確定"]);
+    }
+
+    #[test]
+    fn finalizing_without_result_flag_makes_no_callbacks() {
+        let sink = FakeSink::default();
+        let source = FakeSource {
+            composition: utf16_bytes("つぎ"),
+            ..Default::default()
+        };
+        apply_finalizing_composition(&sink, &source, GCS_COMPSTR.0);
+        assert!(sink.callbacks.borrow().is_empty());
+    }
+
+    #[test]
+    fn finalizing_empty_result_makes_no_callbacks() {
+        let sink = FakeSink::default();
+        apply_finalizing_composition(&sink, &FakeSource::default(), GCS_RESULTSTR.0);
+        assert!(sink.callbacks.borrow().is_empty());
+    }
+
+    #[test]
+    fn finalizing_result_read_failure_is_tolerated() {
+        let sink = FakeSink::default();
+        let source = FakeSource {
+            fail_on: Some(GCS_RESULTSTR),
+            ..Default::default()
+        };
+        apply_finalizing_composition(&sink, &source, GCS_RESULTSTR.0);
+        assert!(sink.callbacks.borrow().is_empty());
     }
 }

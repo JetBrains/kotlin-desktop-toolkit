@@ -772,6 +772,10 @@ impl Window {
         self.ime.get().finalizing
     }
 
+    pub(crate) const fn ime_app_has_marked_text(&self) -> bool {
+        self.ime.get().app_has_marked_text
+    }
+
     pub(crate) fn ime_set_app_marked(&self, value: bool) -> u64 {
         let mut ime = self.ime.get();
         ime.app_has_marked_text = value;
@@ -921,7 +925,9 @@ impl Window {
         } else {
             self.finalize_composition()?;
             anyhow::ensure!(
-                // SAFETY: `hwnd` is live; null HIMC and zero flags detach this HWND's input context.
+                // Null HIMC + flags 0 is the de-facto detach idiom (winit, GLFW); Learn documents
+                // only the IACE_* flags.
+                // SAFETY: `hwnd` is live.
                 unsafe { ImmAssociateContextEx(hwnd, HIMC::default(), 0) }.as_bool(),
                 "ImmAssociateContextEx(detach) failed"
             );
@@ -975,9 +981,9 @@ impl Window {
     }
 
     pub(crate) fn ime_focus_lost(&self) -> anyhow::Result<()> {
-        // Keep `focused` true during Phase-1 `CPS_COMPLETE`: its synchronous `WM_CHAR` must still
-        // route to the active client. The call can reenter and regain focus, so query the final OS
-        // focus owner before committing local state.
+        // Finalizing can synchronously reenter this window (`CPS_COMPLETE` delivers its result
+        // through `WM_IME_COMPOSITION`) and can even regain focus, so query the final OS focus
+        // owner before committing local state.
         let finalization = self.finalize_composition();
         // SAFETY: `GetFocus` has no pointer/lifetime preconditions and returns this GUI thread's owner.
         let focused = unsafe { GetFocus() } == self.hwnd();
@@ -999,6 +1005,8 @@ impl Window {
         }
         let ime = self.ime.get();
         if ime.enabled {
+            // Null HIMC + flags 0 is the de-facto detach idiom (winit, GLFW); Learn documents
+            // only the IACE_* flags.
             // SAFETY: teardown runs before `WM_NCDESTROY` releases the live HWND.
             if !unsafe { ImmAssociateContextEx(self.hwnd(), HIMC::default(), 0) }.as_bool() {
                 log::warn!("ImmAssociateContextEx(detach during teardown) failed");

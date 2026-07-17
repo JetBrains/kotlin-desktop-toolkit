@@ -930,7 +930,9 @@ fn set_ime_enabled(&self, enabled: bool) -> anyhow::Result<()> {
         }
     } else {
         self.finalize_composition()?;
-        // SAFETY: hwnd is live; flags=0 with a null HIMC detaches the input context from this HWND.
+        // Null HIMC + flags 0 is the de-facto detach idiom (winit, GLFW); Learn documents only
+        // the IACE_* flags.
+        // SAFETY: hwnd is live.
         anyhow::ensure!(unsafe { ImmAssociateContextEx(hwnd, HIMC::default(), 0) }.as_bool(),
             "ImmAssociateContextEx(detach) failed");
         let mut ime = self.ime.get();
@@ -967,7 +969,8 @@ fn finalize_composition(&self) -> anyhow::Result<()> {
         self.clear_composition_state(); // also clears finalizing
         anyhow::ensure!(notified, "ImmNotifyIME(CPS_CANCEL) failed");
     } else {
-        // Phase 1 / idle: commit any IME-drawn composition through the normal WM_CHAR path.
+        // Phase 1 / idle: CPS_COMPLETE synchronously reenters WM_IME_COMPOSITION with
+        // GCS_RESULTSTR; the finalizing arm of on_ime_composition routes it to insert_text (§7.2).
         // SAFETY: ctx owns a valid HIMC acquired for this live HWND.
         let notified = unsafe { ImmNotifyIME(ctx.himc(), NI_COMPOSITIONSTR, CPS_COMPLETE, 0) }.as_bool();
         self.clear_composition_state();
@@ -1039,6 +1042,8 @@ fn ime_teardown(&self) {
     }
     let ime = self.ime.get();
     if ime.enabled {
+        // Null HIMC + flags 0 is the de-facto detach idiom (winit, GLFW); Learn documents
+        // only the IACE_* flags.
         // SAFETY: teardown runs before WM_NCDESTROY releases the live HWND.
         if !unsafe { ImmAssociateContextEx(self.hwnd(), HIMC::default(), 0) }.as_bool() {
             log::warn!("ImmAssociateContextEx(detach during teardown) failed");
@@ -1216,12 +1221,22 @@ fn on_ime_endcomposition(window: &Window) -> Option<LRESULT> {
 }
 ```
 
-`on_ime_composition` owns the message (returns `Some(LRESULT(0))` so the IME neither draws the
-preedit nor re-emits the result as `WM_CHAR`):
+`on_ime_composition` owns the message: returning `Some(LRESULT(0))` keeps the IME from drawing the
+preedit and from re-emitting the result as `WM_IME_CHAR`/`WM_CHAR` later, when the client may
+already be swapped, disabled, or unfocused. That ownership makes the `finalizing` reentries this
+window inflicts on itself the only delivery path, so they must be told apart: a `CPS_CANCEL`
+reentry (`app_has_marked_text` still set) is consumed without an edit because the client already
+unmarked, while a `CPS_COMPLETE` reentry carries `GCS_RESULTSTR` and must route it to the client
+synchronously via `apply_finalizing_composition` — otherwise the committed text is silently lost:
 
 ```rust
 fn on_ime_composition(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
     window.enabled_client()?;
+    let finalizing = window.ime_is_finalizing();
+    if finalizing && window.ime_app_has_marked_text() {
+        // Reentry from our own CPS_CANCEL: the client already unmarked, so consume without an edit.
+        return Some(LRESULT(0));
+    }
     let Some(ctx) = ImmContext::get(window.hwnd()) else {
         log::warn!("enabled IME client has no input context; keeping composition ownership");
         return Some(LRESULT(0));
@@ -1230,9 +1245,10 @@ fn on_ime_composition(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
         log::warn!("WM_IME_COMPOSITION carried an invalid negative or oversized lParam");
         return Some(LRESULT(0));
     };
-
-    if window.ime_is_finalizing() {
-        return Some(LRESULT(0)); // consume notification-generated cancellation without a client edit
+    if finalizing {
+        // Reentry from our own CPS_COMPLETE: deliver the result to the client synchronously.
+        apply_finalizing_composition(window, &ctx, gcs);
+        return Some(LRESULT(0));
     }
 
     // Read every required value before the first callback. Once START/SETCONTEXT have suppressed the
@@ -1298,16 +1314,13 @@ impl CompositionSnapshot {
         let preedit = if gcs & GCS_PREEDIT_UPDATE != 0 {
             let text = read_comp_string(ctx, GCS_COMPSTR)?;
             let len = text.encode_utf16().count();
-            let cursor = read_comp_cursor(ctx)?.min(len);
+            let selected = read_comp_cursor(ctx)
+                .map_or_else(TextRange::none, |cursor| TextRange { location: cursor.min(len), length: 0 });
             let underlines = read_underlines(ctx, len).unwrap_or_else(|err| {
                 log::warn!("reading IME underline data failed: {err:#}");
                 fallback_underlines(len)
             });
-            Some(PreeditSnapshot {
-                text,
-                selected: TextRange { location: cursor, length: 0 },
-                underlines,
-            })
+            Some(PreeditSnapshot { text, selected, underlines })
         } else {
             None
         };
@@ -1346,13 +1359,13 @@ fn read_comp_string(ctx: &ImmContext, which: IME_COMPOSITION_STRING) -> anyhow::
     Ok(String::from_utf16_lossy(&units))
 }
 
-// GCS_CURSORPOS is the function's return value (null buffer). Distinguish an IMM error (negative)
-// from a real caret offset of 0.
-fn read_comp_cursor(ctx: &ImmContext) -> anyhow::Result<usize> {
+// GCS_CURSORPOS is the function's return value (null buffer). A negative value is the documented
+// "cursor not present" state — some IMEs hide the composition cursor — not an IMM error; render
+// such a preedit without a selection instead of failing the whole snapshot.
+fn read_comp_cursor(ctx: &ImmContext) -> Option<usize> {
     // SAFETY: ctx owns a valid HIMC; GCS_CURSORPOS returns its scalar in the function result.
     let pos = unsafe { ImmGetCompositionStringW(ctx.himc(), GCS_CURSORPOS, None, 0) };
-    anyhow::ensure!(pos >= 0, "ImmGetCompositionStringW(GCS_CURSORPOS) failed: {pos}");
-    Ok(usize::try_from(pos)?)
+    usize::try_from(pos).ok()
 }
 ```
 
@@ -2496,7 +2509,9 @@ pub(crate) fn set_ime_enabled(&self, enabled: bool) -> anyhow::Result<()> {
     } else {
         self.finalize_composition()?;
         anyhow::ensure!(
-            // SAFETY: `hwnd` is live; null HIMC and zero flags detach this HWND's input context.
+            // Null HIMC + flags 0 is the de-facto detach idiom (winit, GLFW); Learn documents
+            // only the IACE_* flags.
+            // SAFETY: `hwnd` is live.
             unsafe { ImmAssociateContextEx(hwnd, HIMC::default(), 0) }.as_bool(),
             "ImmAssociateContextEx(detach) failed"
         );
@@ -2534,6 +2549,8 @@ fn finalize_composition(&self) -> anyhow::Result<()> {
         self.clear_composition_state();
         anyhow::ensure!(notified, "ImmNotifyIME(CPS_CANCEL) failed");
     } else {
+        // CPS_COMPLETE synchronously reenters WM_IME_COMPOSITION with GCS_RESULTSTR; the
+        // finalizing arm of on_ime_composition routes it to insert_text.
         // SAFETY: `context` owns the live window's valid HIMC.
         let notified = unsafe {
             ImmNotifyIME(context.himc(), NI_COMPOSITIONSTR, CPS_COMPLETE, 0)
@@ -2559,9 +2576,9 @@ pub(crate) fn ime_focus_gained(&self) -> anyhow::Result<()> {
 }
 
 pub(crate) fn ime_focus_lost(&self) -> anyhow::Result<()> {
-    // Keep `focused` true during Phase-1 `CPS_COMPLETE`: its synchronous `WM_CHAR` must still
-    // route to the active client. The call can reenter and regain focus, so query the final OS
-    // focus owner before committing local state.
+    // Finalizing can synchronously reenter this window (`CPS_COMPLETE` delivers its result
+    // through `WM_IME_COMPOSITION`) and can even regain focus, so query the final OS focus
+    // owner before committing local state.
     let finalization = self.finalize_composition();
     // SAFETY: `GetFocus` has no pointer/lifetime preconditions and returns this GUI thread's owner.
     let focused = unsafe { GetFocus() } == self.hwnd();
@@ -2585,6 +2602,8 @@ pub(crate) fn ime_teardown(&self) {
     }
     let ime = self.ime.get();
     if ime.enabled {
+        // Null HIMC + flags 0 is the de-facto detach idiom (winit, GLFW); Learn documents
+        // only the IACE_* flags.
         // SAFETY: teardown runs before `WM_NCDESTROY` releases the live HWND.
         if !unsafe { ImmAssociateContextEx(self.hwnd(), HIMC::default(), 0) }.as_bool() {
             log::warn!("ImmAssociateContextEx(detach during teardown) failed");
@@ -3825,7 +3844,7 @@ struct FakeSource {
     composition: Vec<u8>,
     attributes: Vec<u8>,
     clauses: Vec<u8>,
-    cursor: usize,
+    cursor: Option<usize>,
     fail_on: Option<IME_COMPOSITION_STRING>,
 }
 
@@ -3843,8 +3862,8 @@ impl CompositionSource for FakeSource {
         })
     }
 
-    fn cursor(&self) -> anyhow::Result<usize> {
-        Ok(self.cursor)
+    fn cursor(&self) -> Option<usize> {
+        self.cursor
     }
 }
 
@@ -3897,7 +3916,7 @@ fn partial_preedit_flags_refetch_complete_preedit() {
         composition: utf16_bytes("かな"),
         attributes: vec![u8::try_from(ATTR_INPUT).unwrap(), u8::try_from(ATTR_INPUT).unwrap()],
         clauses: u32_bytes(&[0, 2]),
-        cursor: 1,
+        cursor: Some(1),
         ..Default::default()
     };
     for flag in [GCS_COMPATTR, GCS_COMPCLAUSE, GCS_CURSORPOS, GCS_DELTASTART] {
@@ -3913,7 +3932,7 @@ fn snapshot_reads_result_and_new_preedit_together() {
     let source = FakeSource {
         result: utf16_bytes("確定"),
         composition: utf16_bytes("つぎ"),
-        cursor: 1,
+        cursor: Some(1),
         ..Default::default()
     };
     let snapshot = CompositionSnapshot::read(&source, GCS_RESULTSTR.0 | GCS_COMPSTR.0).unwrap();
@@ -3929,11 +3948,22 @@ fn empty_preedit_is_present_and_cursor_is_clamped() {
 
     let source = FakeSource {
         composition: utf16_bytes("かな"),
-        cursor: 99,
+        cursor: Some(99),
         ..Default::default()
     };
     let clamped = CompositionSnapshot::read(&source, GCS_COMPSTR.0).unwrap();
     assert_eq!(clamped.preedit.unwrap().selected, TextRange { location: 2, length: 0 });
+}
+
+#[test]
+fn hidden_cursor_renders_preedit_without_selection() {
+    let source = FakeSource {
+        composition: utf16_bytes("かな"),
+        cursor: None,
+        ..Default::default()
+    };
+    let snapshot = CompositionSnapshot::read(&source, GCS_COMPSTR.0).unwrap();
+    assert_eq!(snapshot.preedit.unwrap().selected, TextRange::none());
 }
 
 #[test]
@@ -3983,7 +4013,8 @@ use windows::Win32::UI::Input::Ime::{
 ```rust
 trait CompositionSource {
     fn bytes(&self, which: IME_COMPOSITION_STRING) -> anyhow::Result<Vec<u8>>;
-    fn cursor(&self) -> anyhow::Result<usize>;
+    /// `None` when the IME shows no composition cursor.
+    fn cursor(&self) -> Option<usize>;
 }
 
 impl CompositionSource for ImmContext {
@@ -4008,11 +4039,11 @@ impl CompositionSource for ImmContext {
         Ok(bytes)
     }
 
-    fn cursor(&self) -> anyhow::Result<usize> {
+    fn cursor(&self) -> Option<usize> {
         // SAFETY: this guard owns a valid HIMC; `GCS_CURSORPOS` returns the scalar as the result.
         let cursor = unsafe { ImmGetCompositionStringW(self.himc(), GCS_CURSORPOS, None, 0) };
-        anyhow::ensure!(cursor >= 0, "ImmGetCompositionStringW(GCS_CURSORPOS) failed: {cursor}");
-        Ok(usize::try_from(cursor)?)
+        // A negative value is the documented "no visible cursor" state, not an IMM error.
+        usize::try_from(cursor).ok()
     }
 }
 ```
@@ -4494,6 +4525,20 @@ fn apply_owned_composition(
     apply_composition_actions(sink, reduce_composition(snapshot));
     OwnedCompositionResult::Applied
 }
+
+/// Deliver the result of this window's own `CPS_COMPLETE` finalization. The reentrant
+/// `WM_IME_COMPOSITION` arrives while composition state is being torn down, so only
+/// `GCS_RESULTSTR` matters — preedit flags describe a composition that no longer exists.
+fn apply_finalizing_composition(sink: &impl CompositionSink, source: &impl CompositionSource, gcs: u32) {
+    if gcs & GCS_RESULTSTR.0 == 0 {
+        return;
+    }
+    match source.bytes(GCS_RESULTSTR).and_then(|bytes| decode_utf16_bytes(&bytes)) {
+        Ok(text) if !text.is_empty() => sink.insert_text(&text),
+        Ok(_) => {}
+        Err(err) => log::warn!("reading the finalized IME result failed: {err:#}"),
+    }
+}
 ```
 
 - [ ] **Step 3: Replace Phase-1 handlers with the full owned handlers**
@@ -4523,7 +4568,9 @@ pub(crate) fn on_ime_startcomposition(window: &Window) -> Option<LRESULT> {
 
 pub(crate) fn on_ime_composition(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
     window.enabled_client()?;
-    if window.ime_is_finalizing() {
+    let finalizing = window.ime_is_finalizing();
+    if finalizing && window.ime_app_has_marked_text() {
+        // Reentry from our own CPS_CANCEL: the client already unmarked, so consume without an edit.
         return Some(LRESULT(0));
     }
     let Some(context) = ImmContext::get(window.hwnd()) else {
@@ -4534,6 +4581,11 @@ pub(crate) fn on_ime_composition(window: &Window, lparam: LPARAM) -> Option<LRES
         log::warn!("WM_IME_COMPOSITION carried an invalid negative or oversized lParam");
         return Some(LRESULT(0));
     };
+    if finalizing {
+        // Reentry from our own CPS_COMPLETE: deliver the result to the client synchronously.
+        apply_finalizing_composition(window, &context, gcs);
+        return Some(LRESULT(0));
+    }
     let _ = apply_owned_composition(window, &context, gcs);
     Some(LRESULT(0))
 }
