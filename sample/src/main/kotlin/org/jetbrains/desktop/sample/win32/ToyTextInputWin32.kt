@@ -10,6 +10,7 @@ import org.jetbrains.desktop.win32.PointerButton
 import org.jetbrains.desktop.win32.TextInputClient
 import org.jetbrains.desktop.win32.TextRange
 import org.jetbrains.desktop.win32.UnderlineSegment
+import org.jetbrains.desktop.win32.UnderlineStyle
 import org.jetbrains.desktop.win32.VirtualKey
 import org.jetbrains.desktop.win32.Window
 import org.jetbrains.skia.Canvas
@@ -237,6 +238,33 @@ class ToyTextInputWin32(
                     )
                 }
                 paragraph.paint(canvas, textX, textY)
+                val mark = marked
+                if (mark != null) {
+                    for (segment in underlines) {
+                        val start = mark.location.toInt() + segment.range.location.toInt()
+                        val end = start + segment.range.length.toInt()
+                        val x1 = textX + measurePrefix(start, scale)
+                        val x2 = textX + measurePrefix(end, scale)
+                        Paint().use { paint ->
+                            paint.color = if (segment.targetClause) 0xFF_FF_CC_33.toInt() else 0xFF_E0_E0_E0.toInt()
+                            paint.strokeWidth = when (segment.style) {
+                                UnderlineStyle.Solid -> 1f * scale
+                                UnderlineStyle.Dotted -> 1f * scale
+                                UnderlineStyle.Thick -> 2f * scale
+                            }
+                            if (segment.style == UnderlineStyle.Dotted) {
+                                var x = x1
+                                while (x < x2) {
+                                    canvas.drawPoint(x, textY + paragraph.height - scale, paint)
+                                    x += 3f * scale
+                                }
+                            } else {
+                                val underlineY = textY + paragraph.height - scale
+                                canvas.drawLine(x1, underlineY, x2, underlineY, paint)
+                            }
+                        }
+                    }
+                }
                 val caretX = textX + measurePrefix(cursor, scale)
                 paint.color = 0xFF_F0_F0_F0.toInt()
                 paint.strokeWidth = 1.5f * scale
