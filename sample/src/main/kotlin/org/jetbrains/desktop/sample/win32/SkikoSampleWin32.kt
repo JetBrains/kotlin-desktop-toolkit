@@ -9,6 +9,7 @@ import org.jetbrains.desktop.win32.Keyboard
 import org.jetbrains.desktop.win32.KotlinDesktopToolkit
 import org.jetbrains.desktop.win32.LogLevel
 import org.jetbrains.desktop.win32.Logger
+import org.jetbrains.desktop.win32.LogicalPoint
 import org.jetbrains.desktop.win32.LogicalSize
 import org.jetbrains.desktop.win32.PhysicalSize
 import org.jetbrains.desktop.win32.VirtualKey
@@ -49,6 +50,55 @@ class SkottieWindow(app: Application) : SkikoWindowWin32(app) {
         }
     }
 
+    private val textInput = ToyTextInputWin32(
+        window = window,
+        origin = LogicalPoint(40f, titleBarHeight + 24f),
+        size = LogicalSize(560f, 52f),
+    )
+    private var imeEnabled = true
+    private var clientRegistered = true
+
+    init {
+        window.setTextInputClient(textInput)
+    }
+
+    override fun handleEvent(event: Event): EventHandlerResult {
+        when (event) {
+            is Event.WindowResize -> {
+                val logical = event.size.toLogical(event.scale)
+                textInput.reflow(LogicalSize(maxOf(160f, logical.width - 80f), 52f))
+            }
+            is Event.WindowScaleChanged -> {
+                val logical = event.size.toLogical(event.scale)
+                textInput.reflow(LogicalSize(maxOf(160f, logical.width - 80f), 52f))
+            }
+            else -> Unit
+        }
+        if (event is Event.InputLanguageChanged) {
+            Logger.info { "Input language: HKL=${event.hkl}, locale=${event.localeName}" }
+        }
+        if (event is Event.KeyDown &&
+            event.virtualKey == VirtualKey.I &&
+            Keyboard.getKeyState(VirtualKey.Control).isDown
+        ) {
+            imeEnabled = !imeEnabled
+            window.setImeEnabled(imeEnabled)
+            Logger.info { "IME enabled: $imeEnabled" }
+            return EventHandlerResult.Stop
+        }
+        if (event is Event.KeyDown &&
+            event.virtualKey == VirtualKey.T &&
+            Keyboard.getKeyState(VirtualKey.Control).isDown
+        ) {
+            clientRegistered = !clientRegistered
+            if (clientRegistered) window.setTextInputClient(textInput) else window.clearTextInputClient()
+            Logger.info { "Text input client registered: $clientRegistered" }
+            return EventHandlerResult.Stop
+        }
+        val textResult = textInput.handleEvent(event)
+        return if (textResult == EventHandlerResult.Stop) textResult else super.handleEvent(event)
+    }
+
     override fun Canvas.draw(size: PhysicalSize, scale: Float, time: Long) {
         val canvas = this
         // Title-bar height is logical; scale it to device pixels to match the physical `size`,
@@ -76,6 +126,7 @@ class SkottieWindow(app: Application) : SkikoWindowWin32(app) {
         val frame = (time.toFloat() % animationDuration) / animation.fPS
         animation.seekFrame(frame)
         animation.render(canvas, (size.width.toFloat() / 2) - (animation.width / 2), (size.height.toFloat() / 2) - (animation.height / 2))
+        textInput.draw(this, scale)
         timer.schedule(floor(1000f / animation.fPS).toLong()) {
             window.requestRedraw()
         }
@@ -83,7 +134,9 @@ class SkottieWindow(app: Application) : SkikoWindowWin32(app) {
 
     override fun close() {
         timer.cancel()
-        super.close()
+        textInput.use {
+            super.close()
+        }
     }
 }
 
