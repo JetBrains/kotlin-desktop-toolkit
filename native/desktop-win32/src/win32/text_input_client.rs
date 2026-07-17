@@ -1,8 +1,18 @@
 use desktop_common::ffi_utils::{BorrowedArray, BorrowedUtf8};
 
-use windows::Win32::Foundation::RECT;
+use windows::Win32::{
+    Foundation::RECT,
+    UI::Input::Ime::{
+        ATTR_CONVERTED, ATTR_FIXEDCONVERTED, ATTR_INPUT, ATTR_TARGET_CONVERTED, ATTR_TARGET_NOTCONVERTED, GCS_COMPATTR, GCS_COMPCLAUSE,
+        GCS_COMPREADATTR, GCS_COMPREADCLAUSE, GCS_COMPREADSTR, GCS_COMPSTR, GCS_CURSORPOS, GCS_DELTASTART, GCS_RESULTCLAUSE,
+        GCS_RESULTREADCLAUSE, GCS_RESULTREADSTR, GCS_RESULTSTR, IME_COMPOSITION_STRING, ImmGetCompositionStringW,
+    },
+};
 
-use super::geometry::{LogicalPoint, LogicalRect, LogicalSize};
+use super::{
+    geometry::{LogicalPoint, LogicalRect, LogicalSize},
+    ime::ImmContext,
+};
 
 /// cbindgen:ignore
 const NOT_FOUND: usize = usize::MAX;
@@ -132,9 +142,198 @@ pub(crate) fn client_logical_to_physical_rect(rect: LogicalRect, scale: f32) -> 
     }
 }
 
+trait CompositionSource {
+    fn bytes(&self, which: IME_COMPOSITION_STRING) -> anyhow::Result<Vec<u8>>;
+    fn cursor(&self) -> anyhow::Result<usize>;
+}
+
+impl CompositionSource for ImmContext {
+    fn bytes(&self, which: IME_COMPOSITION_STRING) -> anyhow::Result<Vec<u8>> {
+        // SAFETY: this guard owns a valid HIMC; null buffer and zero size is the documented probe.
+        let required = unsafe { ImmGetCompositionStringW(self.himc(), which, None, 0) };
+        anyhow::ensure!(required >= 0, "ImmGetCompositionStringW({which:?}) probe failed: {required}");
+        if required == 0 {
+            return Ok(Vec::new());
+        }
+        let capacity = usize::try_from(required)?;
+        let capacity_u32 = u32::try_from(capacity)?;
+        let mut bytes = vec![0u8; capacity];
+        // SAFETY: `bytes` is writable for exactly `capacity_u32` bytes and this guard owns the HIMC.
+        let written = unsafe { ImmGetCompositionStringW(self.himc(), which, Some(bytes.as_mut_ptr().cast()), capacity_u32) };
+        anyhow::ensure!(written >= 0, "ImmGetCompositionStringW({which:?}) fill failed: {written}");
+        let written = usize::try_from(written)?;
+        anyhow::ensure!(
+            written <= capacity,
+            "ImmGetCompositionStringW({which:?}) returned {written} > {capacity}"
+        );
+        bytes.truncate(written);
+        Ok(bytes)
+    }
+
+    fn cursor(&self) -> anyhow::Result<usize> {
+        // SAFETY: this guard owns a valid HIMC; `GCS_CURSORPOS` returns the scalar as the result.
+        let cursor = unsafe { ImmGetCompositionStringW(self.himc(), GCS_CURSORPOS, None, 0) };
+        anyhow::ensure!(cursor >= 0, "ImmGetCompositionStringW(GCS_CURSORPOS) failed: {cursor}");
+        Ok(usize::try_from(cursor)?)
+    }
+}
+
+fn decode_utf16_bytes(bytes: &[u8]) -> anyhow::Result<String> {
+    anyhow::ensure!(
+        bytes.len().is_multiple_of(size_of::<u16>()),
+        "odd UTF-16 byte count: {}",
+        bytes.len()
+    );
+    let units = bytes
+        .chunks_exact(size_of::<u16>())
+        .map(|pair| u16::from_ne_bytes([pair[0], pair[1]]))
+        .collect::<Vec<_>>();
+    Ok(String::from_utf16_lossy(&units))
+}
+
+fn decode_u32_bytes(bytes: &[u8]) -> anyhow::Result<Vec<u32>> {
+    anyhow::ensure!(
+        bytes.len().is_multiple_of(size_of::<u32>()),
+        "unaligned u32 byte count: {}",
+        bytes.len()
+    );
+    Ok(bytes
+        .chunks_exact(size_of::<u32>())
+        .map(|part| u32::from_ne_bytes([part[0], part[1], part[2], part[3]]))
+        .collect())
+}
+
+fn underlines_from_parts(attrs: &[u8], clauses: &[u32], preedit_len: usize) -> Vec<UnderlineSegment> {
+    let bounds = clauses.iter().map(|value| usize::try_from(*value)).collect::<Result<Vec<_>, _>>();
+    let Ok(bounds) = bounds else {
+        return fallback_underlines(preedit_len);
+    };
+    if bounds.len() < 2
+        || bounds.first() != Some(&0)
+        || bounds.last() != Some(&preedit_len)
+        || bounds.iter().any(|value| *value > preedit_len)
+        || bounds.windows(2).any(|pair| pair[0] > pair[1])
+    {
+        return fallback_underlines(preedit_len);
+    }
+
+    bounds
+        .windows(2)
+        .filter_map(|pair| {
+            let (start, end) = (pair[0], pair[1]);
+            if start >= end {
+                return None;
+            }
+            let attribute = attrs.get(start).copied().map_or(ATTR_INPUT, u32::from);
+            let (style, target_clause) = match attribute {
+                ATTR_TARGET_CONVERTED => (UnderlineStyle::Thick, true),
+                ATTR_TARGET_NOTCONVERTED => (UnderlineStyle::Dotted, true),
+                ATTR_CONVERTED | ATTR_FIXEDCONVERTED => (UnderlineStyle::Solid, false),
+                _ => (UnderlineStyle::Dotted, false),
+            };
+            Some(UnderlineSegment {
+                range: TextRange {
+                    location: start,
+                    length: end - start,
+                },
+                style,
+                target_clause,
+            })
+        })
+        .collect()
+}
+
+fn fallback_underlines(preedit_len: usize) -> Vec<UnderlineSegment> {
+    (preedit_len != 0)
+        .then_some(UnderlineSegment {
+            range: TextRange {
+                location: 0,
+                length: preedit_len,
+            },
+            style: UnderlineStyle::Dotted,
+            target_clause: false,
+        })
+        .into_iter()
+        .collect()
+}
+
+/// cbindgen:ignore
+const GCS_ANY: u32 = GCS_COMPREADSTR.0
+    | GCS_COMPREADATTR.0
+    | GCS_COMPREADCLAUSE.0
+    | GCS_COMPSTR.0
+    | GCS_COMPATTR.0
+    | GCS_COMPCLAUSE.0
+    | GCS_CURSORPOS.0
+    | GCS_DELTASTART.0
+    | GCS_RESULTREADSTR.0
+    | GCS_RESULTREADCLAUSE.0
+    | GCS_RESULTSTR.0
+    | GCS_RESULTCLAUSE.0;
+
+/// cbindgen:ignore
+const GCS_PREEDIT_UPDATE: u32 = GCS_COMPSTR.0 | GCS_COMPATTR.0 | GCS_COMPCLAUSE.0 | GCS_CURSORPOS.0 | GCS_DELTASTART.0;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PreeditSnapshot {
+    text: String,
+    selected: TextRange,
+    underlines: Vec<UnderlineSegment>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CompositionSnapshot {
+    result: Option<String>,
+    preedit: Option<PreeditSnapshot>,
+    cancelled: bool,
+}
+
+impl CompositionSnapshot {
+    fn read(source: &impl CompositionSource, gcs: u32) -> anyhow::Result<Self> {
+        let result = (gcs & GCS_RESULTSTR.0 != 0)
+            .then(|| source.bytes(GCS_RESULTSTR).and_then(|bytes| decode_utf16_bytes(&bytes)))
+            .transpose()?;
+        let preedit = if gcs & GCS_PREEDIT_UPDATE != 0 {
+            let text = decode_utf16_bytes(&source.bytes(GCS_COMPSTR)?)?;
+            let length = text.encode_utf16().count();
+            let cursor = source.cursor()?.min(length);
+            let underlines = match (
+                source.bytes(GCS_COMPATTR),
+                source.bytes(GCS_COMPCLAUSE).and_then(|bytes| decode_u32_bytes(&bytes)),
+            ) {
+                (Ok(attrs), Ok(clauses)) => underlines_from_parts(&attrs, &clauses, length),
+                (Err(err), _) | (_, Err(err)) => {
+                    log::warn!("reading IME underline data failed: {err:#}");
+                    fallback_underlines(length)
+                }
+            };
+            Some(PreeditSnapshot {
+                text,
+                selected: TextRange {
+                    location: cursor,
+                    length: 0,
+                },
+                underlines,
+            })
+        } else {
+            None
+        };
+        Ok(Self {
+            result,
+            preedit,
+            cancelled: gcs & GCS_ANY == 0,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use windows::Win32::UI::Input::Ime::{
+        ATTR_INPUT, ATTR_TARGET_CONVERTED, CS_INSERTCHAR, CS_NOMOVECARET, GCS_COMPATTR, GCS_COMPCLAUSE, GCS_COMPSTR, GCS_CURSORPOS,
+        GCS_DELTASTART, GCS_RESULTSTR, IME_COMPOSITION_STRING,
+    };
 
     #[test]
     fn none_range_round_trips() {
@@ -151,5 +350,155 @@ mod tests {
         };
         let physical = client_logical_to_physical_rect(rect, 1.5);
         assert_eq!((physical.left, physical.top, physical.right, physical.bottom), (15, 8, 21, 15));
+    }
+
+    fn utf16_bytes(value: &str) -> Vec<u8> {
+        value.encode_utf16().flat_map(u16::to_ne_bytes).collect()
+    }
+
+    fn u32_bytes(values: &[u32]) -> Vec<u8> {
+        values.iter().flat_map(|value| value.to_ne_bytes()).collect()
+    }
+
+    #[derive(Default)]
+    struct FakeSource {
+        result: Vec<u8>,
+        composition: Vec<u8>,
+        attributes: Vec<u8>,
+        clauses: Vec<u8>,
+        cursor: usize,
+        fail_on: Option<IME_COMPOSITION_STRING>,
+    }
+
+    impl CompositionSource for FakeSource {
+        fn bytes(&self, which: IME_COMPOSITION_STRING) -> anyhow::Result<Vec<u8>> {
+            if self.fail_on == Some(which) {
+                anyhow::bail!("injected {which:?} failure");
+            }
+            Ok(match which {
+                GCS_RESULTSTR => self.result.clone(),
+                GCS_COMPSTR => self.composition.clone(),
+                GCS_COMPATTR => self.attributes.clone(),
+                GCS_COMPCLAUSE => self.clauses.clone(),
+                _ => Vec::new(),
+            })
+        }
+
+        fn cursor(&self) -> anyhow::Result<usize> {
+            Ok(self.cursor)
+        }
+    }
+
+    #[test]
+    fn byte_decoders_reject_misaligned_data() {
+        assert!(decode_utf16_bytes(&[1]).is_err());
+        assert!(decode_u32_bytes(&[0, 0, 0]).is_err());
+    }
+
+    #[test]
+    fn underline_conversion_maps_clauses_and_targets() {
+        let underlines = underlines_from_parts(
+            &[
+                u8::try_from(ATTR_INPUT).unwrap(),
+                u8::try_from(ATTR_INPUT).unwrap(),
+                u8::try_from(ATTR_TARGET_CONVERTED).unwrap(),
+                u8::try_from(ATTR_TARGET_CONVERTED).unwrap(),
+            ],
+            &[0, 2, 4],
+            4,
+        );
+        assert_eq!(
+            underlines,
+            vec![
+                UnderlineSegment {
+                    range: TextRange { location: 0, length: 2 },
+                    style: UnderlineStyle::Dotted,
+                    target_clause: false,
+                },
+                UnderlineSegment {
+                    range: TextRange { location: 2, length: 2 },
+                    style: UnderlineStyle::Thick,
+                    target_clause: true,
+                },
+            ],
+        );
+    }
+
+    #[test]
+    fn malformed_clauses_fall_back_to_whole_preedit() {
+        assert_eq!(underlines_from_parts(&[], &[1, 3], 3), fallback_underlines(3),);
+    }
+
+    #[test]
+    fn partial_preedit_flags_refetch_complete_preedit() {
+        let source = FakeSource {
+            composition: utf16_bytes("かな"),
+            attributes: vec![u8::try_from(ATTR_INPUT).unwrap(), u8::try_from(ATTR_INPUT).unwrap()],
+            clauses: u32_bytes(&[0, 2]),
+            cursor: 1,
+            ..Default::default()
+        };
+        for flag in [GCS_COMPATTR, GCS_COMPCLAUSE, GCS_CURSORPOS, GCS_DELTASTART] {
+            let snapshot = CompositionSnapshot::read(&source, flag.0).unwrap();
+            let preedit = snapshot.preedit.unwrap();
+            assert_eq!(preedit.text, "かな");
+            assert_eq!(preedit.selected, TextRange { location: 1, length: 0 });
+        }
+    }
+
+    #[test]
+    fn snapshot_reads_result_and_new_preedit_together() {
+        let source = FakeSource {
+            result: utf16_bytes("確定"),
+            composition: utf16_bytes("つぎ"),
+            cursor: 1,
+            ..Default::default()
+        };
+        let snapshot = CompositionSnapshot::read(&source, GCS_RESULTSTR.0 | GCS_COMPSTR.0).unwrap();
+        assert_eq!(snapshot.result.as_deref(), Some("確定"));
+        assert_eq!(snapshot.preedit.unwrap().text, "つぎ");
+    }
+
+    #[test]
+    fn empty_preedit_is_present_and_cursor_is_clamped() {
+        let empty = CompositionSnapshot::read(&FakeSource::default(), GCS_COMPSTR.0).unwrap();
+        assert_eq!(empty.preedit.unwrap().text, "");
+        assert!(!empty.cancelled);
+
+        let source = FakeSource {
+            composition: utf16_bytes("かな"),
+            cursor: 99,
+            ..Default::default()
+        };
+        let clamped = CompositionSnapshot::read(&source, GCS_COMPSTR.0).unwrap();
+        assert_eq!(clamped.preedit.unwrap().selected, TextRange { location: 2, length: 0 });
+    }
+
+    #[test]
+    fn status_only_mask_is_cancellation() {
+        let snapshot = CompositionSnapshot::read(&FakeSource::default(), CS_INSERTCHAR | CS_NOMOVECARET).unwrap();
+        assert!(snapshot.cancelled);
+        assert!(snapshot.result.is_none());
+        assert!(snapshot.preedit.is_none());
+    }
+
+    #[test]
+    fn optional_decoration_failure_uses_fallback() {
+        let source = FakeSource {
+            composition: utf16_bytes("かな"),
+            fail_on: Some(GCS_COMPATTR),
+            ..Default::default()
+        };
+        let snapshot = CompositionSnapshot::read(&source, GCS_COMPSTR.0).unwrap();
+        assert_eq!(snapshot.preedit.unwrap().underlines, fallback_underlines(2));
+    }
+
+    #[test]
+    fn core_read_failure_is_returned_before_any_action() {
+        let source = FakeSource {
+            fail_on: Some(GCS_COMPSTR),
+            ..Default::default()
+        };
+        assert!(CompositionSnapshot::read(&source, GCS_COMPSTR.0).is_err());
     }
 }
