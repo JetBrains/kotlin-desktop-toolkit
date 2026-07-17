@@ -718,9 +718,7 @@ fn on_keyevent(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM
 }
 
 fn on_setfocus(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
-    if let Err(err) = window.ime_focus_gained() {
-        log::warn!("IME focus-gain update failed: {err:#}");
-    }
+    window.ime_focus_gained();
     event_loop.handle_event(window, Event::WindowKeyboardEnter)
 }
 

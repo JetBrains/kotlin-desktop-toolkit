@@ -726,10 +726,6 @@ impl Window {
         Ok(())
     }
 
-    pub(crate) const fn ime_client(&self) -> Option<TextInputClient> {
-        self.ime.get().client
-    }
-
     pub(crate) fn enabled_client(&self) -> Option<TextInputClient> {
         let ime = self.ime.get();
         (ime.enabled).then_some(ime.client).flatten()
@@ -863,6 +859,7 @@ impl Window {
         unsafe { CreateCaret(self.hwnd(), None, 1, 1) }
     }
 
+    #[allow(clippy::unused_self)]
     fn destroy_caret(&self) -> windows_core::Result<()> {
         // SAFETY: callers use this only while this window owns the GUI thread's caret.
         unsafe { DestroyCaret() }
@@ -965,7 +962,7 @@ impl Window {
         Ok(())
     }
 
-    pub(crate) fn ime_focus_gained(&self) -> anyhow::Result<()> {
+    pub(crate) fn ime_focus_gained(&self) {
         let mut ime = self.ime.get();
         ime.set_focused(true);
         self.ime.set(ime);
@@ -975,7 +972,6 @@ impl Window {
             }
             self.update_ime_windows();
         }
-        Ok(())
     }
 
     pub(crate) fn ime_focus_lost(&self) -> anyhow::Result<()> {
