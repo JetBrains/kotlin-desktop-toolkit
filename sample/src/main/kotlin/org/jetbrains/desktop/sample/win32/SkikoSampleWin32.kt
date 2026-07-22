@@ -42,6 +42,7 @@ class SkottieWindow(app: Application) : SkikoWindowWin32(app) {
     companion object {
         private const val ANIMATION_FRAME_COUNT: Int = 151
     }
+
     private val timer: Timer = Timer(true)
 
     private val animation: Animation by lazy {
