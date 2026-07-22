@@ -3,15 +3,15 @@ use std::cell::Cell;
 use windows::Win32::{
     Foundation::{HWND, POINT, RECT},
     UI::Input::Ime::{
-        ATTR_CONVERTED, ATTR_FIXEDCONVERTED, ATTR_INPUT, ATTR_TARGET_CONVERTED, ATTR_TARGET_NOTCONVERTED, CANDIDATEFORM, CFS_EXCLUDE,
-        CFS_POINT, COMPOSITIONFORM, GCS_COMPATTR, GCS_COMPCLAUSE, GCS_COMPREADATTR, GCS_COMPREADCLAUSE, GCS_COMPREADSTR, GCS_COMPSTR,
-        GCS_CURSORPOS, GCS_DELTASTART, GCS_RESULTCLAUSE, GCS_RESULTREADCLAUSE, GCS_RESULTREADSTR, GCS_RESULTSTR, HIMC,
+        ATTR_CONVERTED, ATTR_FIXEDCONVERTED, ATTR_INPUT, ATTR_INPUT_ERROR, ATTR_TARGET_CONVERTED, ATTR_TARGET_NOTCONVERTED, CANDIDATEFORM,
+        CFS_EXCLUDE, CFS_POINT, COMPOSITIONFORM, GCS_COMPATTR, GCS_COMPCLAUSE, GCS_COMPREADATTR, GCS_COMPREADCLAUSE, GCS_COMPREADSTR,
+        GCS_COMPSTR, GCS_CURSORPOS, GCS_DELTASTART, GCS_RESULTCLAUSE, GCS_RESULTREADCLAUSE, GCS_RESULTREADSTR, GCS_RESULTSTR, HIMC,
         IME_COMPOSITION_STRING, ImmGetCompositionStringW, ImmGetContext, ImmNotifyIME, ImmReleaseContext, ImmSetCandidateWindow,
         ImmSetCompositionWindow, NI_COMPOSITIONSTR, NOTIFY_IME_INDEX,
     },
 };
 
-use super::text_input_client::{TextInputClient, TextRange, UnderlineSegment, UnderlineStyle};
+use super::text_input_client::{TextCompositionAttribute, TextCompositionSegment, TextInputClient, TextRange};
 
 pub(crate) struct ImmContext {
     hwnd: HWND,
@@ -281,18 +281,31 @@ fn decode_u32_bytes(bytes: &[u8]) -> anyhow::Result<Vec<u32>> {
         .collect())
 }
 
-fn underlines_from_parts(attrs: &[u8], clauses: &[u32], preedit_len: usize) -> Vec<UnderlineSegment> {
+fn composition_attribute_from_raw(value: u8) -> TextCompositionAttribute {
+    match u32::from(value) {
+        ATTR_INPUT => TextCompositionAttribute::Input,
+        ATTR_TARGET_CONVERTED => TextCompositionAttribute::TargetConverted,
+        ATTR_CONVERTED => TextCompositionAttribute::Converted,
+        ATTR_TARGET_NOTCONVERTED => TextCompositionAttribute::TargetNotConverted,
+        ATTR_INPUT_ERROR => TextCompositionAttribute::InputError,
+        ATTR_FIXEDCONVERTED => TextCompositionAttribute::FixedConverted,
+        _ => TextCompositionAttribute::Unspecified,
+    }
+}
+
+fn segments_from_parts(attrs: &[u8], clauses: &[u32], preedit_len: usize) -> Vec<TextCompositionSegment> {
     let bounds = clauses.iter().map(|value| usize::try_from(*value)).collect::<Result<Vec<_>, _>>();
     let Ok(bounds) = bounds else {
-        return fallback_underlines(preedit_len);
+        return fallback_segments(preedit_len);
     };
-    if bounds.len() < 2
+    if attrs.len() != preedit_len
+        || bounds.len() < 2
         || bounds.first() != Some(&0)
         || bounds.last() != Some(&preedit_len)
         || bounds.iter().any(|value| *value > preedit_len)
         || bounds.windows(2).any(|pair| pair[0] > pair[1])
     {
-        return fallback_underlines(preedit_len);
+        return fallback_segments(preedit_len);
     }
 
     bounds
@@ -302,34 +315,25 @@ fn underlines_from_parts(attrs: &[u8], clauses: &[u32], preedit_len: usize) -> V
             if start >= end {
                 return None;
             }
-            let attribute = attrs.get(start).copied().map_or(ATTR_INPUT, u32::from);
-            let (style, target_clause) = match attribute {
-                ATTR_TARGET_CONVERTED => (UnderlineStyle::Thick, true),
-                ATTR_TARGET_NOTCONVERTED => (UnderlineStyle::Dotted, true),
-                ATTR_CONVERTED | ATTR_FIXEDCONVERTED => (UnderlineStyle::Solid, false),
-                _ => (UnderlineStyle::Dotted, false),
-            };
-            Some(UnderlineSegment {
+            Some(TextCompositionSegment {
                 range: TextRange {
                     location: start,
                     length: end - start,
                 },
-                style,
-                target_clause,
+                attribute: composition_attribute_from_raw(attrs[start]),
             })
         })
         .collect()
 }
 
-fn fallback_underlines(preedit_len: usize) -> Vec<UnderlineSegment> {
+fn fallback_segments(preedit_len: usize) -> Vec<TextCompositionSegment> {
     (preedit_len != 0)
-        .then_some(UnderlineSegment {
+        .then_some(TextCompositionSegment {
             range: TextRange {
                 location: 0,
                 length: preedit_len,
             },
-            style: UnderlineStyle::Dotted,
-            target_clause: false,
+            attribute: TextCompositionAttribute::Unspecified,
         })
         .into_iter()
         .collect()
@@ -357,7 +361,7 @@ pub(crate) struct PreeditSnapshot {
     pub(crate) text: String,
     /// `TextRange::none()` when the IME shows no composition cursor.
     pub(crate) selected: TextRange,
-    pub(crate) underlines: Vec<UnderlineSegment>,
+    pub(crate) segments: Vec<TextCompositionSegment>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -380,21 +384,17 @@ impl CompositionSnapshot {
                 location: cursor.min(length),
                 length: 0,
             });
-            let underlines = match (
+            let segments = match (
                 source.bytes(GCS_COMPATTR),
                 source.bytes(GCS_COMPCLAUSE).and_then(|bytes| decode_u32_bytes(&bytes)),
             ) {
-                (Ok(attrs), Ok(clauses)) => underlines_from_parts(&attrs, &clauses, length),
+                (Ok(attrs), Ok(clauses)) => segments_from_parts(&attrs, &clauses, length),
                 (Err(err), _) | (_, Err(err)) => {
-                    log::warn!("reading IME underline data failed: {err:#}");
-                    fallback_underlines(length)
+                    log::warn!("reading IME composition metadata failed: {err:#}");
+                    fallback_segments(length)
                 }
             };
-            Some(PreeditSnapshot {
-                text,
-                selected,
-                underlines,
-            })
+            Some(PreeditSnapshot { text, selected, segments })
         } else {
             None
         };
@@ -593,8 +593,8 @@ mod tests {
     use super::*;
 
     use windows::Win32::UI::Input::Ime::{
-        ATTR_INPUT, ATTR_TARGET_CONVERTED, CS_INSERTCHAR, CS_NOMOVECARET, GCS_COMPATTR, GCS_COMPCLAUSE, GCS_COMPSTR, GCS_CURSORPOS,
-        GCS_DELTASTART, GCS_RESULTSTR, IME_COMPOSITION_STRING,
+        CS_INSERTCHAR, CS_NOMOVECARET, GCS_COMPATTR, GCS_COMPCLAUSE, GCS_COMPSTR, GCS_CURSORPOS, GCS_DELTASTART, GCS_RESULTSTR,
+        IME_COMPOSITION_STRING,
     };
 
     fn utf16_units(value: &str) -> Vec<u16> {
@@ -652,8 +652,34 @@ mod tests {
     }
 
     #[test]
-    fn underline_conversion_maps_clauses_and_targets() {
-        let underlines = underlines_from_parts(
+    fn composition_attributes_preserve_all_known_imm32_values() {
+        let attributes = [
+            (ATTR_INPUT, TextCompositionAttribute::Input),
+            (ATTR_TARGET_CONVERTED, TextCompositionAttribute::TargetConverted),
+            (ATTR_CONVERTED, TextCompositionAttribute::Converted),
+            (ATTR_TARGET_NOTCONVERTED, TextCompositionAttribute::TargetNotConverted),
+            (ATTR_INPUT_ERROR, TextCompositionAttribute::InputError),
+            (ATTR_FIXEDCONVERTED, TextCompositionAttribute::FixedConverted),
+        ];
+        for (raw, attribute) in attributes {
+            assert_eq!(composition_attribute_from_raw(u8::try_from(raw).unwrap()), attribute);
+        }
+        assert_eq!(TextCompositionAttribute::Input as u32, 0);
+        assert_eq!(TextCompositionAttribute::TargetConverted as u32, 1);
+        assert_eq!(TextCompositionAttribute::Converted as u32, 2);
+        assert_eq!(TextCompositionAttribute::TargetNotConverted as u32, 3);
+        assert_eq!(TextCompositionAttribute::InputError as u32, 4);
+        assert_eq!(TextCompositionAttribute::FixedConverted as u32, 5);
+        assert_eq!(TextCompositionAttribute::Unspecified as u32, 255);
+        assert_ne!(
+            TextCompositionAttribute::TargetConverted,
+            TextCompositionAttribute::TargetNotConverted
+        );
+    }
+
+    #[test]
+    fn composition_segments_keep_clause_ranges_and_attributes() {
+        let segments = segments_from_parts(
             &[
                 u8::try_from(ATTR_INPUT).unwrap(),
                 u8::try_from(ATTR_INPUT).unwrap(),
@@ -664,17 +690,15 @@ mod tests {
             4,
         );
         assert_eq!(
-            underlines,
+            segments,
             vec![
-                UnderlineSegment {
+                TextCompositionSegment {
                     range: TextRange { location: 0, length: 2 },
-                    style: UnderlineStyle::Dotted,
-                    target_clause: false,
+                    attribute: TextCompositionAttribute::Input,
                 },
-                UnderlineSegment {
+                TextCompositionSegment {
                     range: TextRange { location: 2, length: 2 },
-                    style: UnderlineStyle::Thick,
-                    target_clause: true,
+                    attribute: TextCompositionAttribute::TargetConverted,
                 },
             ],
         );
@@ -682,7 +706,15 @@ mod tests {
 
     #[test]
     fn malformed_clauses_fall_back_to_whole_preedit() {
-        assert_eq!(underlines_from_parts(&[], &[1, 3], 3), fallback_underlines(3),);
+        assert_eq!(
+            segments_from_parts(&[u8::try_from(ATTR_INPUT).unwrap(); 3], &[1, 3], 3),
+            fallback_segments(3),
+        );
+    }
+
+    #[test]
+    fn reserved_composition_attribute_becomes_unspecified() {
+        assert_eq!(composition_attribute_from_raw(42), TextCompositionAttribute::Unspecified);
     }
 
     #[test]
@@ -750,14 +782,14 @@ mod tests {
     }
 
     #[test]
-    fn optional_decoration_failure_uses_fallback() {
+    fn optional_composition_metadata_failure_uses_unspecified_fallback() {
         let source = FakeSource {
             composition: utf16_units("かな"),
             fail_on: Some(GCS_COMPATTR),
             ..Default::default()
         };
         let snapshot = CompositionSnapshot::read(&source, GCS_COMPSTR.0).unwrap();
-        assert_eq!(snapshot.preedit.unwrap().underlines, fallback_underlines(2));
+        assert_eq!(snapshot.preedit.unwrap().segments, fallback_segments(2));
     }
 
     #[test]
@@ -877,7 +909,7 @@ mod tests {
                 preedit: Some(PreeditSnapshot {
                     text: "stale".to_owned(),
                     selected: TextRange { location: 0, length: 0 },
-                    underlines: Vec::new(),
+                    segments: Vec::new(),
                 }),
                 cancelled: false,
             },
@@ -899,7 +931,7 @@ mod tests {
                 preedit: Some(PreeditSnapshot {
                     text: "preedit".to_owned(),
                     selected: TextRange { location: 0, length: 0 },
-                    underlines: Vec::new(),
+                    segments: Vec::new(),
                 }),
                 cancelled: false,
             },

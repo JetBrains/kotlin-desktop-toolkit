@@ -996,7 +996,7 @@ impl CompositionSink for Window {
     }
     fn set_marked_text(&self, preedit: &PreeditSnapshot) {
         let _ = self.with_enabled_client(|client| {
-            client.set_marked_text(&preedit.text, preedit.selected, &preedit.underlines);
+            client.set_marked_text(&preedit.text, preedit.selected, &preedit.segments);
         });
     }
     fn discard_marked_text(&self) {

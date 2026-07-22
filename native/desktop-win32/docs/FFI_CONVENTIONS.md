@@ -50,7 +50,7 @@ Mixing `BorrowedStrPtr` (NUL-terminated) and `BorrowedUtf8` (length-delimited) s
 
 ### Reverse-borrow direction: text-input upcalls
 
-`BorrowedUtf8` and `BorrowedArray<T>` normally flow Kotlin → Rust, but inside the pull-model text-input upcalls (`text_input_client.rs`) they flow **Rust → Kotlin**: Rust builds `InsertTextArgs.text` and `SetMarkedTextArgs.{text, underlines}` over Rust-owned memory (a `&str` / `&[UnderlineSegment]` local to the composition handler) and passes them by value into the Kotlin callback. Lifetime rule: the payload is valid **only for the duration of that upcall** — Kotlin must decode/copy inside the callback and never retain the segments. Nothing Rust-allocated crosses that Kotlin has to free, and the length-delimited UTF-8 slice means an embedded NUL doesn't truncate the text.
+`BorrowedUtf8` and `BorrowedArray<T>` normally flow Kotlin → Rust, but inside the pull-model text-input upcalls (`text_input_client.rs`) they flow **Rust → Kotlin**: Rust builds `InsertTextArgs.text` and `SetMarkedTextArgs.{text, segments}` over Rust-owned memory (a `&str` / `&[TextCompositionSegment]` local to the composition handler) and passes them by value into the Kotlin callback. Lifetime rule: the payload is valid **only for the duration of that upcall** — Kotlin must decode/copy inside the callback and never retain native-backed data. Nothing Rust-allocated crosses that Kotlin has to free, and the length-delimited UTF-8 slice means an embedded NUL doesn't truncate the text.
 
 ### Arrays
 
@@ -159,7 +159,7 @@ The `TextInputClient` table (`text_input_client.rs` ↔ `TextInputClient.kt`) is
   - `SelectedRangeCallback = extern "C" fn(range_out: &mut TextRange)` — Kotlin writes the selection into `range_out` (or the none-sentinel when there is no selection).
   - `CaretRectCallback = extern "C" fn(args: &mut CaretRectArgs)` — Rust fills `args.range_in`; Kotlin writes the caret rectangle into `args.rect_out` (logical pixels).
 - **`TextRange` none-sentinel.** `TextRange { location: usize::MAX, length: 0 }` means "none" (`TextRange::none()` / `into_option()` on the Rust side). Kotlin mirrors `usize::MAX` as `-1L` (`TextRange.notFound` / `nullIfNotFound()`); the two-complement bit pattern is identical, so no translation happens at the boundary.
-- **Edit callbacks take reverse-borrowed payloads.** `InsertTextArgs` / `SetMarkedTextArgs` carry `BorrowedUtf8` / `BorrowedArray<UnderlineSegment>` built over Rust memory, valid only for the callback's duration — see "Reverse-borrow direction" above.
+- **Edit callbacks take reverse-borrowed payloads.** `InsertTextArgs` / `SetMarkedTextArgs` carry `BorrowedUtf8` / `BorrowedArray<TextCompositionSegment>` built over Rust memory, valid only for the callback's duration — see "Reverse-borrow direction" above.
 - **Reentrancy is bounded on the Rust side.** Every upcall runs under `ClientCallbackGuard` (`callback_depth`); the client-mutating downcalls (`window_set_text_input_client`, `window_clear_text_input_client`, `window_set_ime_enabled`, `window_destroy`) are rejected while inside a callback. The notify downcalls (`window_notify_selection_changed`, `window_notify_layout_changed`) stay legal and may synchronously re-query the client.
 - **Stub lifetime.** As with every upcall, the stubs live in a shared-Arena holder owned by `Window`; `Window.close()` clears the native client before dropping the window and closes the holder Arena last.
 

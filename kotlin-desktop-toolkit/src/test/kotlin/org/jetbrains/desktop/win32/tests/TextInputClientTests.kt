@@ -4,13 +4,13 @@ import org.jetbrains.desktop.win32.Event
 import org.jetbrains.desktop.win32.LogicalPoint
 import org.jetbrains.desktop.win32.LogicalRect
 import org.jetbrains.desktop.win32.LogicalSize
+import org.jetbrains.desktop.win32.TextCompositionAttribute
+import org.jetbrains.desktop.win32.TextCompositionSegment
 import org.jetbrains.desktop.win32.TextInputClient
 import org.jetbrains.desktop.win32.TextInputClientHolder
 import org.jetbrains.desktop.win32.TextRange
-import org.jetbrains.desktop.win32.UnderlineSegment
-import org.jetbrains.desktop.win32.UnderlineStyle
 import org.jetbrains.desktop.win32.fromNative
-import org.jetbrains.desktop.win32.generated.NativeBorrowedArray_UnderlineSegment
+import org.jetbrains.desktop.win32.generated.NativeBorrowedArray_TextCompositionSegment
 import org.jetbrains.desktop.win32.generated.NativeBorrowedUtf8
 import org.jetbrains.desktop.win32.generated.NativeCaretRectArgs
 import org.jetbrains.desktop.win32.generated.NativeEvent
@@ -18,11 +18,12 @@ import org.jetbrains.desktop.win32.generated.NativeInputLanguageChangedEvent
 import org.jetbrains.desktop.win32.generated.NativeLogicalPoint
 import org.jetbrains.desktop.win32.generated.NativeLogicalRect
 import org.jetbrains.desktop.win32.generated.NativeLogicalSize
+import org.jetbrains.desktop.win32.generated.NativeSetMarkedTextArgs
+import org.jetbrains.desktop.win32.generated.NativeTextCompositionSegment
 import org.jetbrains.desktop.win32.generated.NativeTextRange
-import org.jetbrains.desktop.win32.generated.NativeUnderlineSegment
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import org.jetbrains.desktop.win32.readBorrowedUtf8
-import org.jetbrains.desktop.win32.readUnderlines
+import org.jetbrains.desktop.win32.readSegments
 import org.junit.jupiter.api.Test
 import java.lang.foreign.Arena
 import java.lang.foreign.ValueLayout
@@ -35,17 +36,16 @@ import kotlin.test.assertTrue
 class TextInputClientTests {
     private class RecordingClient : TextInputClient {
         var inserted = ""
+        var markedSegments: List<TextCompositionSegment> = emptyList()
         override fun selectedRange(): TextRange = TextRange(3, 0)
         override fun caretRect(range: TextRange): LogicalRect =
             LogicalRect(LogicalPoint(range.location.toFloat(), 7f), LogicalSize(1f, 18f))
         override fun insertText(text: String) {
             inserted += text
         }
-        override fun setMarkedText(
-            text: String,
-            selectedRange: TextRange?,
-            underlines: List<org.jetbrains.desktop.win32.UnderlineSegment>,
-        ) = Unit
+        override fun setMarkedText(text: String, selectedRange: TextRange?, segments: List<TextCompositionSegment>) {
+            markedSegments = segments
+        }
         override fun unmarkText() = Unit
         override fun discardMarkedText() = Unit
     }
@@ -94,20 +94,67 @@ class TextInputClientTests {
     }
 
     @Test
-    fun `underline decoder reads range style and target`() = Arena.ofConfined().use { arena ->
-        val items = NativeUnderlineSegment.allocateArray(1L, arena)
-        val item = NativeUnderlineSegment.asSlice(items, 0L)
-        NativeTextRange.location(NativeUnderlineSegment.range(item), 2)
-        NativeTextRange.length(NativeUnderlineSegment.range(item), 3)
-        NativeUnderlineSegment.style(item, desktop_win32_h.NativeUnderlineStyle_Thick())
-        NativeUnderlineSegment.target_clause(item, true)
-        val borrowed = NativeBorrowedArray_UnderlineSegment.allocate(arena)
-        NativeBorrowedArray_UnderlineSegment.ptr(borrowed, items)
-        NativeBorrowedArray_UnderlineSegment.len(borrowed, 1)
-        assertEquals(
-            listOf(UnderlineSegment(TextRange(2, 3), UnderlineStyle.Thick, true)),
-            readUnderlines(borrowed),
+    fun `segment decoder reads every known attribute plus unspecified`() = Arena.ofConfined().use { arena ->
+        val expected = listOf(
+            TextCompositionAttribute.Input,
+            TextCompositionAttribute.TargetConverted,
+            TextCompositionAttribute.Converted,
+            TextCompositionAttribute.TargetNotConverted,
+            TextCompositionAttribute.InputError,
+            TextCompositionAttribute.FixedConverted,
+            TextCompositionAttribute.Unspecified,
         )
+        val nativeAttributes = listOf(
+            desktop_win32_h.NativeTextCompositionAttribute_Input(),
+            desktop_win32_h.NativeTextCompositionAttribute_TargetConverted(),
+            desktop_win32_h.NativeTextCompositionAttribute_Converted(),
+            desktop_win32_h.NativeTextCompositionAttribute_TargetNotConverted(),
+            desktop_win32_h.NativeTextCompositionAttribute_InputError(),
+            desktop_win32_h.NativeTextCompositionAttribute_FixedConverted(),
+            desktop_win32_h.NativeTextCompositionAttribute_Unspecified(),
+        )
+        val items = NativeTextCompositionSegment.allocateArray(expected.size.toLong(), arena)
+        expected.indices.forEach { index ->
+            val item = NativeTextCompositionSegment.asSlice(items, index.toLong())
+            NativeTextRange.location(NativeTextCompositionSegment.range(item), index.toLong())
+            NativeTextRange.length(NativeTextCompositionSegment.range(item), 1)
+            NativeTextCompositionSegment.attribute(item, nativeAttributes[index])
+        }
+        val borrowed = NativeBorrowedArray_TextCompositionSegment.allocate(arena)
+        NativeBorrowedArray_TextCompositionSegment.ptr(borrowed, items)
+        NativeBorrowedArray_TextCompositionSegment.len(borrowed, expected.size.toLong())
+        assertEquals(
+            expected.mapIndexed { index, attribute -> TextCompositionSegment(TextRange(index.toLong(), 1), attribute) },
+            readSegments(borrowed),
+        )
+    }
+
+    @Test
+    fun `set marked text copies reverse borrowed segments before upcall returns`() {
+        val holder = TextInputClientHolder()
+        val client = RecordingClient()
+        holder.textInputClient = client
+        Arena.ofConfined().use { arena ->
+            val items = NativeTextCompositionSegment.allocateArray(1L, arena)
+            val item = NativeTextCompositionSegment.asSlice(items, 0L)
+            NativeTextRange.location(NativeTextCompositionSegment.range(item), 2)
+            NativeTextRange.length(NativeTextCompositionSegment.range(item), 3)
+            NativeTextCompositionSegment.attribute(item, desktop_win32_h.NativeTextCompositionAttribute_TargetConverted())
+            val borrowed = NativeBorrowedArray_TextCompositionSegment.allocate(arena)
+            NativeBorrowedArray_TextCompositionSegment.ptr(borrowed, items)
+            NativeBorrowedArray_TextCompositionSegment.len(borrowed, 1)
+            val args = NativeSetMarkedTextArgs.allocate(arena)
+            NativeBorrowedUtf8.ptr(NativeSetMarkedTextArgs.text(args), arena.allocateFrom("preedit"))
+            NativeBorrowedUtf8.len(NativeSetMarkedTextArgs.text(args), 7L)
+            TextRange(0, 0).toNative(NativeSetMarkedTextArgs.selected_range(args))
+            NativeSetMarkedTextArgs.segments(args, borrowed)
+            holder.setMarkedTextCallback(args)
+        }
+        assertEquals(
+            listOf(TextCompositionSegment(TextRange(2, 3), TextCompositionAttribute.TargetConverted)),
+            client.markedSegments,
+        )
+        holder.close()
     }
 
     @Test

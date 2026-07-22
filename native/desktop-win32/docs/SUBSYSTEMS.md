@@ -219,7 +219,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 **Key types.**
 - `TextInputClient` (`text_input_client.rs`) — `#[repr(C)]` table of six `extern "C"` function pointers (Kotlin upcall stubs) with safe Rust-side wrappers.
 - `TextRange` — `{ location, length }` in UTF-16 units; `location == usize::MAX` is the none-sentinel (`TextRange::none()` / `into_option()`), mirrored as `-1L` on the Kotlin side.
-- `UnderlineSegment` / `UnderlineStyle` — preedit clause underlines passed to `setMarkedText`.
+- `TextCompositionSegment` / `TextCompositionAttribute` — preedit-relative clause ranges plus IMM32 conversion status passed to `setMarkedText`. `GCS_COMPATTR` supplies status; applications choose its visual styling.
 - `ImeState` (`ime.rs`) — `Copy` state record kept in a per-window `Cell`: client, enabled/focused flags, composition/finalizing flags, `composition_revision`, `callback_depth`, pending high surrogate.
 - `ImmContext` (`ime.rs`) — RAII `ImmGetContext` / `ImmReleaseContext` guard and sole `HIMC` owner (composition-string reads, composition/candidate window positioning, `ImmNotifyIME`). Never stored; every use acquires a fresh guard.
 - `ClientCallbackGuard` (`ime.rs`) — RAII increment/decrement of `callback_depth` around every client upcall.

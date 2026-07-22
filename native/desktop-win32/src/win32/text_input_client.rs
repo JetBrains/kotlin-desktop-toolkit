@@ -34,7 +34,7 @@ pub struct InsertTextArgs<'a> {
 pub struct SetMarkedTextArgs<'a> {
     pub text: BorrowedUtf8<'a>,
     pub selected_range: TextRange,
-    pub underlines: BorrowedArray<'a, UnderlineSegment>,
+    pub segments: BorrowedArray<'a, TextCompositionSegment>,
 }
 
 #[repr(C)]
@@ -45,18 +45,22 @@ pub struct CaretRectArgs {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct UnderlineSegment {
+pub struct TextCompositionSegment {
     pub range: TextRange,
-    pub style: UnderlineStyle,
-    pub target_clause: bool,
+    pub attribute: TextCompositionAttribute,
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum UnderlineStyle {
-    Solid,
-    Dotted,
-    Thick,
+pub enum TextCompositionAttribute {
+    Input = 0,
+    TargetConverted = 1,
+    Converted = 2,
+    TargetNotConverted = 3,
+    InputError = 4,
+    FixedConverted = 5,
+    /// Toolkit sentinel for malformed, unavailable, or reserved IMM32 metadata.
+    Unspecified = 255,
 }
 
 pub type SelectedRangeCallback = extern "C" fn(range_out: &mut TextRange);
@@ -103,11 +107,11 @@ impl TextInputClient {
     }
 
     /// A `none` `selected_range` means the IME shows no composition cursor.
-    pub(crate) fn set_marked_text(self, text: &str, selected_range: TextRange, underlines: &[UnderlineSegment]) {
+    pub(crate) fn set_marked_text(self, text: &str, selected_range: TextRange, segments: &[TextCompositionSegment]) {
         (self.set_marked_text)(SetMarkedTextArgs {
             text: BorrowedUtf8::new(text),
             selected_range,
-            underlines: BorrowedArray::from_slice(underlines),
+            segments: BorrowedArray::from_slice(segments),
         });
     }
 

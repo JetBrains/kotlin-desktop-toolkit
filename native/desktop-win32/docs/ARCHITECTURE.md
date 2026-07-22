@@ -69,7 +69,7 @@ native/
         keyboard_api.rs           FFI: keyboard_get_key_state, keyboard_get_state
         ime.rs                    ImmContext (HIMC RAII), ImeState, ClientCallbackGuard, composition apply
         ime_api.rs                FFI: window_set/clear_text_input_client, set_ime_enabled, notify_*
-        text_input_client.rs      TextInputClient fn-pointer table, TextRange, UnderlineSegment (#[repr(C)])
+        text_input_client.rs      TextInputClient fn-pointer table, TextRange, TextCompositionSegment (#[repr(C)])
         pointer.rs                PointerInfo (Touch/Pen/Common), PointerClickCounter, modifiers
         cursor.rs                 Cursor RAII (HCURSOR + is_system flag), CursorIcon → PCWSTR
         cursor_api.rs             FFI: cursor_show / cursor_hide (counter)

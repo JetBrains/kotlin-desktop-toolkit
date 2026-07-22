@@ -80,13 +80,13 @@ Inside `WM_IME_COMPOSITION`, get the input context and call `ImmGetCompositionSt
 | `GCS_RESULTSTR`  | Finalized (committed) text                     | UTF-16 string |
 | `GCS_COMPSTR`    | In-progress preedit text                       | UTF-16 string |
 | `GCS_CURSORPOS`  | Caret position inside the preedit              | scalar (return value), **UTF-16 code units** |
-| `GCS_COMPATTR`   | Per-character clause attributes (underlining)  | one `ATTR_*` byte per UTF-16 unit |
+| `GCS_COMPATTR`   | Per-character conversion attributes             | 8-bit `ATTR_*` status values |
 | `GCS_COMPCLAUSE` | Clause segment boundaries                      | array of UTF-16 offsets (`u32`) |
 
-Units matter: `ImmGetCompositionStringW` returns **byte** lengths for the string buffers (divide
-by 2 for the `u16` count), but `GCS_CURSORPOS`, the `GCS_COMPATTR` indices, and the
-`GCS_COMPCLAUSE` offsets are all **UTF-16 code-unit** indices. The call returns a signed count and
-can fail with `IMM_ERROR_NODATA` (`-1`) or `IMM_ERROR_GENERAL` (`-2`); §7.3 handles those.
+Units matter: `ImmGetCompositionStringW` returns **byte** lengths for string and attribute buffers,
+and `GCS_COMPCLAUSE` returns `u32` offsets. The backend validates the metadata against the preedit
+and normalizes segment ranges to its UTF-16 indexing model. The call returns a signed count and can
+fail with `IMM_ERROR_NODATA` (`-1`) or `IMM_ERROR_GENERAL` (`-2`); §7.3 handles those.
 
 A single `WM_IME_COMPOSITION` can carry both `GCS_RESULTSTR` and `GCS_COMPSTR`; this is observed
 with Japanese IMEs when one phrase commits as the next begins. Microsoft documents cancellation
@@ -234,7 +234,7 @@ self-drawn preedit.
    to the client-relative physical pixels IMM32 wants (§6.3); no virtual-desktop conversion is
    involved, so the contract remains valid on mixed-DPI desktops. Ranges are UTF-16 code units. The
    document `selectedRange` identifies the insertion caret; the `selectedRange` passed to
-   `setMarkedText` and every underline range are preedit-relative.
+   `setMarkedText` and every composition-segment range are preedit-relative.
 
 8. **Phase 1 lets the IME draw; Phase 2 self-draws the preedit.** Reading `GCS_RESULTSTR` for a
    whole-phrase commit, or `GCS_COMPSTR` for inline preedit, only makes sense once the app owns
@@ -297,7 +297,7 @@ Holds all IMM32 logic and per-window IME state, keeping `event_loop.rs` a thin d
   ```
 
 - The per-window `ImeState` record and `ClientCallbackGuard` (§5.2).
-- The `GCS_*` readers, the attribute→underline conversion, and the composition-apply logic (§7.3).
+- The `GCS_*` readers, direct composition-attribute transport, and the composition-apply logic (§7.3).
 
 ### 5.2 Per-window state (`window.rs`)
 
@@ -480,7 +480,7 @@ public interface TextInputClient {
     public fun setMarkedText(
         text: String,
         selectedRange: TextRange?,          // caret within the preedit (preedit-relative)
-        underlines: List<UnderlineSegment>, // preedit-relative
+        segments: List<TextCompositionSegment>, // preedit-relative
     )
 
     // Finalize: accept the marked text as if it had been inserted normally.
@@ -496,7 +496,7 @@ public interface TextInputClient {
         override fun setMarkedText(
             text: String,
             selectedRange: TextRange?,
-            underlines: List<UnderlineSegment>,
+            segments: List<TextCompositionSegment>,
         ) = Unit
         override fun unmarkText() = Unit
         override fun discardMarkedText() = Unit
@@ -504,8 +504,10 @@ public interface TextInputClient {
 }
 
 public data class TextRange(val location: Long, val length: Long)          // UTF-16 code units
-public data class UnderlineSegment(val range: TextRange, val style: UnderlineStyle, val targetClause: Boolean)
-public enum class UnderlineStyle { Solid, Dotted, Thick }
+public data class TextCompositionSegment(val range: TextRange, val attribute: TextCompositionAttribute)
+public enum class TextCompositionAttribute {
+    Input, TargetConverted, Converted, TargetNotConverted, InputError, FixedConverted, Unspecified,
+}
 ```
 
 Ranges are UTF-16 code units; Kotlin `String` is UTF-16, so offsets line up with `String` indices.
@@ -541,7 +543,7 @@ pub struct InsertTextArgs<'a> {
 pub struct SetMarkedTextArgs<'a> {
     pub text: BorrowedUtf8<'a>,
     pub selected_range: TextRange,    // preedit-relative caret; NOT_FOUND => none
-    pub underlines: BorrowedArray<'a, UnderlineSegment>, // preedit-relative; borrowed for the call
+    pub segments: BorrowedArray<'a, TextCompositionSegment>, // preedit-relative; borrowed for the call
 }
 
 #[repr(C)]
@@ -552,15 +554,22 @@ pub struct CaretRectArgs {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct UnderlineSegment {
+pub struct TextCompositionSegment {
     pub range: TextRange,      // preedit-relative UTF-16
-    pub style: UnderlineStyle,
-    pub target_clause: bool,   // the clause the IME is currently converting
+    pub attribute: TextCompositionAttribute,
 }
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub enum UnderlineStyle { Solid, Dotted, Thick }
+pub enum TextCompositionAttribute {
+    Input = 0,
+    TargetConverted = 1,
+    Converted = 2,
+    TargetNotConverted = 3,
+    InputError = 4,
+    FixedConverted = 5,
+    Unspecified = 255,
+}
 
 pub type SelectedRangeCallback = extern "C" fn(range_out: &mut TextRange);
 pub type CaretRectCallback = extern "C" fn(args: &mut CaretRectArgs);
@@ -583,7 +592,7 @@ pub struct TextInputClient {
 
 Callers use the table through thin wrappers beside it in `text_input_client.rs` that build the
 borrowed arguments — mirroring the macOS `TextInputClientHandler`. Text borrows the caller's
-`&str` bytes through length-bearing `BorrowedUtf8`; the `underlines` slice is likewise borrowed
+`&str` bytes through length-bearing `BorrowedUtf8`; the `segments` slice is likewise borrowed
 for the synchronous up-call only. Only the query direction maps the `NOT_FOUND` sentinel to
 `Option`; `set_marked_text` passes the sentinel-carrying `TextRange` through unchanged (a `none`
 range means the IME shows no composition cursor, §7.3):
@@ -620,11 +629,11 @@ impl TextInputClient {
     }
 
     /// A `none` `selected_range` means the IME shows no composition cursor.
-    pub(crate) fn set_marked_text(self, text: &str, selected_range: TextRange, underlines: &[UnderlineSegment]) {
+    pub(crate) fn set_marked_text(self, text: &str, selected_range: TextRange, segments: &[TextCompositionSegment]) {
         (self.set_marked_text)(SetMarkedTextArgs {
             text: BorrowedUtf8::new(text),
             selected_range,
-            underlines: BorrowedArray::from_slice(underlines),
+            segments: BorrowedArray::from_slice(segments),
         });
     }
 
@@ -1157,8 +1166,8 @@ candidate windows track the caret, and committed CJK text arrives as `insertText
 
 ## 7. Phase 2 — inline (self-drawn) composition
 
-Goal: the application renders the in-progress composition inline (with clause underlines and a
-composition caret); the backend reads composition state and calls `setMarkedText` / `insertText` /
+Goal: the application renders the in-progress composition inline with clause styling and a
+composition caret; the backend reads composition state and calls `setMarkedText` / `insertText` /
 `unmarkText` / `discardMarkedText`; the IME still draws only the candidate list.
 
 Phase 2 is additive — it adds message handlers without changing the client interface or the
@@ -1275,7 +1284,7 @@ re-emitting native text; their state is cleared only after the callback returns 
 abandons the remaining stale steps if a nested START/END or focus transition changed the revision.
 Tasks 11–12 give the exact apply function, injectable sink, and tests.
 
-### 7.3 `GCS_*` readers and underline conversion (`ime.rs`)
+### 7.3 `GCS_*` readers and composition-attribute transport (`ime.rs`)
 
 `ImmGetCompositionStringW` returns a **byte** length for buffers and a signed count that can be
 `IMM_ERROR_NODATA` (`-1`) or `IMM_ERROR_GENERAL` (`-2`). Empty data is a successful zero, not an
@@ -1319,7 +1328,7 @@ pub(crate) struct PreeditSnapshot {
     pub(crate) text: String,
     /// `TextRange::none()` when the IME shows no composition cursor.
     pub(crate) selected: TextRange,
-    pub(crate) underlines: Vec<UnderlineSegment>,
+    pub(crate) segments: Vec<TextCompositionSegment>,
 }
 
 struct CompositionSnapshot {
@@ -1341,17 +1350,17 @@ impl CompositionSnapshot {
                 location: cursor.min(length),
                 length: 0,
             });
-            let underlines = match (
+            let segments = match (
                 source.bytes(GCS_COMPATTR),
                 source.bytes(GCS_COMPCLAUSE).and_then(|bytes| decode_u32_bytes(&bytes)),
             ) {
-                (Ok(attrs), Ok(clauses)) => underlines_from_parts(&attrs, &clauses, length),
+                (Ok(attrs), Ok(clauses)) => segments_from_parts(&attrs, &clauses, length),
                 (Err(err), _) | (_, Err(err)) => {
-                    log::warn!("reading IME underline data failed: {err:#}");
-                    fallback_underlines(length)
+                    log::warn!("reading IME composition metadata failed: {err:#}");
+                    fallback_segments(length)
                 }
             };
-            Some(PreeditSnapshot { text, selected, underlines })
+            Some(PreeditSnapshot { text, selected, segments })
         } else {
             None
         };
@@ -1360,11 +1369,13 @@ impl CompositionSnapshot {
 }
 ```
 
-`underlines_from_parts` converts `GCS_COMPATTR` (one `ATTR_*` byte per preedit UTF-16 unit) and
-the decoded `GCS_COMPCLAUSE` offsets (ascending clause boundaries, `u32`) into one
-`UnderlineSegment` per clause. **All emitted ranges are preedit-relative.** A valid clause array
-starts at zero, ends at the preedit UTF-16 length, stays in bounds, and is non-descending.
-Malformed or missing clause data falls back to one dotted segment spanning the whole preedit:
+`segments_from_parts` converts `GCS_COMPATTR` status bytes and decoded `GCS_COMPCLAUSE` offsets into
+one `TextCompositionSegment` per clause. **All emitted ranges are preedit-relative UTF-16.** A valid
+clause array starts at zero, ends at the preedit length, stays in bounds, and is non-descending.
+Known IMM32 attributes retain their SDK values (`Input = 0`, `TargetConverted = 1`, `Converted = 2`,
+`TargetNotConverted = 3`, `InputError = 4`, `FixedConverted = 5`). Unknown status bytes map to the
+synthetic `Unspecified = 255`. Invalid or unreadable attribute/clause metadata produces one
+full-preedit `Unspecified` segment. Applications map composition attributes to presentation.
 
 ```rust
 fn decode_u32_bytes(bytes: &[u8]) -> anyhow::Result<Vec<u32>> {
@@ -1375,18 +1386,31 @@ fn decode_u32_bytes(bytes: &[u8]) -> anyhow::Result<Vec<u32>> {
         .collect())
 }
 
-fn underlines_from_parts(attrs: &[u8], clauses: &[u32], preedit_len: usize) -> Vec<UnderlineSegment> {
+fn composition_attribute_from_raw(value: u8) -> TextCompositionAttribute {
+    match u32::from(value) {
+        ATTR_INPUT => TextCompositionAttribute::Input,
+        ATTR_TARGET_CONVERTED => TextCompositionAttribute::TargetConverted,
+        ATTR_CONVERTED => TextCompositionAttribute::Converted,
+        ATTR_TARGET_NOTCONVERTED => TextCompositionAttribute::TargetNotConverted,
+        ATTR_INPUT_ERROR => TextCompositionAttribute::InputError,
+        ATTR_FIXEDCONVERTED => TextCompositionAttribute::FixedConverted,
+        _ => TextCompositionAttribute::Unspecified,
+    }
+}
+
+fn segments_from_parts(attrs: &[u8], clauses: &[u32], preedit_len: usize) -> Vec<TextCompositionSegment> {
     let bounds = clauses.iter().map(|value| usize::try_from(*value)).collect::<Result<Vec<_>, _>>();
     let Ok(bounds) = bounds else {
-        return fallback_underlines(preedit_len);
+        return fallback_segments(preedit_len);
     };
-    if bounds.len() < 2
+    if attrs.len() != preedit_len
+        || bounds.len() < 2
         || bounds.first() != Some(&0)
         || bounds.last() != Some(&preedit_len)
         || bounds.iter().any(|value| *value > preedit_len)
         || bounds.windows(2).any(|pair| pair[0] > pair[1])
     {
-        return fallback_underlines(preedit_len);
+        return fallback_segments(preedit_len);
     }
 
     bounds
@@ -1396,28 +1420,19 @@ fn underlines_from_parts(attrs: &[u8], clauses: &[u32], preedit_len: usize) -> V
             if start >= end {
                 return None;
             }
-            let attribute = attrs.get(start).copied().map_or(ATTR_INPUT, u32::from);
-            let (style, target_clause) = match attribute {
-                ATTR_TARGET_CONVERTED => (UnderlineStyle::Thick, true),
-                ATTR_TARGET_NOTCONVERTED => (UnderlineStyle::Dotted, true),
-                ATTR_CONVERTED | ATTR_FIXEDCONVERTED => (UnderlineStyle::Solid, false),
-                _ => (UnderlineStyle::Dotted, false), // ATTR_INPUT / ATTR_INPUT_ERROR
-            };
-            Some(UnderlineSegment {
+            Some(TextCompositionSegment {
                 range: TextRange { location: start, length: end - start },
-                style,
-                target_clause,
+                attribute: composition_attribute_from_raw(attrs[start]),
             })
         })
         .collect()
 }
 
-fn fallback_underlines(preedit_len: usize) -> Vec<UnderlineSegment> {
+fn fallback_segments(preedit_len: usize) -> Vec<TextCompositionSegment> {
     (preedit_len != 0)
-        .then_some(UnderlineSegment {
+        .then_some(TextCompositionSegment {
             range: TextRange { location: 0, length: preedit_len },
-            style: UnderlineStyle::Dotted,
-            target_clause: false,
+            attribute: TextCompositionAttribute::Unspecified,
         })
         .into_iter()
         .collect()
@@ -1434,8 +1449,8 @@ with its own font.
 ### 7.5 Kotlin surface (Phase 2)
 
 No new Kotlin API — Phase 2 lights up `setMarkedText` / `unmarkText` / `discardMarkedText` on the
-existing `TextInputClient`. The application renders `text` at the caret, underlines clause segments
-from `underlines`, places its composition caret at `selectedRange`, treats `insertText` during
+existing `TextInputClient`. The application renders `text` at the caret and styles composition
+segments from `segments`, places its composition caret at `selectedRange`, treats `insertText` during
 composition as the commit, `unmarkText` as "keep what you are rendering", and `discardMarkedText` as
 "drop what you are rendering".
 
@@ -1447,12 +1462,13 @@ The generated layers regenerate from Rust; only the Rust definitions and the han
 wrappers are authored.
 
 1. Define the Rust callback table (`TextInputClient`) and its POD companions (`TextRange`,
-   `InsertTextArgs`, `SetMarkedTextArgs`, `CaretRectArgs`, `UnderlineSegment`, `UnderlineStyle`), the
+   `InsertTextArgs`, `SetMarkedTextArgs`, `CaretRectArgs`, `TextCompositionSegment`,
+   `TextCompositionAttribute`), the
    `InputLanguageChangedEvent` variant (`events.rs`), and the downcalls (`ime_api.rs`).
 2. Run the header + binding generation (`./gradlew build`; `cbindgen` regenerates the C header,
    JExtract regenerates the Java bindings). `BorrowedUtf8`, `BorrowedArray<T>`, and
    `AutoDropStrPtr` already have cbindgen mappings and Kotlin readers; the generic
-   `BorrowedArray<UnderlineSegment>` monomorphizes to a `Native…` layout class like the other
+   `BorrowedArray<TextCompositionSegment>` monomorphizes to a `Native…` layout class like the other
    generic instantiations.
 3. Author the Kotlin wrappers: the `TextInputClient` interface + a holder that binds each method to
    the native callback table via a shared `Arena` (mirror `macos/TextInputClient.kt` — the stubs
@@ -1497,8 +1513,9 @@ Kotlin/JVM, JUnit 5, Skiko/Skia, PowerShell/Gradle.
   `enabled && client.is_some()` gate.
 - `caretRect` is a client-relative `LogicalRect`; Rust scales both corners directly to client
   physical pixels. Never introduce mixed-DPI screen-logical coordinates.
-- Ranges are UTF-16 code units. Document selection is document-relative; marked selection and
-  underline ranges are preedit-relative. `usize::MAX` is the only null-range sentinel.
+- Ranges are normalized to repository UTF-16 code units. Document selection is document-relative;
+  marked selection and composition-segment ranges are preedit-relative. `usize::MAX` is the only
+  null-range sentinel.
 - Queries use out-parameters. Keep `markedRange`, all replacement-range parameters,
   `textForRange`, and point-to-index APIs absent.
 - The holder type lives in `win32/TextInputClient.kt`, while each `Window` owns exactly one holder
@@ -1519,7 +1536,7 @@ Kotlin/JVM, JUnit 5, Skiko/Skia, PowerShell/Gradle.
 
 | File | Responsibility after implementation |
 |---|---|
-| `native/desktop-win32/src/win32/text_input_client.rs` | Pure FFI callback ABI: `TextRange`, args structs, `UnderlineSegment`/`UnderlineStyle`, callback aliases, the `TextInputClient` table and its safe wrappers. No imports from `ime.rs`/`window.rs`. |
+| `native/desktop-win32/src/win32/text_input_client.rs` | Pure FFI callback ABI: `TextRange`, args structs, `TextCompositionSegment`/`TextCompositionAttribute`, callback aliases, the `TextInputClient` table and its safe wrappers. No imports from `ime.rs`/`window.rs`. |
 | `native/desktop-win32/src/win32/ime.rs` | `ImmContext` guard as sole `HIMC` owner (transport, positioning, notify), `ImeState` + `ClientCallbackGuard`, `GCS_*` readers/decoders, `CompositionSnapshot`, `CompositionSink` trait, composition-apply functions, unit tests. |
 | `native/desktop-win32/src/win32/ime_api.rs` | Five exported window downcalls only. |
 | `native/desktop-win32/src/win32/window.rs` | The `ime` state cell and its `Window` helpers, HWND-bound lifecycle (client/enable/focus/teardown, caret), `CompositionSink` impl, caret-rect scaling. |
@@ -1543,7 +1560,7 @@ Kotlin/JVM, JUnit 5, Skiko/Skia, PowerShell/Gradle.
 **Interfaces:**
 - Consumes: `desktop_common::ffi_utils::{BorrowedArray, BorrowedUtf8}` and
   `geometry::{LogicalPoint, LogicalRect, LogicalSize}`.
-- Produces: `TextRange`, `UnderlineSegment`, `UnderlineStyle`, `InsertTextArgs`,
+- Produces: `TextRange`, `TextCompositionSegment`, `TextCompositionAttribute`, `InsertTextArgs`,
   `SetMarkedTextArgs`, `CaretRectArgs`, `TextInputClient`, `ImmContext::get(HWND)`, and safe
   callback wrapper methods used by Tasks 2–13.
 
@@ -1621,7 +1638,7 @@ pub struct InsertTextArgs<'a> { ... }
 pub struct SetMarkedTextArgs<'a> {
     pub text: BorrowedUtf8<'a>,
     pub selected_range: TextRange,
-    pub underlines: BorrowedArray<'a, UnderlineSegment>,
+    pub segments: BorrowedArray<'a, TextCompositionSegment>,
 }
 
 #[repr(C)]
@@ -1629,11 +1646,11 @@ pub struct CaretRectArgs { ... }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct UnderlineSegment { ... }
+pub struct TextCompositionSegment { ... }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum UnderlineStyle { Solid, Dotted, Thick }
+pub enum TextCompositionAttribute { Input = 0, TargetConverted = 1, Converted = 2, TargetNotConverted = 3, InputError = 4, FixedConverted = 5, Unspecified = 255 }
 
 pub type SelectedRangeCallback = extern "C" fn(range_out: &mut TextRange);
 pub type CaretRectCallback = extern "C" fn(args: &mut CaretRectArgs);
@@ -1651,7 +1668,7 @@ impl TextInputClient {
     pub(crate) fn caret_rect(self, range: TextRange) -> LogicalRect { ... }
     pub(crate) fn insert_text(self, text: &str) { ... }
     /// A `none` `selected_range` means the IME shows no composition cursor.
-    pub(crate) fn set_marked_text(self, text: &str, selected_range: TextRange, underlines: &[UnderlineSegment]) { ... }
+    pub(crate) fn set_marked_text(self, text: &str, selected_range: TextRange, segments: &[TextCompositionSegment]) { ... }
     pub(crate) fn unmark_text(self) { ... }
     pub(crate) fn discard_marked_text(self) { ... }
 }
@@ -2715,7 +2732,7 @@ Expected: `cargo check` ends with `Finished`; no export references a missing `Wi
 
 **Interfaces:**
 - Consumes: Task-7 exports and generated `NativeTextInputClient`, callback, argument, range,
-  underline, and event layouts.
+  composition-segment, and event layouts.
 - Produces: the public Kotlin API in §5.3; a single stable `TextInputClientHolder` per `Window`;
   ordered replacement/clear/close; managed language-event decoding.
 
@@ -2726,7 +2743,7 @@ Expected: `cargo check` ends with `Finished`; no export references a missing `Wi
 ```
 
 Expected: task succeeds and the generated package contains `NativeTextInputClient`,
-`NativeBorrowedUtf8`, `NativeBorrowedArray_UnderlineSegment`, the six named callback helpers, and
+`NativeBorrowedUtf8`, `NativeBorrowedArray_TextCompositionSegment`, the six named callback helpers, and
 `NativeInputLanguageChangedEvent`. A missing/differently named class is a failed ABI-generation
 gate; fix the Rust alias/type declaration before continuing.
 
@@ -2742,13 +2759,13 @@ import org.jetbrains.desktop.win32.Event
 import org.jetbrains.desktop.win32.LogicalPoint
 import org.jetbrains.desktop.win32.LogicalRect
 import org.jetbrains.desktop.win32.LogicalSize
+import org.jetbrains.desktop.win32.TextCompositionAttribute
+import org.jetbrains.desktop.win32.TextCompositionSegment
 import org.jetbrains.desktop.win32.TextInputClient
 import org.jetbrains.desktop.win32.TextInputClientHolder
 import org.jetbrains.desktop.win32.TextRange
-import org.jetbrains.desktop.win32.UnderlineSegment
-import org.jetbrains.desktop.win32.UnderlineStyle
 import org.jetbrains.desktop.win32.fromNative
-import org.jetbrains.desktop.win32.generated.NativeBorrowedArray_UnderlineSegment
+import org.jetbrains.desktop.win32.generated.NativeBorrowedArray_TextCompositionSegment
 import org.jetbrains.desktop.win32.generated.NativeBorrowedUtf8
 import org.jetbrains.desktop.win32.generated.NativeCaretRectArgs
 import org.jetbrains.desktop.win32.generated.NativeEvent
@@ -2756,11 +2773,11 @@ import org.jetbrains.desktop.win32.generated.NativeInputLanguageChangedEvent
 import org.jetbrains.desktop.win32.generated.NativeLogicalPoint
 import org.jetbrains.desktop.win32.generated.NativeLogicalRect
 import org.jetbrains.desktop.win32.generated.NativeLogicalSize
+import org.jetbrains.desktop.win32.generated.NativeTextCompositionSegment
 import org.jetbrains.desktop.win32.generated.NativeTextRange
-import org.jetbrains.desktop.win32.generated.NativeUnderlineSegment
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import org.jetbrains.desktop.win32.readBorrowedUtf8
-import org.jetbrains.desktop.win32.readUnderlines
+import org.jetbrains.desktop.win32.readSegments
 import org.junit.jupiter.api.Test
 import java.lang.foreign.Arena
 import java.lang.foreign.ValueLayout
@@ -2780,7 +2797,7 @@ class TextInputClientTests {
         override fun setMarkedText(
             text: String,
             selectedRange: TextRange?,
-            underlines: List<org.jetbrains.desktop.win32.UnderlineSegment>,
+            segments: List<TextCompositionSegment>,
         ) = Unit
         override fun unmarkText() = Unit
         override fun discardMarkedText() = Unit
@@ -2830,19 +2847,18 @@ class TextInputClientTests {
     }
 
     @Test
-    fun `underline decoder reads range style and target`() = Arena.ofConfined().use { arena ->
-        val items = NativeUnderlineSegment.allocateArray(1L, arena)
-        val item = NativeUnderlineSegment.asSlice(items, 0L)
-        NativeTextRange.location(NativeUnderlineSegment.range(item), 2)
-        NativeTextRange.length(NativeUnderlineSegment.range(item), 3)
-        NativeUnderlineSegment.style(item, desktop_win32_h.NativeUnderlineStyle_Thick())
-        NativeUnderlineSegment.target_clause(item, true)
-        val borrowed = NativeBorrowedArray_UnderlineSegment.allocate(arena)
-        NativeBorrowedArray_UnderlineSegment.ptr(borrowed, items)
-        NativeBorrowedArray_UnderlineSegment.len(borrowed, 1)
+    fun `segment decoder reads direct composition attribute`() = Arena.ofConfined().use { arena ->
+        val items = NativeTextCompositionSegment.allocateArray(1L, arena)
+        val item = NativeTextCompositionSegment.asSlice(items, 0L)
+        NativeTextRange.location(NativeTextCompositionSegment.range(item), 2)
+        NativeTextRange.length(NativeTextCompositionSegment.range(item), 3)
+        NativeTextCompositionSegment.attribute(item, desktop_win32_h.NativeTextCompositionAttribute_TargetConverted())
+        val borrowed = NativeBorrowedArray_TextCompositionSegment.allocate(arena)
+        NativeBorrowedArray_TextCompositionSegment.ptr(borrowed, items)
+        NativeBorrowedArray_TextCompositionSegment.len(borrowed, 1)
         assertEquals(
-            listOf(UnderlineSegment(TextRange(2, 3), UnderlineStyle.Thick, true)),
-            readUnderlines(borrowed),
+            listOf(TextCompositionSegment(TextRange(2, 3), TextCompositionAttribute.TargetConverted)),
+            readSegments(borrowed),
         )
     }
 
@@ -2907,7 +2923,7 @@ Create `TextInputClient.kt`. The imports are the generated layouts named in Step
 ```kotlin
 package org.jetbrains.desktop.win32
 
-import org.jetbrains.desktop.win32.generated.NativeBorrowedArray_UnderlineSegment
+import org.jetbrains.desktop.win32.generated.NativeBorrowedArray_TextCompositionSegment
 import org.jetbrains.desktop.win32.generated.NativeBorrowedUtf8
 import org.jetbrains.desktop.win32.generated.NativeCaretRectArgs
 import org.jetbrains.desktop.win32.generated.NativeCaretRectCallback
@@ -2917,9 +2933,9 @@ import org.jetbrains.desktop.win32.generated.NativeInsertTextCallback
 import org.jetbrains.desktop.win32.generated.NativeSelectedRangeCallback
 import org.jetbrains.desktop.win32.generated.NativeSetMarkedTextArgs
 import org.jetbrains.desktop.win32.generated.NativeSetMarkedTextCallback
+import org.jetbrains.desktop.win32.generated.NativeTextCompositionSegment
 import org.jetbrains.desktop.win32.generated.NativeTextInputClient
 import org.jetbrains.desktop.win32.generated.NativeTextRange
-import org.jetbrains.desktop.win32.generated.NativeUnderlineSegment
 import org.jetbrains.desktop.win32.generated.NativeUnmarkTextCallback
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
@@ -2930,7 +2946,7 @@ public interface TextInputClient {
     public fun selectedRange(): TextRange?
     public fun caretRect(range: TextRange): LogicalRect
     public fun insertText(text: String)
-    public fun setMarkedText(text: String, selectedRange: TextRange?, underlines: List<UnderlineSegment>)
+    public fun setMarkedText(text: String, selectedRange: TextRange?, segments: List<TextCompositionSegment>)
     public fun unmarkText()
     public fun discardMarkedText()
 
@@ -2942,7 +2958,7 @@ public interface TextInputClient {
         override fun setMarkedText(
             text: String,
             selectedRange: TextRange?,
-            underlines: List<UnderlineSegment>,
+            segments: List<TextCompositionSegment>,
         ): Unit = Unit
         override fun unmarkText(): Unit = Unit
         override fun discardMarkedText(): Unit = Unit
@@ -2967,23 +2983,24 @@ public data class TextRange(
     }
 }
 
-public data class UnderlineSegment(
+public data class TextCompositionSegment(
     public val range: TextRange,
-    public val style: UnderlineStyle,
-    public val targetClause: Boolean,
+    public val attribute: TextCompositionAttribute,
 )
 
-public enum class UnderlineStyle {
-    Solid,
-    Dotted,
-    Thick;
+public enum class TextCompositionAttribute {
+    Input, TargetConverted, Converted, TargetNotConverted, InputError, FixedConverted, Unspecified;
 
     internal companion object {
-        fun fromNative(value: Int): UnderlineStyle = when (value) {
-            desktop_win32_h.NativeUnderlineStyle_Solid() -> Solid
-            desktop_win32_h.NativeUnderlineStyle_Dotted() -> Dotted
-            desktop_win32_h.NativeUnderlineStyle_Thick() -> Thick
-            else -> error("Unexpected UnderlineStyle value: $value")
+        fun fromNative(value: Int): TextCompositionAttribute = when (value) {
+            desktop_win32_h.NativeTextCompositionAttribute_Input() -> Input
+            desktop_win32_h.NativeTextCompositionAttribute_TargetConverted() -> TargetConverted
+            desktop_win32_h.NativeTextCompositionAttribute_Converted() -> Converted
+            desktop_win32_h.NativeTextCompositionAttribute_TargetNotConverted() -> TargetNotConverted
+            desktop_win32_h.NativeTextCompositionAttribute_InputError() -> InputError
+            desktop_win32_h.NativeTextCompositionAttribute_FixedConverted() -> FixedConverted
+            desktop_win32_h.NativeTextCompositionAttribute_Unspecified() -> Unspecified
+            else -> error("Unexpected TextCompositionAttribute value: $value")
         }
     }
 }
@@ -2995,16 +3012,15 @@ internal fun readBorrowedUtf8(native: MemorySegment): String {
     return pointer.asSlice(0, length).toArray(ValueLayout.JAVA_BYTE).decodeToString()
 }
 
-internal fun readUnderlines(native: MemorySegment): List<UnderlineSegment> {
-    val pointer = NativeBorrowedArray_UnderlineSegment.ptr(native)
-    val length = NativeBorrowedArray_UnderlineSegment.len(native)
+internal fun readSegments(native: MemorySegment): List<TextCompositionSegment> {
+    val pointer = NativeBorrowedArray_TextCompositionSegment.ptr(native)
+    val length = NativeBorrowedArray_TextCompositionSegment.len(native)
     if (pointer == MemorySegment.NULL || length == 0L) return emptyList()
     return List(Math.toIntExact(length)) { index ->
-        val item = NativeUnderlineSegment.asSlice(pointer, index.toLong())
-        UnderlineSegment(
-            range = TextRange.fromNative(NativeUnderlineSegment.range(item)),
-            style = UnderlineStyle.fromNative(NativeUnderlineSegment.style(item)),
-            targetClause = NativeUnderlineSegment.target_clause(item),
+        val item = NativeTextCompositionSegment.asSlice(pointer, index.toLong())
+        TextCompositionSegment(
+            range = TextRange.fromNative(NativeTextCompositionSegment.range(item)),
+            attribute = TextCompositionAttribute.fromNative(NativeTextCompositionSegment.attribute(item)),
         )
     }
 }
@@ -3042,7 +3058,7 @@ internal class TextInputClientHolder : AutoCloseable {
         textInputClient.setMarkedText(
             text = readBorrowedUtf8(NativeSetMarkedTextArgs.text(args)),
             selectedRange = TextRange.fromNative(NativeSetMarkedTextArgs.selected_range(args)).nullIfNotFound(),
-            underlines = readUnderlines(NativeSetMarkedTextArgs.underlines(args)),
+            segments = readSegments(NativeSetMarkedTextArgs.segments(args)),
         )
     }
 
@@ -3180,9 +3196,10 @@ import org.jetbrains.desktop.win32.LogicalPoint
 import org.jetbrains.desktop.win32.LogicalRect
 import org.jetbrains.desktop.win32.LogicalSize
 import org.jetbrains.desktop.win32.PointerButton
+import org.jetbrains.desktop.win32.TextCompositionAttribute
+import org.jetbrains.desktop.win32.TextCompositionSegment
 import org.jetbrains.desktop.win32.TextInputClient
 import org.jetbrains.desktop.win32.TextRange
-import org.jetbrains.desktop.win32.UnderlineSegment
 import org.jetbrains.desktop.win32.VirtualKey
 import org.jetbrains.desktop.win32.Window
 import org.jetbrains.skia.Canvas
@@ -3210,7 +3227,7 @@ class ToyTextInputWin32(
     private var cursor = 0
     private var anchor = 0
     private var marked: TextRange? = null
-    private var underlines: List<UnderlineSegment> = emptyList()
+    private var segments: List<TextCompositionSegment> = emptyList()
     private var compositionBackup: CompositionBackup? = null
 
     private data class CompositionBackup(
@@ -3245,7 +3262,7 @@ class ToyTextInputWin32(
     override fun setMarkedText(
         text: String,
         selectedRange: TextRange?,
-        underlines: List<UnderlineSegment>,
+        segments: List<TextCompositionSegment>,
     ) {
         val target = marked ?: this.selectedRange().also { range ->
             val start = range.location.toInt()
@@ -3258,7 +3275,7 @@ class ToyTextInputWin32(
         }
         replace(target, text)
         marked = TextRange(target.location, text.length.toLong())
-        this.underlines = underlines
+        this.segments = segments
         val local = selectedRange ?: TextRange(text.length.toLong(), 0)
         anchor = target.location.toInt() + local.location.toInt()
         cursor = anchor + local.length.toInt()
@@ -3289,7 +3306,7 @@ class ToyTextInputWin32(
 
     private fun clearCompositionMetadata() {
         marked = null
-        underlines = emptyList()
+        segments = emptyList()
         compositionBackup = null
     }
 
@@ -3602,13 +3619,13 @@ git commit -m "feat(win32): add editable IME sample"
 
 ---
 
-### Task 10: Testable IMM readers and underline conversion
+### Task 10: Testable IMM readers and composition-attribute transport
 
 **Files:**
 - Modify: `native/desktop-win32/src/win32/ime.rs`
 
 **Interfaces:**
-- Consumes: IMM constants, the private `ImmContext` transport, and Task-1 range/underline types.
+- Consumes: IMM constants, the private `ImmContext` transport, and Task-1 text-composition range/attribute types.
 - Produces: injectable `CompositionSource`, the `u32` clause decoder, `PreeditSnapshot`, and
   `CompositionSnapshot::read` for Tasks 11–12.
 
@@ -3672,8 +3689,8 @@ fn u32_decoder_rejects_misaligned_data() {
 }
 
 #[test]
-fn underline_conversion_maps_clauses_and_targets() {
-    let underlines = underlines_from_parts(
+fn composition_segments_keep_clause_ranges_and_attributes() {
+    let segments = segments_from_parts(
         &[
             u8::try_from(ATTR_INPUT).unwrap(),
             u8::try_from(ATTR_INPUT).unwrap(),
@@ -3684,17 +3701,15 @@ fn underline_conversion_maps_clauses_and_targets() {
         4,
     );
     assert_eq!(
-        underlines,
+        segments,
         vec![
-            UnderlineSegment {
+            TextCompositionSegment {
                 range: TextRange { location: 0, length: 2 },
-                style: UnderlineStyle::Dotted,
-                target_clause: false,
+                attribute: TextCompositionAttribute::Input,
             },
-            UnderlineSegment {
+            TextCompositionSegment {
                 range: TextRange { location: 2, length: 2 },
-                style: UnderlineStyle::Thick,
-                target_clause: true,
+                attribute: TextCompositionAttribute::TargetConverted,
             },
         ],
     );
@@ -3703,8 +3718,8 @@ fn underline_conversion_maps_clauses_and_targets() {
 #[test]
 fn malformed_clauses_fall_back_to_whole_preedit() {
     assert_eq!(
-        underlines_from_parts(&[], &[1, 3], 3),
-        fallback_underlines(3),
+        segments_from_parts(&[u8::try_from(ATTR_INPUT).unwrap(); 3], &[1, 3], 3),
+        fallback_segments(3),
     );
 }
 
@@ -3780,7 +3795,7 @@ fn optional_decoration_failure_uses_fallback() {
         ..Default::default()
     };
     let snapshot = CompositionSnapshot::read(&source, GCS_COMPSTR.0).unwrap();
-    assert_eq!(snapshot.preedit.unwrap().underlines, fallback_underlines(2));
+    assert_eq!(snapshot.preedit.unwrap().segments, fallback_segments(2));
 }
 
 #[test]
@@ -3844,7 +3859,7 @@ impl ImmContext {
 Add the `CompositionSource` trait and its `ImmContext` impl from §7.3 (`bytes`, `utf16`, and
 `cursor`; the first two delegate to `composition_payload`).
 
-- [ ] **Step 3: Add the clause decoder and underline mapping**
+- [ ] **Step 3: Add the clause decoder and direct attribute transport**
 
 ```rust
 fn decode_u32_bytes(bytes: &[u8]) -> anyhow::Result<Vec<u32>> {
@@ -3855,44 +3870,48 @@ fn decode_u32_bytes(bytes: &[u8]) -> anyhow::Result<Vec<u32>> {
         .collect())
 }
 
-fn underlines_from_parts(attrs: &[u8], clauses: &[u32], preedit_len: usize) -> Vec<UnderlineSegment> {
+fn composition_attribute_from_raw(value: u8) -> TextCompositionAttribute {
+    match u32::from(value) {
+        ATTR_INPUT => TextCompositionAttribute::Input,
+        ATTR_TARGET_CONVERTED => TextCompositionAttribute::TargetConverted,
+        ATTR_CONVERTED => TextCompositionAttribute::Converted,
+        ATTR_TARGET_NOTCONVERTED => TextCompositionAttribute::TargetNotConverted,
+        ATTR_INPUT_ERROR => TextCompositionAttribute::InputError,
+        ATTR_FIXEDCONVERTED => TextCompositionAttribute::FixedConverted,
+        _ => TextCompositionAttribute::Unspecified,
+    }
+}
+
+fn segments_from_parts(attrs: &[u8], clauses: &[u32], preedit_len: usize) -> Vec<TextCompositionSegment> {
     let bounds = clauses
         .iter()
         .map(|value| usize::try_from(*value))
         .collect::<Result<Vec<_>, _>>();
-    let Ok(bounds) = bounds else { return fallback_underlines(preedit_len) };
-    if bounds.len() < 2
+    let Ok(bounds) = bounds else { return fallback_segments(preedit_len) };
+    if attrs.len() != preedit_len
+        || bounds.len() < 2
         || bounds.first() != Some(&0)
         || bounds.last() != Some(&preedit_len)
         || bounds.iter().any(|value| *value > preedit_len)
         || bounds.windows(2).any(|pair| pair[0] > pair[1])
     {
-        return fallback_underlines(preedit_len);
+        return fallback_segments(preedit_len);
     }
 
     bounds.windows(2).filter_map(|pair| {
         let (start, end) = (pair[0], pair[1]);
         if start >= end { return None; }
-        let attribute = attrs.get(start).copied().map_or(ATTR_INPUT, u32::from);
-        let (style, target_clause) = match attribute {
-            ATTR_TARGET_CONVERTED => (UnderlineStyle::Thick, true),
-            ATTR_TARGET_NOTCONVERTED => (UnderlineStyle::Dotted, true),
-            ATTR_CONVERTED | ATTR_FIXEDCONVERTED => (UnderlineStyle::Solid, false),
-            _ => (UnderlineStyle::Dotted, false),
-        };
-        Some(UnderlineSegment {
+        Some(TextCompositionSegment {
             range: TextRange { location: start, length: end - start },
-            style,
-            target_clause,
+            attribute: composition_attribute_from_raw(attrs[start]),
         })
     }).collect()
 }
 
-fn fallback_underlines(preedit_len: usize) -> Vec<UnderlineSegment> {
-    (preedit_len != 0).then_some(UnderlineSegment {
+fn fallback_segments(preedit_len: usize) -> Vec<TextCompositionSegment> {
+    (preedit_len != 0).then_some(TextCompositionSegment {
         range: TextRange { location: 0, length: preedit_len },
-        style: UnderlineStyle::Dotted,
-        target_clause: false,
+        attribute: TextCompositionAttribute::Unspecified,
     }).into_iter().collect()
 }
 ```
@@ -3928,7 +3947,7 @@ pub(crate) struct PreeditSnapshot {
     pub(crate) text: String,
     /// `TextRange::none()` when the IME shows no composition cursor.
     pub(crate) selected: TextRange,
-    pub(crate) underlines: Vec<UnderlineSegment>,
+    pub(crate) segments: Vec<TextCompositionSegment>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3951,17 +3970,17 @@ impl CompositionSnapshot {
                 location: cursor.min(length),
                 length: 0,
             });
-            let underlines = match (
+            let segments = match (
                 source.bytes(GCS_COMPATTR),
                 source.bytes(GCS_COMPCLAUSE).and_then(|bytes| decode_u32_bytes(&bytes)),
             ) {
-                (Ok(attrs), Ok(clauses)) => underlines_from_parts(&attrs, &clauses, length),
+                (Ok(attrs), Ok(clauses)) => segments_from_parts(&attrs, &clauses, length),
                 (Err(err), _) | (_, Err(err)) => {
-                    log::warn!("reading IME underline data failed: {err:#}");
-                    fallback_underlines(length)
+                    log::warn!("reading IME composition metadata failed: {err:#}");
+                    fallback_segments(length)
                 }
             };
-            Some(PreeditSnapshot { text, selected, underlines })
+            Some(PreeditSnapshot { text, selected, segments })
         } else {
             None
         };
@@ -4198,7 +4217,7 @@ fn apply_stops_after_reentrant_end_during_insert() {
         preedit: Some(PreeditSnapshot {
             text: "stale".to_owned(),
             selected: TextRange { location: 0, length: 0 },
-            underlines: Vec::new(),
+            segments: Vec::new(),
         }),
         cancelled: false,
     });
@@ -4214,7 +4233,7 @@ fn apply_stops_before_positioning_after_reentrant_focus_loss() {
         preedit: Some(PreeditSnapshot {
             text: "preedit".to_owned(),
             selected: TextRange { location: 0, length: 0 },
-            underlines: Vec::new(),
+            segments: Vec::new(),
         }),
         cancelled: false,
     });
@@ -4258,7 +4277,7 @@ impl CompositionSink for Window {
     }
     fn set_marked_text(&self, preedit: &PreeditSnapshot) {
         let _ = self.with_enabled_client(|client| {
-            client.set_marked_text(&preedit.text, preedit.selected, &preedit.underlines);
+            client.set_marked_text(&preedit.text, preedit.selected, &preedit.segments);
         });
     }
     fn discard_marked_text(&self) {
@@ -4389,28 +4408,25 @@ Expected: all reader, apply, and owned-read tests pass; `cargo check` ends with
 - Consumes: complete Phase-2 callbacks and sample state from Task 9.
 - Produces: visible clause styling/caret, final canonical documentation, and release evidence.
 
-- [ ] **Step 1: Render preedit-relative underlines**
+- [ ] **Step 1: Render preedit-relative composition segments**
 
-Add `import org.jetbrains.desktop.win32.UnderlineStyle` in sorted order. In the
+Add `TextCompositionAttribute` and `TextCompositionSegment` imports in sorted order. In the
 `buildParagraph(...).use` block in `ToyTextInputWin32.draw`, after `paragraph.paint` and before
 drawing the caret, add:
 
 ```kotlin
 val mark = marked
 if (mark != null) {
-    for (segment in underlines) {
+    for (segment in segments) {
         val start = mark.location.toInt() + segment.range.location.toInt()
         val end = start + segment.range.length.toInt()
         val x1 = textX + measurePrefix(start, scale)
         val x2 = textX + measurePrefix(end, scale)
         Paint().use { paint ->
-            paint.color = if (segment.targetClause) 0xFF_FF_CC_33.toInt() else 0xFF_E0_E0_E0.toInt()
-            paint.strokeWidth = when (segment.style) {
-                UnderlineStyle.Solid -> 1f * scale
-                UnderlineStyle.Dotted -> 1f * scale
-                UnderlineStyle.Thick -> 2f * scale
-            }
-            if (segment.style == UnderlineStyle.Dotted) {
+            val presentation = segment.attribute.presentation()
+            paint.color = if (segment.attribute.isTarget()) 0xFF_FF_CC_33.toInt() else presentation.color
+            paint.strokeWidth = presentation.strokeWidth * scale
+            if (presentation.dotted) {
                 var x = x1
                 while (x < x2) {
                     canvas.drawPoint(x, textY + paragraph.height - scale, paint)
@@ -4500,12 +4516,13 @@ cargo test --manifest-path native/Cargo.toml -p desktop-win32 win32::window::ime
 IME message delivery itself is not scriptable, but the reducer and parsing logic are. Cover:
 
 - **Range semantics** — document-global `selectedRange` passed unchanged to `caretRect`;
-  preedit-relative selection and underline ranges; the `NOT_FOUND` sentinel ↔ `null` round-trip.
+  preedit-relative selection and composition-segment ranges; the `NOT_FOUND` sentinel ↔ `null` round-trip.
 - **Surrogate joining** — a BMP unit; a valid high+low pair; a lone high surrogate; a lone low
   surrogate; an interrupted pair; and clearing the pending unit on client switch / focus loss /
   composition end.
-- **Underline mapping** — `ATTR_*` → `UnderlineStyle` / `targetClause`; multi-clause boundaries; and
-  the malformed-boundary fallback to a single whole-preedit clause.
+- **Composition attributes** — checked `ATTR_*` → `TextCompositionAttribute` mapping; multi-clause
+  boundaries; reserved values; and malformed/unavailable metadata fallback to one full-preedit
+  `Unspecified` segment.
 - **Coordinate conversion** — client-relative logical → client-relative physical, including the
   full-rectangle `CFS_EXCLUDE` corner conversion.
 - **Composition state transitions** — start → compose → commit; start → compose → cancel (empty

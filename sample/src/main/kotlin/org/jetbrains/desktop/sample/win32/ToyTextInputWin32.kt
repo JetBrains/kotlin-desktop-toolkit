@@ -7,10 +7,10 @@ import org.jetbrains.desktop.win32.LogicalPoint
 import org.jetbrains.desktop.win32.LogicalRect
 import org.jetbrains.desktop.win32.LogicalSize
 import org.jetbrains.desktop.win32.PointerButton
+import org.jetbrains.desktop.win32.TextCompositionAttribute
+import org.jetbrains.desktop.win32.TextCompositionSegment
 import org.jetbrains.desktop.win32.TextInputClient
 import org.jetbrains.desktop.win32.TextRange
-import org.jetbrains.desktop.win32.UnderlineSegment
-import org.jetbrains.desktop.win32.UnderlineStyle
 import org.jetbrains.desktop.win32.VirtualKey
 import org.jetbrains.desktop.win32.Window
 import org.jetbrains.skia.Canvas
@@ -39,7 +39,7 @@ class ToyTextInputWin32(
     private var cursor = 0
     private var anchor = 0
     private var marked: TextRange? = null
-    private var underlines: List<UnderlineSegment> = emptyList()
+    private var segments: List<TextCompositionSegment> = emptyList()
     private var compositionBackup: CompositionBackup? = null
 
     private data class CompositionBackup(
@@ -71,7 +71,7 @@ class ToyTextInputWin32(
         changed()
     }
 
-    override fun setMarkedText(text: String, selectedRange: TextRange?, underlines: List<UnderlineSegment>) {
+    override fun setMarkedText(text: String, selectedRange: TextRange?, segments: List<TextCompositionSegment>) {
         val target = marked ?: this.selectedRange().also { range ->
             val start = range.location.toInt()
             compositionBackup = CompositionBackup(
@@ -83,7 +83,7 @@ class ToyTextInputWin32(
         }
         replace(target, text)
         marked = TextRange(target.location, text.length.toLong())
-        this.underlines = underlines
+        this.segments = segments
         val local = selectedRange ?: TextRange(text.length.toLong(), 0)
         anchor = target.location.toInt() + local.location.toInt()
         cursor = anchor + local.length.toInt()
@@ -114,7 +114,7 @@ class ToyTextInputWin32(
 
     private fun clearCompositionMetadata() {
         marked = null
-        underlines = emptyList()
+        segments = emptyList()
         compositionBackup = null
     }
 
@@ -240,19 +240,16 @@ class ToyTextInputWin32(
                 paragraph.paint(canvas, textX, textY)
                 val mark = marked
                 if (mark != null) {
-                    for (segment in underlines) {
+                    for (segment in segments) {
                         val start = mark.location.toInt() + segment.range.location.toInt()
                         val end = start + segment.range.length.toInt()
                         val x1 = textX + measurePrefix(start, scale)
                         val x2 = textX + measurePrefix(end, scale)
                         Paint().use { paint ->
-                            paint.color = if (segment.targetClause) 0xFF_FF_CC_33.toInt() else 0xFF_E0_E0_E0.toInt()
-                            paint.strokeWidth = when (segment.style) {
-                                UnderlineStyle.Solid -> 1f * scale
-                                UnderlineStyle.Dotted -> 1f * scale
-                                UnderlineStyle.Thick -> 2f * scale
-                            }
-                            if (segment.style == UnderlineStyle.Dotted) {
+                            val presentation = segment.attribute.presentation()
+                            paint.color = if (segment.attribute.isTarget()) 0xFF_FF_CC_33.toInt() else presentation.color
+                            paint.strokeWidth = presentation.strokeWidth * scale
+                            if (presentation.dotted) {
                                 var x = x1
                                 while (x < x2) {
                                     canvas.drawPoint(x, textY + paragraph.height - scale, paint)
@@ -331,6 +328,25 @@ class ToyTextInputWin32(
     private fun findIndex(x: Float): Int = (0..buffer.length).minBy { index ->
         abs(measurePrefix(index) - x)
     }
+
+    private fun TextCompositionAttribute.isTarget(): Boolean =
+        this == TextCompositionAttribute.TargetConverted || this == TextCompositionAttribute.TargetNotConverted
+
+    private fun TextCompositionAttribute.presentation(): TextCompositionPresentation = when (this) {
+        TextCompositionAttribute.Input -> TextCompositionPresentation(0xFF_E0_E0_E0.toInt(), 1f, true)
+        TextCompositionAttribute.TargetConverted -> TextCompositionPresentation(0xFF_E0_E0_E0.toInt(), 2f, false)
+        TextCompositionAttribute.Converted -> TextCompositionPresentation(0xFF_E0_E0_E0.toInt(), 1f, false)
+        TextCompositionAttribute.TargetNotConverted -> TextCompositionPresentation(0xFF_E0_E0_E0.toInt(), 1f, true)
+        TextCompositionAttribute.InputError -> TextCompositionPresentation(0xFF_FF_66_66.toInt(), 1f, true)
+        TextCompositionAttribute.FixedConverted -> TextCompositionPresentation(0xFF_E0_E0_E0.toInt(), 1f, false)
+        TextCompositionAttribute.Unspecified -> TextCompositionPresentation(0xFF_A0_A0_A0.toInt(), 1f, true)
+    }
+
+    private data class TextCompositionPresentation(
+        val color: Int,
+        val strokeWidth: Float,
+        val dotted: Boolean,
+    )
 
     override fun close(): Unit = Unit
 }

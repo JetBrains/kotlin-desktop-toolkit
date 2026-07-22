@@ -1,6 +1,6 @@
 package org.jetbrains.desktop.win32
 
-import org.jetbrains.desktop.win32.generated.NativeBorrowedArray_UnderlineSegment
+import org.jetbrains.desktop.win32.generated.NativeBorrowedArray_TextCompositionSegment
 import org.jetbrains.desktop.win32.generated.NativeBorrowedUtf8
 import org.jetbrains.desktop.win32.generated.NativeCaretRectArgs
 import org.jetbrains.desktop.win32.generated.NativeCaretRectCallback
@@ -10,9 +10,9 @@ import org.jetbrains.desktop.win32.generated.NativeInsertTextCallback
 import org.jetbrains.desktop.win32.generated.NativeSelectedRangeCallback
 import org.jetbrains.desktop.win32.generated.NativeSetMarkedTextArgs
 import org.jetbrains.desktop.win32.generated.NativeSetMarkedTextCallback
+import org.jetbrains.desktop.win32.generated.NativeTextCompositionSegment
 import org.jetbrains.desktop.win32.generated.NativeTextInputClient
 import org.jetbrains.desktop.win32.generated.NativeTextRange
-import org.jetbrains.desktop.win32.generated.NativeUnderlineSegment
 import org.jetbrains.desktop.win32.generated.NativeUnmarkTextCallback
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
@@ -23,7 +23,7 @@ public interface TextInputClient {
     public fun selectedRange(): TextRange?
     public fun caretRect(range: TextRange): LogicalRect
     public fun insertText(text: String)
-    public fun setMarkedText(text: String, selectedRange: TextRange?, underlines: List<UnderlineSegment>)
+    public fun setMarkedText(text: String, selectedRange: TextRange?, segments: List<TextCompositionSegment>)
     public fun unmarkText()
     public fun discardMarkedText()
 
@@ -31,7 +31,7 @@ public interface TextInputClient {
         override fun selectedRange(): TextRange? = null
         override fun caretRect(range: TextRange): LogicalRect = LogicalRect(LogicalPoint.Zero, LogicalSize(0f, 0f))
         override fun insertText(text: String): Unit = Unit
-        override fun setMarkedText(text: String, selectedRange: TextRange?, underlines: List<UnderlineSegment>): Unit = Unit
+        override fun setMarkedText(text: String, selectedRange: TextRange?, segments: List<TextCompositionSegment>): Unit = Unit
         override fun unmarkText(): Unit = Unit
         override fun discardMarkedText(): Unit = Unit
     }
@@ -54,24 +54,31 @@ public data class TextRange(
     }
 }
 
-public data class UnderlineSegment(
+public data class TextCompositionSegment(
     public val range: TextRange,
-    public val style: UnderlineStyle,
-    public val targetClause: Boolean,
+    public val attribute: TextCompositionAttribute,
 )
 
-public enum class UnderlineStyle {
-    Solid,
-    Dotted,
-    Thick,
+public enum class TextCompositionAttribute {
+    Input,
+    TargetConverted,
+    Converted,
+    TargetNotConverted,
+    InputError,
+    FixedConverted,
+    Unspecified,
     ;
 
     internal companion object {
-        fun fromNative(value: Int): UnderlineStyle = when (value) {
-            desktop_win32_h.NativeUnderlineStyle_Solid() -> Solid
-            desktop_win32_h.NativeUnderlineStyle_Dotted() -> Dotted
-            desktop_win32_h.NativeUnderlineStyle_Thick() -> Thick
-            else -> error("Unexpected UnderlineStyle value: $value")
+        fun fromNative(value: Int): TextCompositionAttribute = when (value) {
+            desktop_win32_h.NativeTextCompositionAttribute_Input() -> Input
+            desktop_win32_h.NativeTextCompositionAttribute_TargetConverted() -> TargetConverted
+            desktop_win32_h.NativeTextCompositionAttribute_Converted() -> Converted
+            desktop_win32_h.NativeTextCompositionAttribute_TargetNotConverted() -> TargetNotConverted
+            desktop_win32_h.NativeTextCompositionAttribute_InputError() -> InputError
+            desktop_win32_h.NativeTextCompositionAttribute_FixedConverted() -> FixedConverted
+            desktop_win32_h.NativeTextCompositionAttribute_Unspecified() -> Unspecified
+            else -> error("Unexpected TextCompositionAttribute value: $value")
         }
     }
 }
@@ -83,16 +90,15 @@ internal fun readBorrowedUtf8(native: MemorySegment): String {
     return pointer.asSlice(0, length).toArray(ValueLayout.JAVA_BYTE).decodeToString()
 }
 
-internal fun readUnderlines(native: MemorySegment): List<UnderlineSegment> {
-    val pointer = NativeBorrowedArray_UnderlineSegment.ptr(native)
-    val length = NativeBorrowedArray_UnderlineSegment.len(native)
+internal fun readSegments(native: MemorySegment): List<TextCompositionSegment> {
+    val pointer = NativeBorrowedArray_TextCompositionSegment.ptr(native)
+    val length = NativeBorrowedArray_TextCompositionSegment.len(native)
     if (pointer == MemorySegment.NULL || length == 0L) return emptyList()
     return List(Math.toIntExact(length)) { index ->
-        val item = NativeUnderlineSegment.asSlice(pointer, index.toLong())
-        UnderlineSegment(
-            range = TextRange.fromNative(NativeUnderlineSegment.range(item)),
-            style = UnderlineStyle.fromNative(NativeUnderlineSegment.style(item)),
-            targetClause = NativeUnderlineSegment.target_clause(item),
+        val item = NativeTextCompositionSegment.asSlice(pointer, index.toLong())
+        TextCompositionSegment(
+            range = TextRange.fromNative(NativeTextCompositionSegment.range(item)),
+            attribute = TextCompositionAttribute.fromNative(NativeTextCompositionSegment.attribute(item)),
         )
     }
 }
@@ -130,7 +136,7 @@ internal class TextInputClientHolder : AutoCloseable {
         textInputClient.setMarkedText(
             text = readBorrowedUtf8(NativeSetMarkedTextArgs.text(args)),
             selectedRange = TextRange.fromNative(NativeSetMarkedTextArgs.selected_range(args)).nullIfNotFound(),
-            underlines = readUnderlines(NativeSetMarkedTextArgs.underlines(args)),
+            segments = readSegments(NativeSetMarkedTextArgs.segments(args)),
         )
     }
 
