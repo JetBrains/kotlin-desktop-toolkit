@@ -8,13 +8,16 @@ use desktop_common::ffi_utils::RustAllocatedStrPtr;
 use anyhow::Context;
 use windows::Win32::{
     Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM},
+    Globalization::LCIDToLocaleName,
     Graphics::{
         Dwm::DwmDefWindowProc,
         Gdi::{BeginPaint, EndPaint, GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow, PAINTSTRUCT},
     },
+    System::SystemServices::LOCALE_NAME_MAX_LENGTH,
     UI::{
         HiDpi::{AdjustWindowRectExForDpi, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext},
         Input::{
+            Ime::ISC_SHOWUICOMPOSITIONWINDOW,
             KeyboardAndMouse::{GetCapture, ReleaseCapture, SetCapture, VK_PROCESSKEY},
             Pointer::EnableMouseInPointer,
         },
@@ -24,7 +27,8 @@ use windows::Win32::{
             GetWindowLongPtrW, GetWindowRect, HMENU, HTCAPTION, HTCLIENT, HTCLOSE, HTMAXBUTTON, HTMINBUTTON, HTTOP, MINMAXINFO, MSG,
             NCCALCSIZE_PARAMS, SC_KEYMENU, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
             TranslateMessage, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_CANCELMODE,
-            WM_CAPTURECHANGED, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_INITMENUPOPUP,
+            WM_CAPTURECHANGED, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO,
+            WM_IME_COMPOSITION, WM_IME_ENDCOMPOSITION, WM_IME_SETCONTEXT, WM_IME_STARTCOMPOSITION, WM_INITMENUPOPUP, WM_INPUTLANGCHANGE,
             WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCLBUTTONDOWN, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN,
             WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_NCRBUTTONUP, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL,
             WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE,
@@ -36,15 +40,17 @@ use windows::Win32::{
 use super::{
     appearance::{Appearance, HighContrast},
     events::{
-        CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerDownEvent, PointerEnteredEvent,
-        PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, SystemAppearanceChangeEvent,
-        SystemHighContrastChangeEvent, Timestamp, WindowActivatedEvent, WindowDrawEvent, WindowMoveEvent, WindowResizeEvent,
-        WindowScaleChangedEvent, WindowTitleChangedEvent,
+        CharacterReceivedEvent, Event, EventHandler, InputLanguageChangedEvent, KeyEvent, NCCalcSizeEvent, NCHitTestEvent,
+        PointerDownEvent, PointerEnteredEvent, PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent,
+        SystemAppearanceChangeEvent, SystemHighContrastChangeEvent, Timestamp, WindowActivatedEvent, WindowDrawEvent, WindowMoveEvent,
+        WindowResizeEvent, WindowScaleChangedEvent, WindowTitleChangedEvent,
     },
     geometry::{PhysicalPoint, PhysicalSize},
+    ime::{ImmContext, apply_finalizing_composition, apply_owned_composition},
     keyboard::{PhysicalKeyStatus, VirtualKey},
     pointer::{PointerButton, PointerButtonChangeKind, PointerClickCounter, PointerInfo},
     strings::copy_from_wide_string,
+    text_input_client::TextInputClient,
     utils::{GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
     window::Window,
 };
@@ -130,9 +136,19 @@ impl EventLoop {
 
             WM_KEYDOWN | WM_SYSKEYDOWN | WM_KEYUP | WM_SYSKEYUP => on_keyevent(self, window, msg, wparam, lparam),
 
-            WM_SETFOCUS => self.handle_event(window, Event::WindowKeyboardEnter),
+            WM_SETFOCUS => on_setfocus(self, window),
 
-            WM_KILLFOCUS => self.handle_event(window, Event::WindowKeyboardLeave),
+            WM_KILLFOCUS => on_killfocus(self, window),
+
+            WM_IME_SETCONTEXT => on_ime_setcontext(window, msg, wparam, lparam),
+
+            WM_IME_STARTCOMPOSITION => on_ime_startcomposition(window),
+
+            WM_IME_COMPOSITION => on_ime_composition(window, lparam),
+
+            WM_IME_ENDCOMPOSITION => on_ime_endcomposition(window),
+
+            WM_INPUTLANGCHANGE => on_inputlangchange(self, window, lparam),
 
             WM_CHAR | WM_DEADCHAR | WM_SYSCHAR | WM_SYSDEADCHAR => on_char(self, window, msg, wparam, lparam),
 
@@ -148,6 +164,7 @@ impl EventLoop {
             WM_POINTERLEAVE => on_pointerleave(self, window, wparam),
 
             WM_POINTERCAPTURECHANGED => on_pointercapturechanged(window, wparam),
+
             // Pointer event end
             WM_CANCELMODE => on_cancelmode(window),
 
@@ -163,11 +180,10 @@ impl EventLoop {
             // see https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/nf-dwmapi-dwmdefwindowproc
             WM_NCMOUSELEAVE => on_ncmouseleave(self, window, wparam, lparam),
 
-            // NC
             WM_NCLBUTTONDOWN => on_nclbuttondown(window, wparam, lparam),
 
             WM_NCRBUTTONUP => on_ncrbuttonup(window, wparam, lparam),
-            // NC
+
             WM_SETCURSOR => on_setcursor(window, lparam),
 
             WM_SETTEXT => on_settext(self, window, wparam, lparam),
@@ -251,6 +267,7 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
             .set_content_top_offset(window.max_chrome_y())
             .inspect_err(|err| log::warn!("set_content_top_offset on DPI change failed: {err}"));
     }
+    window.update_ime_windows();
     result
 }
 
@@ -701,7 +718,117 @@ fn on_keyevent(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM
     result
 }
 
+fn on_setfocus(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
+    window.ime_focus_gained();
+    event_loop.handle_event(window, Event::WindowKeyboardEnter)
+}
+
+fn on_killfocus(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
+    if let Err(err) = window.ime_focus_lost() {
+        log::warn!("IME focus-loss update failed: {err:#}");
+    }
+    event_loop.handle_event(window, Event::WindowKeyboardLeave)
+}
+
+fn on_ime_setcontext(window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    window.enabled_client()?;
+    let adjusted = LPARAM(lparam.0 & !(ISC_SHOWUICOMPOSITIONWINDOW as isize));
+    // SAFETY: arguments came from this live wndproc; only the documented composition-UI bit changed.
+    Some(unsafe { DefWindowProcW(window.hwnd(), msg, wparam, adjusted) })
+}
+
+fn on_ime_startcomposition(window: &Window) -> Option<LRESULT> {
+    window.enabled_client()?;
+    window.ime_start();
+    window.update_ime_windows();
+    Some(LRESULT(0))
+}
+
+fn on_ime_composition(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
+    window.enabled_client()?;
+    let finalizing = window.ime_is_finalizing();
+    if finalizing && window.ime_app_has_marked_text() {
+        // Reentry from our own CPS_CANCEL: the client already unmarked, so consume without an edit.
+        return Some(LRESULT(0));
+    }
+    let Some(context) = ImmContext::get(window.hwnd()) else {
+        log::warn!("enabled IME client has no input context; keeping composition ownership");
+        return Some(LRESULT(0));
+    };
+    let Ok(gcs) = u32::try_from(lparam.0) else {
+        log::warn!("WM_IME_COMPOSITION carried an invalid negative or oversized lParam");
+        return Some(LRESULT(0));
+    };
+    if finalizing {
+        // Reentry from our own CPS_COMPLETE: deliver the result to the client synchronously.
+        // Owning the message keeps the IME from re-emitting it as WM_IME_CHAR/WM_CHAR later,
+        // when the client may already be swapped, disabled, or unfocused.
+        apply_finalizing_composition(window, &context, gcs);
+        return Some(LRESULT(0));
+    }
+    apply_owned_composition(window, &context, gcs);
+    Some(LRESULT(0))
+}
+
+fn on_ime_endcomposition(window: &Window) -> Option<LRESULT> {
+    window.enabled_client()?;
+    if window.ime_is_finalizing() {
+        return Some(LRESULT(0));
+    }
+    if window.ime_end() {
+        let _ = window.with_enabled_client(TextInputClient::discard_marked_text);
+    }
+    Some(LRESULT(0))
+}
+
+fn on_inputlangchange(event_loop: &EventLoop, window: &Window, lparam: LPARAM) -> Option<LRESULT> {
+    let hkl = lparam.0.cast_unsigned();
+    let langid = u32::from(LOWORD!(hkl));
+    let locale_name = RustAllocatedStrPtr::allocate(resolve_locale_name(langid))
+        .inspect_err(|err| log::error!("Failed to allocate the locale name: {err:?}"))
+        .unwrap_or_else(|_| RustAllocatedStrPtr::null())
+        .to_auto_drop();
+    let _ = event_loop.handle_event(window, InputLanguageChangedEvent { hkl, locale_name });
+    None
+}
+
+fn resolve_locale_name(langid: u32) -> String {
+    let mut buffer = [0u16; LOCALE_NAME_MAX_LENGTH as usize];
+    // SAFETY: the buffer is writable for `LOCALE_NAME_MAX_LENGTH` UTF-16 units; a LANGID is a
+    // valid SORT_DEFAULT LCID because its high word is zero.
+    let length = unsafe { LCIDToLocaleName(langid, Some(buffer.as_mut_slice()), 0) };
+    // The returned length counts the trailing NUL.
+    if let Ok(length) = usize::try_from(length)
+        && length > 1
+    {
+        String::from_utf16_lossy(&buffer[..length - 1])
+    } else {
+        String::new()
+    }
+}
+
 fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    if window.active_client().is_none() {
+        return character_received(event_loop, window, msg, wparam, lparam);
+    }
+    if msg != WM_CHAR {
+        window.clear_pending_surrogate();
+        return character_received(event_loop, window, msg, wparam, lparam);
+    }
+    let unit = LOWORD!(wparam.0);
+    // Control units (Enter, Tab, Backspace, ...) must still reach the app as CharacterReceived,
+    // never as an insertText edit.
+    if matches!(unit, 0x00..=0x1F | 0x7F..=0x9F) {
+        window.clear_pending_surrogate();
+        return character_received(event_loop, window, msg, wparam, lparam);
+    }
+    if let Some(text) = window.join_surrogate(unit) {
+        let _ = window.with_active_client(|client| client.insert_text(&text));
+    }
+    Some(LRESULT(0))
+}
+
+fn character_received(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     let character = LOWORD!(wparam.0);
     let event = CharacterReceivedEvent {
         character,

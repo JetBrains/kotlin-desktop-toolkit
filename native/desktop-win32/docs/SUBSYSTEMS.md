@@ -10,6 +10,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 - [System menu](#system-menu)
 - [Geometry](#geometry)
 - [Keyboard](#keyboard)
+- [Text input (IME)](#text-input-ime)
 - [Pointer](#pointer)
 - [Cursor](#cursor)
 - [Screen](#screen)
@@ -35,16 +36,16 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 **FFI surface (`application_api.rs`, `events_api.rs`).**
 `application_init_apartment`, `application_init`, `application_run_event_loop`, `application_stop_event_loop`, `application_dispatcher_invoke`, `application_is_dispatcher_thread`, `application_open_url`, `application_drop`; `keyevent_translate_message`, `keydown_to_unicode`.
 
-**Kotlin surface.** `Application` (`AutoCloseable`) — `runEventLoop`, `stopEventLoop`, `invokeOnDispatcher`, `onStartup`, `isDispatcherThread`, `newWindow`, `createAngleRenderer`. Companion extension `openURL`. `Event` `sealed class` with 22 subclasses 1-to-1 with the Rust enum.
+**Kotlin surface.** `Application` (`AutoCloseable`) — `runEventLoop`, `stopEventLoop`, `invokeOnDispatcher`, `onStartup`, `isDispatcherThread`, `newWindow`, `createAngleRenderer`. Companion extension `openURL`. `Event` `sealed class` with 25 subclasses 1-to-1 with the Rust enum.
 
 **Key types.**
 - `Application` (Rust) — owns `Rc<EventLoop>`, the `DispatcherQueueController`, a message-only-window `Dispatcher`, and `compositor_driver: Arc<CompositorDriver>`. Heap-boxed; opaque to Kotlin as `AppPtr<'a> = RustAllocatedRawPtr<'a>` (alias). The WinRT `DispatcherQueue` is accessed via `dispatcher_queue_controller.DispatcherQueue()` rather than stored as a separate field.
 - `Dispatcher` — posts wake messages to a message-only HWND and drains queued FFI callbacks on the UI thread.
 - `EventLoop` — the message pump. `Window` keeps `Weak<EventLoop>` to avoid cycles.
-- `Event` — `#[repr(C)]` enum, 22 variants. Mirrored 1-to-1 in Kotlin. Has `#[allow(dead_code)]` on the whole enum because variants are constructed by Rust but consumed only across FFI.
+- `Event` — `#[repr(C)]` enum, 25 variants. Mirrored 1-to-1 in Kotlin. Has `#[allow(dead_code)]` on the whole enum because variants are constructed by Rust but consumed only across FFI.
 - `EventHandler = extern "C" fn(WindowId, &Event) -> bool` (returns "handled?")
 
-**Ownership.** `application_init` heap-boxes the `Application` and returns the leaked pointer; `application_drop` reclaims. The `borrow::<Application>` path on each call leak-reconstructs the box (see `FFI_CONVENTIONS.md` → opaque pointers). Per-`WindowTitleChangedEvent` strings are `AutoDropStrPtr`, owned by the `Event` for the duration of the callback.
+**Ownership.** `application_init` heap-boxes the `Application` and returns the leaked pointer; `application_drop` reclaims. The `borrow::<Application>` path on each call leak-reconstructs the box (see `FFI_CONVENTIONS.md` → opaque pointers). Per-event strings (`WindowTitleChangedEvent.title`, `InputLanguageChangedEvent.locale_name`) are `AutoDropStrPtr`, owned by the `Event` for the duration of the callback.
 
 **Threading.** Everything UI-thread. `OleInitialize(None)` runs during application setup. `DispatcherQueueController::CreateOnDedicatedThread` is **not** used — `DQTYPE_THREAD_CURRENT` ties the queue to the calling thread. `KEYEVENT_MESSAGES` and `LAST_KEYEVENT_MESSAGE_ID` are `thread_local!`. `LAST_EXCEPTION_MSGS` is also thread-local — errors on background threads are silently lost (see `ARCHITECTURE.md`).
 
@@ -65,13 +66,13 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 
 **Files.** `window.rs`, `window_api.rs` + Kotlin `Window.kt`.
 
-**FFI surface.** `window_new`, `window_create`, `window_drop`, `window_destroy`, `window_show`, `window_maximize`, `window_minimize`, `window_restore`, `window_request_redraw`, `window_request_close`, `window_get_client_size`, `window_get_rect`, `window_get_scale_factor`, `window_get_screen_info`, `window_is_maximized`, `window_is_minimized`, `window_set_backdrop_tint`, `window_remove_backdrop_tint`, `window_set_cursor_from_file`, `window_set_cursor_from_system`, `window_set_icon`, `window_set_immersive_dark_mode`, `window_set_min_size`, `window_set_title`, `window_set_rect`.
+**FFI surface.** `window_new`, `window_create`, `window_drop`, `window_destroy`, `window_show`, `window_maximize`, `window_minimize`, `window_restore`, `window_request_redraw`, `window_request_close`, `window_get_client_size`, `window_get_rect`, `window_get_scale_factor`, `window_get_screen_info`, `window_is_maximized`, `window_is_minimized`, `window_set_backdrop_tint`, `window_remove_backdrop_tint`, `window_set_cursor_from_file`, `window_set_cursor_from_system`, `window_set_icon`, `window_set_immersive_dark_mode`, `window_set_min_size`, `window_set_title`, `window_set_rect`. Text-input downcalls live in `ime_api.rs`: `window_set_text_input_client`, `window_clear_text_input_client`, `window_set_ime_enabled`, `window_notify_selection_changed`, `window_notify_layout_changed` (see the Text input (IME) subsystem).
 
 **Key types.**
-- `Window` — `Rc<Window>` on Rust side. Holds `HWND` (via `AtomicPtr` set during `WM_NCCREATE`), `Weak<EventLoop>`, `compositor: Compositor`, `composition_target: RefCell<Option<DesktopWindowTarget>>`, root `ContainerVisual`, backdrop `SpriteVisual`, cursor `RefCell<Option<Cursor>>`, `PointerClickCounter`. Opaque to Kotlin as `WindowPtr<'a> = RustAllocatedRcPtr<'a>` (alias).
+- `Window` — `Rc<Window>` on Rust side. Holds `HWND` (via `AtomicPtr` set during `WM_NCCREATE`), `Weak<EventLoop>`, `compositor: Compositor`, `composition_target: RefCell<Option<DesktopWindowTarget>>`, root `ContainerVisual`, backdrop `SpriteVisual`, cursor `RefCell<Option<Cursor>>`, `PointerClickCounter`, `ime: Cell<ImeState>` (text-input client/composition state — see the Text input (IME) subsystem). Opaque to Kotlin as `WindowPtr<'a> = RustAllocatedRcPtr<'a>` (alias).
 - `WindowParams`, `WindowStyle`, `WindowTitleBarKind`, `WindowSystemBackdropType` — `#[repr(C)]` enums/structs.
 
-**Ownership.** `window_new` does `Rc::new` → `Rc::into_raw`. `CreateWindowExW` is called with `lpCreateParams = Rc::downgrade(window).into_raw()`. In `WM_NCCREATE`, the `Weak` is reconstructed, upgraded, used to call `initialize_window`, then re-serialised via `Weak::into_raw` and stored as a Win32 window property under `KDT_WINDOW_PTR`. On every wndproc message, `GetPropW` retrieves this raw pointer and wraps it in `ManuallyDrop::new(Weak::from_raw(...))` to avoid dropping the weak per message. On `WM_NCDESTROY`, `RemovePropW` recovers the raw pointer and the weak is dropped. `window_drop` calls `to_rc::<Window>()` → `Rc::from_raw` → drop.
+**Ownership.** `window_new` does `Rc::new` → `Rc::into_raw`. `CreateWindowExW` is called with `lpCreateParams = Rc::downgrade(window).into_raw()`. In `WM_NCCREATE`, the `Weak` is reconstructed, upgraded, used to call `initialize_window`, then re-serialised via `Weak::into_raw` and stored as a Win32 window property under `KDT_WINDOW_PTR`. On every wndproc message, `GetPropW` retrieves this raw pointer and wraps it in `ManuallyDrop::new(Weak::from_raw(...))` to avoid dropping the weak per message. On `WM_NCDESTROY`, the wndproc first upgrades the stored `Weak` and runs `Window::ime_teardown` (finalize composition, detach input context, destroy caret) while the property is still installed, then `RemovePropW` recovers the raw pointer and the weak is dropped. `window_drop` calls `to_rc::<Window>()` → `Rc::from_raw` → drop. `Window::destroy` returns `anyhow::Result` and refuses to run during a text-input callback (`ImeState::ensure_mutation_allowed`); Kotlin `Window.close()` is idempotent and clears the text-input client before `window_drop`, closing the upcall-stub holder only afterwards.
 
 **Threading.** Single UI thread (the one that called `Application::new`). Not `Send` (uses `Rc`, `RefCell`, non-Send WinRT handles) — implicit, not type-asserted.
 
@@ -198,12 +199,41 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 **Gotchas.**
 - `keydown_to_unicode` calls `ToUnicodeEx` with the "do not change keyboard state" flag (bit 2) — dead-key state in the OS is not consumed by the probe. But the negative return value (which signals "dead key stored") is collapsed via `unsigned_abs()` (events_api.rs), so the caller can't tell "dead key applied" from "regular character emitted".
-- No `WM_IME_*` handlers anywhere. IME composition characters arrive only through `WM_CHAR` / `WM_DEADCHAR`. Full IME composition window is unhandled.
+- IME composition is handled by the [Text input (IME)](#text-input-ime) subsystem (`WM_IME_*` arms in `event_loop.rs`). While a text-input client is active, printable `WM_CHAR` units are diverted into `TextInputClient::insert_text` and do **not** fire `CharacterReceived`; control units (Enter/Tab/Backspace…), dead chars, and syschars still arrive as `CharacterReceived`.
 - `PhysicalKeyStatus.scan_code` is 8 bits (`LOBYTE(HIWORD(lparam))`). Extended scancodes (e0-prefixed) carry only the trailing byte; the prefix must be reconstructed from `is_extended_key`.
 - `VirtualKey` width inconsistency: Rust `u16` (keyboard.rs), FFI `i32` (keyboard_api.rs), Kotlin `Int` (`@JvmInline value class`).
 - `keyboard_get_state` returns `AutoDropArray<u8>` (256 bytes); Kotlin reads into `KeyboardState(ByteArray)` with bit-mask helpers.
 
 **Cross-refs.** `events` (`KeyDownEvent`, `CharacterReceivedEvent`), `event_loop` (`thread_local!`, dispatcher), `desktop_common::ffi_utils` (`AutoDropArray`, `RustAllocatedStrPtr`).
+
+---
+
+## Text input (IME)
+
+**Purpose.** IMM32-backed composition input (CJK and other IME-composed text) delivered to an application-owned text buffer through a **pull `TextInputClient`**: the app answers queries (selection, caret rectangle) and receives edits (`insertText`, `setMarkedText`, `unmarkText`, `discardMarkedText`); the backend never holds a copy of the text. The system composition window stays hidden — the app renders the preedit inline.
+
+**Files.** `ime.rs` (IMM32 transport + composition state machine), `ime_api.rs` (FFI), `text_input_client.rs` (pure callback ABI) + Kotlin `TextInputClient.kt` (client interface, holder, upcall stubs).
+
+**FFI surface (`ime_api.rs`).** `window_set_text_input_client`, `window_clear_text_input_client`, `window_set_ime_enabled`, `window_notify_selection_changed`, `window_notify_layout_changed`.
+
+**Key types.**
+- `TextInputClient` (`text_input_client.rs`) — `#[repr(C)]` table of six `extern "C"` function pointers (Kotlin upcall stubs) with safe Rust-side wrappers.
+- `TextRange` — `{ location, length }` in UTF-16 units; `location == usize::MAX` is the none-sentinel (`TextRange::none()` / `into_option()`), mirrored as `-1L` on the Kotlin side.
+- `TextCompositionSegment` / `TextCompositionAttribute` — preedit-relative clause ranges plus IMM32 conversion status passed to `setMarkedText`. `GCS_COMPATTR` supplies status; applications choose its visual styling.
+- `ImeState` (`ime.rs`) — `Copy` state record kept in a per-window `Cell`: client, enabled/focused flags, composition/finalizing flags, `composition_revision`, `callback_depth`, pending high surrogate.
+- `ImmContext` (`ime.rs`) — RAII `ImmGetContext` / `ImmReleaseContext` guard and sole `HIMC` owner (composition-string reads, composition/candidate window positioning, `ImmNotifyIME`). Never stored; every use acquires a fresh guard.
+- `ClientCallbackGuard` (`ime.rs`) — RAII increment/decrement of `callback_depth` around every client upcall.
+
+**Ownership.** Per-window `ime: Cell<ImeState>` on `Window`. A hidden 1×1 system caret (`CreateCaret` / `DestroyCaret`) is created while an enabled client has focus and destroyed on clear/disable/focus-loss/teardown — it exists so `SetCaretPos` steers the IME candidate window. `WM_NCDESTROY` runs `Window::ime_teardown` (finalize composition, detach input context, destroy caret) before the window property is removed.
+
+**Threading.** UI thread only. Reentrancy: composition apply reads an immutable `PreeditSnapshot` from the `ImmContext` **before** the first client upcall, wraps each upcall in `ClientCallbackGuard`, and re-checks `composition_revision` after each upcall — a mid-apply teardown (nested END, focus loss) advances the revision and aborts the remaining steps.
+
+**Gotchas.**
+- Client/enable mutations (`window_set_text_input_client`, `window_clear_text_input_client`, `window_set_ime_enabled`) and `Window::destroy` are rejected with an error while `callback_depth != 0` — a text-input callback can't swap or free the table it is executing from.
+- While a client is active, printable `WM_CHAR` units are diverted into `insert_text` (with surrogate-pair joining) and `CharacterReceived` does not fire for them; control units, dead chars, and syschars still fire it. See the Keyboard subsystem.
+- Every `WM_IME_*` arm no-ops (falls through to `DefWindowProc`) unless the window has an enabled client. `WM_IME_SETCONTEXT` clears `ISC_SHOWUICOMPOSITIONWINDOW` so the system composition UI never shows.
+
+**Cross-refs.** `window` (state cell, caret lifecycle, `CompositionSink` impl, `ime_teardown`), `event_loop` (`WM_IME_*` / `WM_INPUTLANGCHANGE` arms, `WM_CHAR` diversion), `events` (`InputLanguageChangedEvent`), `keyboard` (character fallback), `FFI_CONVENTIONS.md` (reverse-borrow upcall payloads, out-param callbacks).
 
 ---
 
@@ -511,7 +541,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 **Highlights.**
 - `lib.rs` captures `HINSTANCE` in `DllMain` (`DLL_PROCESS_ATTACH`) into a `static AtomicPtr`, exposed via `get_dll_instance()`. Used by ANGLE for resolving `libEGL.dll` next to the DLL.
-- `mod.rs` declares all 36 `win32/*` files as `pub mod` siblings — no visibility narrowing; the only API-control mechanism is which symbols get `#[no_mangle]`.
+- `mod.rs` declares all 44 `win32/*` files as `pub mod` siblings — no visibility narrowing; the only API-control mechanism is which symbols get `#[no_mangle]`.
 - `strings.rs` provides the only UTF-16 ↔ UTF-8 converters in the crate (`copy_from_wide_string`, `copy_from_utf8_bytes`, `copy_from_utf8_string`). All three strip a trailing NUL if present and return `anyhow::Result`.
 - `utils.rs` exposes `LOWORD` / `HIWORD` / `LOBYTE` / `GET_X_LPARAM` / `GET_Y_LPARAM` / `GET_WHEEL_DELTA_WPARAM` macros (every body suppresses `cast_possible_truncation` + `cast_sign_loss`), plus `is_windows_11_build_22000_or_higher` / `is_windows_11_build_22621_or_higher` via `RoIsApiContractPresent`.
 - `desktop-common::ffi_utils` defines the entire pointer/array/option zoo (see `FFI_CONVENTIONS.md`).

@@ -12,7 +12,9 @@ use anyhow::Context;
 use windows::{
     UI::Composition::{CompositionBackfaceVisibility, Compositor, ContainerVisual, Desktop::DesktopWindowTarget, SpriteVisual},
     Win32::{
-        Foundation::{COLORREF, ERROR_SUCCESS, GetLastError, HANDLE, HWND, LPARAM, LRESULT, RECT, SetLastError, WIN32_ERROR, WPARAM},
+        Foundation::{
+            COLORREF, ERROR_SUCCESS, GetLastError, HANDLE, HWND, LPARAM, LRESULT, POINT, RECT, SetLastError, WIN32_ERROR, WPARAM,
+        },
         Graphics::{
             Dwm::{
                 DWM_SYSTEMBACKDROP_TYPE, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE, DWMWA_EXTENDED_FRAME_BOUNDS, DWMWA_SYSTEMBACKDROP_TYPE,
@@ -27,16 +29,20 @@ use windows::{
         UI::{
             Controls::MARGINS,
             HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
-            Input::KeyboardAndMouse::SetActiveWindow,
+            Input::{
+                Ime::{CPS_CANCEL, CPS_COMPLETE, HIMC, IACE_DEFAULT, ImmAssociateContextEx},
+                KeyboardAndMouse::{GetFocus, SetActiveWindow},
+            },
             WindowsAndMessaging::{
-                BringWindowToTop, CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateIconFromResourceEx, CreateWindowExW, DefWindowProcW,
-                DestroyWindow, GWL_STYLE, GetClientRect, GetForegroundWindow, GetPropW, GetWindowLongPtrW, GetWindowThreadProcessId, HMENU,
-                ICON_BIG, ICON_SMALL, IsHungAppWindow, IsIconic, IsZoomed, LR_DEFAULTCOLOR, PostMessageW, RegisterClassExW, RemovePropW,
-                SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXPADDEDBORDER, SM_CXSMICON, SM_CYICON, SM_CYSIZEFRAME, SM_CYSMICON,
-                SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SendMessageW,
-                SetCursor, SetForegroundWindow, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, TPM_RETURNCMD,
-                TPM_RIGHTBUTTON, TrackPopupMenu, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_NULL, WM_SETICON,
-                WM_SYSCOMMAND, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
+                BringWindowToTop, CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateCaret, CreateIconFromResourceEx, CreateWindowExW,
+                DefWindowProcW, DestroyCaret, DestroyWindow, GWL_STYLE, GetClientRect, GetForegroundWindow, GetPropW, GetWindowLongPtrW,
+                GetWindowThreadProcessId, HMENU, ICON_BIG, ICON_SMALL, IsHungAppWindow, IsIconic, IsZoomed, LR_DEFAULTCOLOR, PostMessageW,
+                RegisterClassExW, RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXPADDEDBORDER, SM_CXSMICON, SM_CYICON,
+                SM_CYSIZEFRAME, SM_CYSMICON, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE,
+                SWP_NOZORDER, SendMessageW, SetCaretPos, SetCursor, SetForegroundWindow, SetPropW, SetWindowLongPtrW, SetWindowPos,
+                SetWindowTextW, ShowWindow, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE,
+                WM_NCDESTROY, WM_NULL, WM_SETICON, WM_SYSCOMMAND, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
+                WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
             },
         },
     },
@@ -48,10 +54,12 @@ use super::{
     cursor::{Cursor, CursorIcon},
     event_loop::EventLoop,
     geometry::{LogicalPoint, LogicalRect, LogicalSize, PhysicalPoint},
+    ime::{ClientCallbackGuard, CompositionSink, ImeState, ImmContext, PreeditSnapshot},
     pointer::{PointerButton, PointerClickCounter},
     screen::{self, ScreenInfo},
     strings::copy_from_utf8_string,
     system_menu::{seed_system_menu, sync_system_menu_state},
+    text_input_client::TextInputClient,
     utils,
     window_api::{WindowParams, WindowStyle, WindowTitleBarKind},
 };
@@ -138,6 +146,7 @@ pub struct Window {
     pointer_click_counter: RefCell<PointerClickCounter>,
     cursor: RefCell<Option<Cursor>>,
     backdrop_tint: RefCell<Option<SpriteVisual>>,
+    ime: Cell<ImeState>,
     event_loop: Weak<EventLoop>,
 }
 
@@ -177,6 +186,7 @@ impl Window {
             pointer_click_counter: RefCell::new(PointerClickCounter::new()),
             cursor: RefCell::new(None),
             backdrop_tint: RefCell::new(None),
+            ime: Cell::new(ImeState::new()),
             event_loop,
         };
         Ok(window)
@@ -688,8 +698,11 @@ impl Window {
         unsafe { PostMessageW(Some(self.hwnd()), WM_CLOSE, WPARAM::default(), LPARAM::default()) }
     }
 
-    pub fn destroy(&self) -> WinResult<()> {
-        unsafe { DestroyWindow(self.hwnd()) }
+    pub fn destroy(&self) -> anyhow::Result<()> {
+        self.ime.get().ensure_mutation_allowed("window destruction")?;
+        // SAFETY: this is the live HWND owned by `Window`; `WM_NCDESTROY` performs terminal teardown.
+        unsafe { DestroyWindow(self.hwnd()) }?;
+        Ok(())
     }
 
     pub fn set_icon(&self, bytes: &[u8]) -> anyhow::Result<()> {
@@ -708,6 +721,300 @@ impl Window {
         set_icon_worker(SM_CXSMICON, SM_CYSMICON, ICON_SMALL)?;
         set_icon_worker(SM_CXICON, SM_CYICON, ICON_BIG)?;
         Ok(())
+    }
+
+    pub(crate) const fn enabled_client(&self) -> Option<TextInputClient> {
+        self.ime.get().enabled_client()
+    }
+
+    pub(crate) const fn active_client(&self) -> Option<TextInputClient> {
+        self.ime.get().active_client()
+    }
+
+    pub(crate) fn with_enabled_client<R>(&self, f: impl FnOnce(TextInputClient) -> R) -> Option<R> {
+        let client = self.enabled_client()?;
+        let _guard = ClientCallbackGuard::enter(&self.ime);
+        Some(f(client))
+    }
+
+    pub(crate) fn with_active_client<R>(&self, f: impl FnOnce(TextInputClient) -> R) -> Option<R> {
+        let client = self.active_client()?;
+        let _guard = ClientCallbackGuard::enter(&self.ime);
+        Some(f(client))
+    }
+
+    pub(crate) const fn ime_revision(&self) -> u64 {
+        self.ime.get().revision()
+    }
+
+    pub(crate) fn ime_start(&self) {
+        let mut ime = self.ime.get();
+        ime.start_composition();
+        self.ime.set(ime);
+    }
+
+    pub(crate) fn ime_end(&self) -> bool {
+        let had_marked_text = self.ime.get().app_has_marked_text();
+        self.clear_composition_state();
+        had_marked_text
+    }
+
+    pub(crate) const fn ime_is_finalizing(&self) -> bool {
+        self.ime.get().is_finalizing()
+    }
+
+    pub(crate) const fn ime_app_has_marked_text(&self) -> bool {
+        self.ime.get().app_has_marked_text()
+    }
+
+    fn ime_set_app_marked(&self, value: bool) -> u64 {
+        let mut ime = self.ime.get();
+        let revision = ime.set_app_marked(value);
+        self.ime.set(ime);
+        revision
+    }
+
+    pub(crate) fn clear_composition_state(&self) -> u64 {
+        let mut ime = self.ime.get();
+        let revision = ime.clear_composition_state();
+        self.ime.set(ime);
+        revision
+    }
+
+    pub(crate) fn join_surrogate(&self, unit: u16) -> Option<String> {
+        let mut ime = self.ime.get();
+        let result = ime.join_surrogate(unit);
+        self.ime.set(ime);
+        result
+    }
+
+    pub(crate) fn clear_pending_surrogate(&self) {
+        let mut ime = self.ime.get();
+        ime.reset_pending_surrogate();
+        self.ime.set(ime);
+    }
+
+    pub(crate) fn update_ime_windows(&self) {
+        let revision = self.ime_revision();
+        let caret_rect = self
+            .with_active_client(|client| client.selected_range().map(|range| client.caret_rect(range)))
+            .flatten();
+        let Some(caret_rect) = caret_rect else {
+            return;
+        };
+        if self.ime_revision() != revision {
+            return;
+        }
+        let Some(context) = ImmContext::get(self.hwnd()) else {
+            log::warn!("active IME client has no input context; skipping positioning");
+            return;
+        };
+
+        let caret = client_logical_to_physical_rect(caret_rect, self.get_scale());
+        let origin = POINT {
+            x: caret.left,
+            y: caret.top,
+        };
+        context.set_composition_window(origin);
+        context.set_candidate_window(origin, caret);
+
+        // SAFETY: active-client gating requires focus; lifecycle code attempted to create this caret.
+        if let Err(err) = unsafe { SetCaretPos(origin.x, origin.y) } {
+            log::warn!("SetCaretPos failed: {err}");
+        }
+    }
+
+    fn create_caret(&self) -> windows_core::Result<()> {
+        // SAFETY: callers use this only for a live, focused HWND with an active client.
+        unsafe { CreateCaret(self.hwnd(), None, 1, 1) }
+    }
+
+    #[allow(clippy::unused_self)]
+    fn destroy_caret(&self) -> windows_core::Result<()> {
+        // SAFETY: callers use this only while this window owns the GUI thread's caret.
+        unsafe { DestroyCaret() }
+    }
+
+    pub(crate) fn set_text_input_client(&self, client: Option<TextInputClient>) -> anyhow::Result<()> {
+        let current = self.ime.get();
+        current.ensure_mutation_allowed("text input client change")?;
+        if current.is_composition_active() {
+            self.finalize_composition()?;
+        }
+
+        let current = self.ime.get();
+        let was_active = current.is_active();
+        let mut ime = current;
+        ime.replace_client(client);
+        self.ime.set(ime);
+
+        let is_active = ime.is_active();
+        if was_active && !is_active {
+            if let Err(err) = self.destroy_caret() {
+                log::warn!("DestroyCaret failed after clearing text input client: {err}");
+            }
+        } else if !was_active
+            && is_active
+            && let Err(err) = self.create_caret()
+        {
+            log::warn!("CreateCaret failed after registering text input client: {err}");
+        }
+        if is_active {
+            self.update_ime_windows();
+        }
+        Ok(())
+    }
+
+    pub(crate) fn set_ime_enabled(&self, enabled: bool) -> anyhow::Result<()> {
+        let current = self.ime.get();
+        current.ensure_mutation_allowed("IME enablement change")?;
+        if current.is_enabled() == enabled {
+            return Ok(());
+        }
+
+        let hwnd = self.hwnd();
+        if enabled {
+            anyhow::ensure!(
+                // SAFETY: `hwnd` is live; null HIMC plus `IACE_DEFAULT` restores the thread default.
+                unsafe { ImmAssociateContextEx(hwnd, HIMC::default(), IACE_DEFAULT) }.as_bool(),
+                "ImmAssociateContextEx(IACE_DEFAULT) failed"
+            );
+            let mut ime = self.ime.get();
+            ime.set_enabled(true);
+            self.ime.set(ime);
+            if ime.is_active() {
+                if let Err(err) = self.create_caret() {
+                    log::warn!("CreateCaret failed after enabling IME: {err}");
+                }
+                self.update_ime_windows();
+            }
+        } else {
+            self.finalize_composition()?;
+            anyhow::ensure!(
+                // Null HIMC + flags 0 is the de-facto detach idiom (winit, GLFW); Learn documents
+                // only the IACE_* flags.
+                // SAFETY: `hwnd` is live.
+                unsafe { ImmAssociateContextEx(hwnd, HIMC::default(), 0) }.as_bool(),
+                "ImmAssociateContextEx(detach) failed"
+            );
+            let mut ime = self.ime.get();
+            let destroy_caret = ime.is_active();
+            ime.set_enabled(false);
+            self.ime.set(ime);
+            if destroy_caret && let Err(err) = self.destroy_caret() {
+                log::warn!("DestroyCaret failed after disabling IME: {err}");
+            }
+        }
+        Ok(())
+    }
+
+    fn finalize_composition(&self) -> anyhow::Result<()> {
+        let current = self.ime.get();
+        if current.is_finalizing() || !current.is_composition_active() {
+            return Ok(());
+        }
+        let context = ImmContext::get(self.hwnd()).context("window has no input context")?;
+        let mut ime = current;
+        ime.begin_finalizing();
+        self.ime.set(ime);
+        let (action, action_name) = if current.app_has_marked_text() {
+            let _ = self.with_enabled_client(TextInputClient::unmark_text);
+            (CPS_CANCEL, "CPS_CANCEL")
+        } else {
+            (CPS_COMPLETE, "CPS_COMPLETE")
+        };
+        let notified = context.notify_composition(action);
+        self.clear_composition_state();
+        anyhow::ensure!(notified, "ImmNotifyIME({action_name}) failed");
+        Ok(())
+    }
+
+    pub(crate) fn ime_focus_gained(&self) {
+        let mut ime = self.ime.get();
+        ime.set_focused(true);
+        self.ime.set(ime);
+        if ime.is_active() {
+            if let Err(err) = self.create_caret() {
+                log::warn!("CreateCaret failed after focus gain: {err}");
+            }
+            self.update_ime_windows();
+        }
+    }
+
+    pub(crate) fn ime_focus_lost(&self) -> anyhow::Result<()> {
+        // Finalizing can synchronously reenter this window (`CPS_COMPLETE` delivers its result
+        // through `WM_IME_COMPOSITION`) and can even regain focus, so query the final OS focus
+        // owner before committing local state.
+        let finalization = self.finalize_composition();
+        // SAFETY: `GetFocus` has no pointer/lifetime preconditions and returns this GUI thread's owner.
+        let focused = unsafe { GetFocus() } == self.hwnd();
+        let mut ime = self.ime.get();
+        let destroy_caret = ime.is_active() && !focused;
+        ime.set_focused(focused);
+        self.ime.set(ime);
+        if destroy_caret && let Err(err) = self.destroy_caret() {
+            log::warn!("DestroyCaret failed after focus loss: {err}");
+        }
+        finalization
+    }
+
+    pub(crate) fn ime_teardown(&self) {
+        if self.ime.get().is_composition_active()
+            && let Err(err) = self.finalize_composition()
+        {
+            log::warn!("finalizing IME during teardown failed: {err:#}");
+        }
+        let ime = self.ime.get();
+        if ime.is_enabled() {
+            // Null HIMC + flags 0 is the de-facto detach idiom (winit, GLFW); Learn documents
+            // only the IACE_* flags.
+            // SAFETY: teardown runs before `WM_NCDESTROY` releases the live HWND.
+            if !unsafe { ImmAssociateContextEx(self.hwnd(), HIMC::default(), 0) }.as_bool() {
+                log::warn!("ImmAssociateContextEx(detach during teardown) failed");
+            }
+            if ime.is_active()
+                && let Err(err) = self.destroy_caret()
+            {
+                log::warn!("DestroyCaret during IME teardown failed: {err}");
+            }
+        }
+    }
+}
+
+impl CompositionSink for Window {
+    fn revision(&self) -> u64 {
+        self.ime_revision()
+    }
+    fn set_app_marked(&self, value: bool) -> u64 {
+        self.ime_set_app_marked(value)
+    }
+    fn clear_composition(&self) -> u64 {
+        self.clear_composition_state()
+    }
+    fn insert_text(&self, text: &str) {
+        let _ = self.with_enabled_client(|client| client.insert_text(text));
+    }
+    fn set_marked_text(&self, preedit: &PreeditSnapshot) {
+        let _ = self.with_enabled_client(|client| {
+            client.set_marked_text(&preedit.text, preedit.selected, &preedit.segments);
+        });
+    }
+    fn discard_marked_text(&self) {
+        let _ = self.with_enabled_client(TextInputClient::discard_marked_text);
+    }
+    fn update_windows(&self) {
+        self.update_ime_windows();
+    }
+}
+
+fn client_logical_to_physical_rect(rect: LogicalRect, scale: f32) -> RECT {
+    let top_left = rect.origin.to_physical(scale);
+    let bottom_right = LogicalPoint::new(rect.origin.x.0 + rect.size.width.0, rect.origin.y.0 + rect.size.height.0).to_physical(scale);
+    RECT {
+        left: top_left.x.0,
+        top: top_left.y.0,
+        right: bottom_right.x.0,
+        bottom: bottom_right.y.0,
     }
 }
 
@@ -735,9 +1042,21 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
 
     // WM_NCDESTROY is a special case: this is when we must clean up the extra resources used by the window
     if msg == WM_NCDESTROY {
+        // SAFETY: this is the property installed by `on_nccreate`; it remains installed through IME
+        // teardown so any synchronous finalization message can recover the same `Window`.
+        let raw = unsafe { GetPropW(hwnd, WINDOW_PTR_PROP_NAME).0.cast::<Window>() };
+        if !raw.is_null() {
+            // SAFETY: `raw` is the leaked `Weak<Window>`; `ManuallyDrop` only borrows it here because
+            // `RemovePropW` below performs the unique reclamation.
+            let weak = ManuallyDrop::new(unsafe { Weak::from_raw(raw) });
+            if let Some(window) = weak.upgrade() {
+                window.ime_teardown();
+            }
+        }
+        // SAFETY: teardown is complete and this terminal message removes the property exactly once.
         if let Ok(raw) = unsafe { RemovePropW(hwnd, WINDOW_PTR_PROP_NAME) } {
-            // Reclaim and drop the `Weak` leaked via `into_raw` in `on_nccreate`,
-            // before the HWND is recycled.
+            // SAFETY: property removal transfers the single `Weak<Window>` leaked by `on_nccreate`
+            // back for exactly one reconstruction and drop.
             drop(unsafe { Weak::from_raw(raw.0.cast::<Window>()) });
         }
         return LRESULT(0);
@@ -834,4 +1153,19 @@ fn initialize_content(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     window.backdrop_layer.replace(Some(backdrop_layer));
     window.content_layer.replace(Some(content_layer));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn logical_caret_rect_scales_both_corners() {
+        let rect = LogicalRect {
+            origin: LogicalPoint::new(10.25, 5.25),
+            size: LogicalSize::new(3.5, 4.5),
+        };
+        let physical = client_logical_to_physical_rect(rect, 1.5);
+        assert_eq!((physical.left, physical.top, physical.right, physical.bottom), (15, 8, 21, 15));
+    }
 }

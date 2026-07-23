@@ -48,6 +48,10 @@ Encoding at the boundary is **always UTF-8, NUL-terminated** for `*StrPtr` types
 
 Mixing `BorrowedStrPtr` (NUL-terminated) and `BorrowedUtf8` (length-delimited) silently misreads memory. Choose one and stick with it per parameter.
 
+### Reverse-borrow direction: text-input upcalls
+
+`BorrowedUtf8` and `BorrowedArray<T>` normally flow Kotlin → Rust, but inside the pull-model text-input upcalls (`text_input_client.rs`) they flow **Rust → Kotlin**: Rust builds `InsertTextArgs.text` and `SetMarkedTextArgs.{text, segments}` over Rust-owned memory (a `&str` / `&[TextCompositionSegment]` local to the composition handler) and passes them by value into the Kotlin callback. Lifetime rule: the payload is valid **only for the duration of that upcall** — Kotlin must decode/copy inside the callback and never retain native-backed data. Nothing Rust-allocated crosses that Kotlin has to free, and the length-delimited UTF-8 slice means an embedded NUL doesn't truncate the text.
+
 ### Arrays
 
 | Type | Direction | Allocator | Lifetime | Drop |
@@ -146,6 +150,18 @@ internal fun <T> ffiUpCall(defaultResult: T, body: () -> T): T
 Wraps every Kotlin lambda that Rust may invoke through a function pointer (event handler, drop-target callbacks, dispatcher trampoline). Catches every `Throwable`, logs it, and returns `defaultResult`. **Kotlin exceptions never propagate into Rust.** If you need an "error" signal back into Rust, design it explicitly as a return value (e.g. `EventHandlerResult.Stop`).
 
 Allocate the upcall stub in an `Arena.ofShared()` whose lifetime matches the Rust object that will hold the function pointer (e.g. `Application.applicationCallbacks`, `DragDropManager.dropTargetCallbacks`). Confined arenas would close before the Rust side calls the stub.
+
+## Pull-model upcall contract (text input)
+
+The `TextInputClient` table (`text_input_client.rs` ↔ `TextInputClient.kt`) is the crate's one **pull** interface: Rust queries Kotlin for state instead of pushing events. Its conventions:
+
+- **Out-params instead of return values.** Query callbacks write results into caller-owned storage, so no Kotlin-allocated memory crosses the boundary:
+  - `SelectedRangeCallback = extern "C" fn(range_out: &mut TextRange)` — Kotlin writes the selection into `range_out` (or the none-sentinel when there is no selection).
+  - `CaretRectCallback = extern "C" fn(args: &mut CaretRectArgs)` — Rust fills `args.range_in`; Kotlin writes the caret rectangle into `args.rect_out` (logical pixels).
+- **`TextRange` none-sentinel.** `TextRange { location: usize::MAX, length: 0 }` means "none" (`TextRange::none()` / `into_option()` on the Rust side). Kotlin mirrors `usize::MAX` as `-1L` (`TextRange.notFound` / `nullIfNotFound()`); the two-complement bit pattern is identical, so no translation happens at the boundary.
+- **Edit callbacks take reverse-borrowed payloads.** `InsertTextArgs` / `SetMarkedTextArgs` carry `BorrowedUtf8` / `BorrowedArray<TextCompositionSegment>` built over Rust memory, valid only for the callback's duration — see "Reverse-borrow direction" above.
+- **Reentrancy is bounded on the Rust side.** Every upcall runs under `ClientCallbackGuard` (`callback_depth`); the client-mutating downcalls (`window_set_text_input_client`, `window_clear_text_input_client`, `window_set_ime_enabled`, `window_destroy`) are rejected while inside a callback. The notify downcalls (`window_notify_selection_changed`, `window_notify_layout_changed`) stay legal and may synchronously re-query the client.
+- **Stub lifetime.** As with every upcall, the stubs live in a shared-Arena holder owned by `Window`; `Window.close()` clears the native client before dropping the window and closes the holder Arena last.
 
 ## Kotlin lifecycle conventions
 
