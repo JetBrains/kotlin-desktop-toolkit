@@ -9,8 +9,9 @@ use block2::RcBlock;
 use desktop_common::ffi_utils::{BorrowedArray, BorrowedStrPtr, RustAllocatedStrPtr};
 use desktop_common::logger::catch_panic;
 use dispatch2::DispatchQueue;
-use objc2::__framework_prelude::{Bool, Retained};
-use objc2::{DeclaredClass, MainThreadMarker, MainThreadOnly, define_class};
+use objc2::rc::Retained;
+use objc2::runtime::Bool;
+use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class};
 use objc2_foundation::{NSArray, NSError, NSObject, NSObjectProtocol, NSSet, NSString};
 use objc2_user_notifications::{
     UNAuthorizationOptions, UNAuthorizationStatus, UNMutableNotificationContent, UNNotificationAction, UNNotificationActionOptions,

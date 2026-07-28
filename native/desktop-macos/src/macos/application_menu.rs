@@ -3,7 +3,7 @@ use std::{cell::RefCell, thread_local};
 
 use anyhow::{Result, anyhow};
 use log::error;
-use objc2::__framework_prelude::NSInteger;
+use objc2::ffi::NSInteger;
 use objc2::{MainThreadOnly, define_class, msg_send, rc::Retained, sel};
 use objc2_app_kit::{
     NSControlStateValueMixed, NSControlStateValueOff, NSControlStateValueOn, NSEventModifierFlags, NSEventType, NSMenu, NSMenuItem,

@@ -4,7 +4,7 @@ use std::{cell::Cell, ffi::c_void};
 
 use anyhow::Context;
 use objc2::rc::autoreleasepool;
-use objc2::{AllocAnyThread, DefinedClass, MainThreadOnly, define_class, msg_send};
+use objc2::{AnyThread, DefinedClass, MainThreadOnly, define_class, msg_send};
 use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{NSAutoresizingMaskOptions, NSView, NSViewLayerContentsPlacement, NSViewLayerContentsRedrawPolicy};
 use objc2_foundation::{MainThreadMarker, NSObject, NSObjectProtocol, NSSize, ns_string};

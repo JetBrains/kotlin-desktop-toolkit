@@ -34,7 +34,7 @@ use desktop_common::logger::catch_panic;
 use log::debug;
 use objc2::AnyThread;
 use objc2::{
-    DeclaredClass, MainThreadOnly, Message, define_class, msg_send,
+    DefinedClass, MainThreadOnly, Message, define_class, msg_send,
     rc::Retained,
     runtime::{AnyObject, ProtocolObject, Sel},
 };

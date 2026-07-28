@@ -23,49 +23,132 @@ desktop-common = { path = "../desktop-common" }
 
 [dev-dependencies]
 test-log = "0.2.19"
+# `quickcheck_macros`' `#[quickcheck]` expands to code referencing `quickcheck` itself
 quickcheck = "1"
 quickcheck_macros = "1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 foreign-types = "0.5"
-dispatch2 = { version = "0.3.0" }
+dispatch2 = { version = "0.3.1" }
 block2 = { version = "0.6.2" }
+# Every objc2 framework crate enables *all* of its bindings by default (objc2-app-kit alone
+# has 305 default features), so each one below sets `default-features = false` and names only
+# what `src/` actually touches. `std` is part of `default`, so it has to be listed explicitly.
+# A missing feature shows up as an unresolved import; to find the feature a symbol needs, grep
+# the crate's `src/generated/` for it -- the file stem is the feature name.
+#
 # "catch-all" feature add try catch for obj-c exceptions in msg_send![]
 # it's nice to have at least for the beginning, but later we need to check how it impacts performance
-objc2 = { version = "0.6.3", features = ["exception", "catch-all"] }
-objc2-foundation = { version = "0.3.2" }
-objc2-core-foundation = { version = "0.3.2", features = ["CFRunLoop", "CFDate", "CFMachPort"] }
-objc2-app-kit = { version = "0.3.2", features = [
+objc2 = { version = "0.6.4", features = ["exception", "catch-all"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = [
+  "std",
+  "block2",
+  "objc2-core-foundation",
+  "NSArray",
+  "NSAttributedString",
+  "NSCharacterSet",
+  "NSData",
+  "NSDictionary",
+  "NSError",
+  "NSGeometry",
+  "NSKeyValueObserving",
+  "NSNotification",
+  "NSObjCRuntime",
+  "NSOperation",
+  "NSProcessInfo",
+  "NSRange",
+  "NSScriptWhoseTests",
+  "NSSet",
+  "NSString",
+  "NSThread",
+  "NSURL",
+  "NSUserDefaults",
+  "NSValue",
+] }
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = [
+  "std",
+  "objc2",
+  "CFCGTypes",
+  "CFDate",
+  "CFMachPort",
+  "CFRunLoop",
+  "CFUUID",
+] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = [
+  "std",
+  # `objc2-core-foundation` gates every method with a CGFloat/CGSize in its signature
+  "objc2-core-foundation",
+  "objc2-quartz-core",
+  "NSAppearance",
   "NSApplication",
-  "NSWindow",
-  "NSWindowRestoration",
-  "NSGraphics",
-  "NSScreen",
-  "NSRunningApplication",
-  "NSResponder",
-  "NSView",
-  "NSLayoutAnchor",
-  "NSControl",
   "NSButton",
-  "NSToolbar",
-  "NSLayoutConstraint",
-  "NSVisualEffectView",
+  "NSCell",
   "NSColor",
+  "NSColorSpace",
+  "NSControl",
+  "NSCursor",
+  "NSDirection",
+  "NSDockTile",
+  "NSDragging",
+  "NSDraggingItem",
+  "NSDraggingSession",
+  "NSEvent",
+  "NSGraphics",
+  "NSGraphicsContext",
+  "NSImage",
+  "NSLayoutAnchor",
+  "NSLayoutConstraint",
   "NSMenu",
   "NSMenuItem",
-  "NSCell",
-  "NSEvent",
+  "NSOpenPanel",
+  "NSPanel",
+  "NSPasteboard",
+  "NSPasteboardItem",
+  "NSResponder",
+  "NSRunningApplication",
+  "NSSavePanel",
+  "NSScreen",
+  "NSSound",
   "NSText",
-  "NSColorSpace",
-  "NSGraphicsContext",
-  "NSDraggingSession",
-  "objc2-quartz-core",
+  "NSTextInputClient",
+  "NSTextInputContext",
+  "NSToolbar",
+  "NSTrackingArea",
+  "NSUserInterfaceLayout",
+  "NSView",
+  "NSVisualEffectView",
+  "NSWindow",
+  "NSWindowRestoration",
+  "NSWorkspace",
 ] }
-objc2-quartz-core = { version = "0.3.2" }
-objc2-core-graphics = { version = "0.3.2", features = ["CGEvent", "CGEventTypes"] }
-objc2-metal = { version = "0.3.2" }
-objc2-uniform-type-identifiers = { version = "0.3.2" }
-objc2-user-notifications = { version = "0.3.2", features = [
+objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
+  "std",
+  "objc2-core-foundation",
+  "objc2-metal",
+  "CALayer",
+  "CAMetalLayer",
+] }
+objc2-core-graphics = { version = "0.3.2", default-features = false, features = [
+  "std",
+  "objc2",
+  "CGEvent",
+  "CGEventSource",
+  "CGEventTypes",
+  # `CGEvent::new_keyboard_event` is gated on CGEventTypes + CGRemoteOperation
+  "CGRemoteOperation",
+] }
+objc2-metal = { version = "0.3.2", default-features = false, features = [
+  "std",
+  "MTLCommandBuffer",
+  "MTLCommandQueue",
+  "MTLDevice",
+  "MTLDrawable",
+  "MTLPixelFormat",
+  "MTLTexture",
+] }
+objc2-user-notifications = { version = "0.3.2", default-features = false, features = [
+  "std",
+  "block2",
   "UNUserNotificationCenter",
   "UNNotificationSettings",
   "UNNotificationContent",
@@ -75,7 +158,7 @@ objc2-user-notifications = { version = "0.3.2", features = [
   "UNNotificationSound",
   "UNNotificationResponse",
   "UNNotification",
+  "UNNotificationTrigger",
 ] }
-objc2-carbon = { version = "0.3.2" }
 num-traits = "0.2"
-num-derive = "0.4"
+num-derive = "0.5.1"

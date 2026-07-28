@@ -1,4 +1,4 @@
-use objc2::__framework_prelude::Retained;
+use objc2::rc::Retained;
 use objc2_app_kit::{NSAppearanceCustomization, NSWindowOcclusionState, NSWindowStyleMask};
 use objc2_foundation::{MainThreadMarker, NSArray, NSString};
 

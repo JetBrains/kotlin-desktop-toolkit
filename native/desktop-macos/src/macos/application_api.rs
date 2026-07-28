@@ -19,7 +19,7 @@ use desktop_common::{
 };
 use log::info;
 use objc2::{
-    ClassType, DeclaredClass, MainThreadOnly, define_class, msg_send,
+    ClassType, DefinedClass, MainThreadOnly, define_class, msg_send,
     rc::Retained,
     runtime::{AnyObject, ProtocolObject},
 };
