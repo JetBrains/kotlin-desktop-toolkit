@@ -87,7 +87,7 @@ pub struct TextInputClient {
     pub unmark_text: UnmarkTextCallback,
     pub set_marked_text: SetMarkedTextCallback,
 
-    // this two is kinda special because it returns Jvm allocated string
+    // this two is kinda special because it returns Jvm allocated string,
     // and we need to free it somehow
     pub attributed_string_for_range: AttributedStringForRangeCallback,
     pub free_attributed_string_for_range: FreeAttributedStringCallback,
@@ -98,7 +98,7 @@ pub struct TextInputClient {
 
 pub(crate) struct TextInputClientHandler {
     pub client: TextInputClient,
-    pub last_commnad_handler_result: Cell<Option<bool>>,
+    pub last_command_handler_result: Cell<Option<bool>>,
 }
 
 // https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/TextEditing/Tasks/TextViewTask.html
@@ -106,7 +106,7 @@ impl TextInputClientHandler {
     pub const fn new(text_input_client: TextInputClient) -> Self {
         Self {
             client: text_input_client,
-            last_commnad_handler_result: Cell::new(None),
+            last_command_handler_result: Cell::new(None),
         }
     }
 
@@ -237,7 +237,7 @@ impl TextInputClientHandler {
     pub fn do_command(&self, selector: Sel) {
         debug!("doCommand: {selector:?}");
         let was_handled = (self.client.do_command)(BorrowedStrPtr::new(selector.name()));
-        let prev_value = self.last_commnad_handler_result.replace(Some(was_handled));
+        let prev_value = self.last_command_handler_result.replace(Some(was_handled));
         if prev_value.is_some() {
             warn!("Overwrite some doCommand result: {prev_value:?}");
         }
@@ -255,7 +255,7 @@ pub extern "C" fn text_input_context_handle_current_event(window_ptr: WindowPtr)
         debug!("input_context.handleEvent start {current_event:?}");
         let result = match input_context {
             Some(input_context) => {
-                let command_result_cell = &window.root_view.ivars().text_input_client_handler.last_commnad_handler_result;
+                let command_result_cell = &window.root_view.ivars().text_input_client_handler.last_command_handler_result;
                 let prev_value = command_result_cell.replace(None);
                 if prev_value.is_some() {
                     warn!("Overwrite some doCommand result: {prev_value:?}");
