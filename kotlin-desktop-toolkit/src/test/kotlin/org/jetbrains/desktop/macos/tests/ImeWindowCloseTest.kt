@@ -16,7 +16,13 @@ import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 import kotlin.test.assertTrue
+import kotlin.test.fail
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Regression test for a crash when closing a window while an IME (e.g. Japanese) has active marked text.
@@ -33,6 +39,9 @@ class ImeWindowCloseTest : KDTApplicationTestBase() {
 
     companion object {
         lateinit var robot: Robot
+
+        private val MARKED_TEXT_TIMEOUT = 5.seconds
+        private val RUNLOOP_PUMP_AFTER_CLOSE = 500.milliseconds
 
         @JvmStatic
         @BeforeAll
@@ -56,9 +65,39 @@ class ImeWindowCloseTest : KDTApplicationTestBase() {
 
         // Set up a TextInputClient that tracks marked text state
         val imeClient = object : TextInputClient {
+            private val markedTextLock = ReentrantLock()
+            private val markedTextChanged = markedTextLock.newCondition()
+
             @Volatile
             var markedText: String = ""
+                private set
 
+            /** Assigns [markedText] and wakes anyone blocked in [awaitMarkedTextChange]. Runs on the AppKit main thread. */
+            private fun updateMarkedText(value: String) = markedTextLock.withLock {
+                markedText = value
+                markedTextChanged.signalAll()
+            }
+
+            /**
+             * Blocks until [markedText] differs from [from], then returns the new value.
+             * Fails the test if nothing changes within [timeout].
+             *
+             * Must not be called while anything else on this thread holds [markedTextLock], and the lock must never be
+             * held across a `ui { }` call: that dispatches synchronously to the main thread, which is where
+             * [updateMarkedText] takes the lock.
+             */
+            fun awaitMarkedTextChange(from: String, timeout: Duration = MARKED_TEXT_TIMEOUT): String = markedTextLock.withLock {
+                var remainingNanos = timeout.inWholeNanoseconds
+                // Guarded loop: copes with spurious wakeups, and returns right away if the change already landed.
+                while (markedText == from) {
+                    if (remainingNanos <= 0) fail("Timed out after $timeout waiting for marked text to change from '$from'")
+                    remainingNanos = markedTextChanged.awaitNanos(remainingNanos)
+                }
+                markedText
+            }
+
+            // The readers below are called by the IME on the main thread and deliberately don't take markedTextLock,
+            // so the main thread never blocks on it.
             override fun hasMarkedText(): Boolean = markedText.isNotEmpty()
 
             override fun markedRange(): TextRange? {
@@ -71,17 +110,17 @@ class ImeWindowCloseTest : KDTApplicationTestBase() {
             }
 
             override fun insertText(text: String, replacementRange: TextRange?) {
-                markedText = ""
+                updateMarkedText("")
             }
 
             override fun doCommand(command: String): Boolean = false
 
             override fun unmarkText() {
-                markedText = ""
+                updateMarkedText("")
             }
 
             override fun setMarkedText(text: String, selectedRange: TextRange?, replacementRange: TextRange?) {
-                markedText = text
+                updateMarkedText(text)
             }
 
             override fun attributedStringForRange(range: TextRange): TextInputClient.StringAndRange {
@@ -106,16 +145,20 @@ class ImeWindowCloseTest : KDTApplicationTestBase() {
                     EventHandlerResult.Continue
                 }
             }) {
+                // Capture the baseline before typing: the IME callback runs on the main thread and
+                // can land before this thread reaches the wait below.
+                val markedTextBeforeTyping = imeClient.markedText
+
                 // Type "a" which in Japanese IME produces marked text "あ"
                 ui { robot.emulateKeyboardEvent(KeyCode.ANSI_A, true) }
                 ui { robot.emulateKeyboardEvent(KeyCode.ANSI_A, false) }
 
                 // Wait for the key event to be processed by the IME
                 awaitEventOfType<Event.KeyDown> { true }
-                Thread.sleep(200)
+                val markedText = imeClient.awaitMarkedTextChange(from = markedTextBeforeTyping)
 
                 assertTrue(imeClient.hasMarkedText(), "IME should have produced marked text")
-                Logger.info { "Marked text before close: '${imeClient.markedText}'" }
+                Logger.info { "Marked text before close: '$markedText'" }
             }
 
             // Close the window while Japanese IME is still active and has marked text.
@@ -125,7 +168,7 @@ class ImeWindowCloseTest : KDTApplicationTestBase() {
 
             // Pump the event loop to give deferred IME blocks a chance to execute.
             // The original crash happens when a deferred IME block runs after window destruction.
-            Thread.sleep(500)
+            Thread.sleep(1000)
             ui { /* force a runloop iteration */ }
         }
     }
