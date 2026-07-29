@@ -22,6 +22,7 @@ import org.jetbrains.desktop.linux.KotlinDesktopToolkit
 import org.jetbrains.desktop.linux.LogLevel
 import org.jetbrains.desktop.linux.Logger
 import org.jetbrains.desktop.linux.LogicalPixels
+import org.jetbrains.desktop.linux.LogicalPixelsInt
 import org.jetbrains.desktop.linux.LogicalPoint
 import org.jetbrains.desktop.linux.LogicalRect
 import org.jetbrains.desktop.linux.LogicalSize
@@ -40,6 +41,7 @@ import org.jetbrains.desktop.linux.TextInputContext
 import org.jetbrains.desktop.linux.Window
 import org.jetbrains.desktop.linux.WindowCapabilities
 import org.jetbrains.desktop.linux.WindowDecorationMode
+import org.jetbrains.desktop.linux.WindowFrame
 import org.jetbrains.desktop.linux.WindowId
 import org.jetbrains.desktop.linux.WindowParams
 import org.jetbrains.desktop.linux.WindowResizeEdge
@@ -51,6 +53,7 @@ import org.jetbrains.skia.DirectContext
 import org.jetbrains.skia.GLAssembledInterface
 import org.jetbrains.skia.Image
 import org.jetbrains.skia.Paint
+import org.jetbrains.skia.Rect
 import org.jetbrains.skia.Surface
 import org.jetbrains.skia.makeGLWithInterface
 import org.jetbrains.skia.paragraph.RectHeightMode
@@ -80,6 +83,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.run
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -91,6 +95,8 @@ import kotlin.use
 private const val TEXT_MIME_TYPE = "text/plain;charset=utf-8"
 private const val URI_LIST_MIME_TYPE = "text/uri-list"
 private const val PNG_MIME_TYPE = "image/png"
+
+private val SHADOW_BLUR_SCALE: Float = sqrt(3f) / 2f // https://bjango.com/articles/matchingdropshadows/
 
 // TODO
 private val EXAMPLE_FILES: List<String> = listOf(
@@ -807,12 +813,14 @@ private class EditorState(val app: Application) {
 
 private class WindowState {
     var size: LogicalSize? = null
+    var active: Boolean = false
     var fullscreen: Boolean = false
     var capabilities: WindowCapabilities? = null
     var scale: Scale = Scale.NO_SCALE
 
     fun configure(event: Event.WindowConfigure) {
         size = event.size
+        active = event.active
         fullscreen = event.fullscreen
         capabilities = event.capabilities
     }
@@ -1017,6 +1025,8 @@ private class WindowContainer(
     val contentArea: ContentArea,
     private var xdgDesktopSettings: XdgDesktopSettings,
 ) {
+    private var frame: WindowFrame? = null
+
     companion object {
         fun create(xdgDesktopSettings: XdgDesktopSettings): WindowContainer {
             val contentArea = ContentArea()
@@ -1032,28 +1042,44 @@ private class WindowContainer(
     }
 
     fun configure(event: Event.WindowConfigure, window: Window) {
-        val shouldUseCustomTitlebar = when (event.decorationMode) {
-            WindowDecorationMode.Client -> !event.fullscreen
-            WindowDecorationMode.Server -> false
-        }
-        val w = event.size.width.toLogicalPixels()
-        val h = event.size.height.toLogicalPixels()
-        if (shouldUseCustomTitlebar) {
-            val headerRect = LogicalDoubleRect(LogicalPixels.Zero, LogicalPixels.Zero, w, LogicalPixels(55.0))
+        val w = event.size.width
+        val h = event.size.height
+        val decorationMode = event.decorationMode
+        if (decorationMode is WindowDecorationMode.Client && !event.fullscreen) {
+            val frame = decorationMode.frame
+            val contentWidth = w - frame.left.padding - frame.right.padding
+            val contentHeight = h - frame.top.padding - frame.bottom.padding
+            val headerRect = LogicalDoubleRect(
+                x = frame.left.padding.toLogicalPixels(),
+                y = frame.top.padding.toLogicalPixels(),
+                width = contentWidth.toLogicalPixels(),
+                height = LogicalPixels(55.0),
+            )
+
+            this.frame = frame
+
             val titlebar = customTitlebar ?: SkikoCustomTitlebarLinux(
                 headerRect = headerRect,
             ) { window.close() }.also {
                 customTitlebar = it
             }
             titlebar.configure(event, headerRect, xdgDesktopSettings.titlebarLayout)
+
             val customBorders = customBorders ?: SkikoCustomBordersLinux().also { customBorders = it }
-            customBorders.configure(event)
+            customBorders.configure(event.size, decorationMode.frame)
+
             contentArea.contentRect =
-                LogicalDoubleRect(LogicalPixels.Zero, headerRect.height, w, h - headerRect.height)
+                LogicalDoubleRect(
+                    headerRect.x,
+                    headerRect.y + headerRect.height,
+                    headerRect.width,
+                    contentHeight.toLogicalPixels() - headerRect.height,
+                )
         } else {
+            frame = null
             customTitlebar = null
             customBorders = null
-            contentArea.contentRect = LogicalDoubleRect(LogicalPixels.Zero, LogicalPixels.Zero, w, h)
+            contentArea.contentRect = LogicalDoubleRect(LogicalPixels.Zero, LogicalPixels.Zero, w.toLogicalPixels(), h.toLogicalPixels())
         }
     }
 
@@ -1133,9 +1159,132 @@ private class WindowContainer(
         return EventHandlerResult.Continue
     }
 
+    private fun drawFrame(canvas: Canvas, windowState: WindowState) {
+        val scale = windowState.scale
+
+        fun drawCssShadow(rect: Rect, dx: Int, dy: Int, blur: Int, spread: Int, alphaPercent: Int) {
+            val color = Color.withA(Color.BLACK, (alphaPercent * 255) / 100)
+            canvas.drawRectShadowNoclip(
+                rect,
+                dx = LogicalPixelsInt(dx).toSkiko(scale),
+                dy = LogicalPixelsInt(dy).toSkiko(scale),
+                blur = LogicalPixelsInt(blur).toSkiko(scale) * SHADOW_BLUR_SCALE,
+                spread = LogicalPixelsInt(spread).toSkiko(scale),
+                color = color,
+            )
+        }
+
+        frame?.let { frame ->
+            val size = windowState.size!!
+
+            val rect = Rect.makeLTRB(
+                frame.left.padding.toSkiko(scale),
+                frame.top.padding.toSkiko(scale),
+                (size.width - frame.right.padding).toSkiko(scale),
+                (size.height - frame.bottom.padding).toSkiko(scale),
+            )
+
+            canvas.save()
+
+            val clipRect = Rect.makeLTRB(
+                l = if (frame.left.tiled) 0f else rect.left,
+                t = if (frame.top.tiled) 0f else rect.top,
+                r = if (frame.right.tiled) size.width.toSkiko(scale) else rect.right,
+                b = if (frame.bottom.tiled) size.height.toSkiko(scale) else rect.bottom,
+            )
+            canvas.clipRect(clipRect, org.jetbrains.skia.ClipMode.DIFFERENCE)
+
+            val useNewLibAdwaitaStyle = false
+            if (useNewLibAdwaitaStyle) {
+                /* window.csd {
+                     box-shadow: 0 0 14px 5px RGB(0 0 0 / 15%),
+                                 0 0 5px 2px RGB(0 0 0 / 10%),
+                                 0 0 0 1px RGB(0 0 0 / #{if($contrast == 'high', 80%, 5%)});
+                     margin: 0px;
+                     border-radius: var(--window-radius);
+                     outline: 1px solid RGB(255 255 255/7%);
+                     outline-offset: -1px;
+                   }
+
+                   window.csd:backdrop {
+                     box-shadow: 0 0 10px 5px RGB(0 0 0 / 8%),
+                                 0 0 0 1px RGB(0 0 0 / #{if($contrast == 'high', 80%, 5%)});
+                     transition: box-shadow 200ms ease-out;
+                   }
+                 */
+                if (windowState.active) {
+                    drawCssShadow(rect, dx = 0, dy = 0, blur = 14, spread = 5, alphaPercent = 15)
+                    drawCssShadow(rect, dx = 0, dy = 0, blur = 5, spread = 2, alphaPercent = 10)
+                } else {
+                    drawCssShadow(rect, dx = 0, dy = 0, blur = 10, spread = 5, alphaPercent = 8)
+                }
+                drawCssShadow(rect, dx = 0, dy = 0, blur = 0, spread = 1, alphaPercent = 5)
+            } else {
+                /* window.csd {
+                     box-shadow: 0 2px 8px 2px RGB(0 0 0 / 13%),
+                                 0 3px 20px 9px RGB(0 0 0 / 9%),
+                                 0 6px 30px 13px RGB(0 0 0 / 4%),
+                                 0 0 0 1px RGB(0 0 0 / #{if($contrast == 'high', 80%, .5%)});
+                     margin: 0px;
+                     border-radius: var(--window-radius);
+                     outline: 1px solid RGB(255 255 255/7%);
+                     outline-offset: -1px;
+                   }
+                 */
+
+                if (windowState.active) {
+                    drawCssShadow(rect, dx = 0, dy = 2, blur = 8, spread = 2, alphaPercent = 13)
+                    drawCssShadow(rect, dx = 0, dy = 3, blur = 20, spread = 9, alphaPercent = 9)
+                    drawCssShadow(rect, dx = 0, dy = 6, blur = 30, spread = 13, alphaPercent = 4)
+                    drawCssShadow(rect, dx = 0, dy = 0, blur = 0, spread = 1, alphaPercent = 5)
+                } else {
+                    /* window.csd:backdrop {
+                         box-shadow: 0 1px 3px 3px RGB(0 0 0 / 9%),
+                                     0 2px 14px 5px RGB(0 0 0 / 5%),
+                                     0 4px 28px 9px RGB(0 0 0 / 3%),
+                                     0 0 0 1px RGB(0 0 0 / #{if($contrast == 'high', 80%, 2%)});
+                         transition: box-shadow 200ms ease-out;
+                       }
+                     */
+                    drawCssShadow(rect, dx = 0, dy = 1, blur = 3, spread = 3, alphaPercent = 9)
+                    drawCssShadow(rect, dx = 0, dy = 2, blur = 14, spread = 5, alphaPercent = 5)
+                    drawCssShadow(rect, dx = 0, dy = 4, blur = 28, spread = 9, alphaPercent = 3)
+                    drawCssShadow(rect, dx = 0, dy = 0, blur = 0, spread = 1, alphaPercent = 2)
+                }
+            }
+
+            canvas.restore()
+
+            Paint().use { paint ->
+                paint.color = Color.RED
+                val tiledBorderWidth = LogicalPixelsInt(1).toSkiko(scale)
+
+                if (frame.left.tiled) {
+                    canvas.drawRect(Rect.makeLTRB(l = rect.left - tiledBorderWidth, t = rect.top, r = rect.left, b = rect.bottom), paint)
+                }
+
+                if (frame.right.tiled) {
+                    canvas.drawRect(Rect.makeLTRB(l = rect.right - tiledBorderWidth, t = rect.top, r = rect.right, b = rect.bottom), paint)
+                }
+
+                if (frame.top.tiled) {
+                    canvas.drawRect(Rect.makeLTRB(l = rect.left, t = rect.top - tiledBorderWidth, r = rect.right, b = rect.top), paint)
+                }
+
+                if (frame.bottom.tiled) {
+                    canvas.drawRect(
+                        Rect.makeLTRB(l = rect.left, t = rect.bottom - tiledBorderWidth, r = rect.right, b = rect.bottom),
+                        paint,
+                    )
+                }
+            }
+        }
+    }
+
     fun draw(canvas: Canvas, time: Long, title: String, editorState: EditorState, windowState: WindowState) {
         canvas.clear(Color.TRANSPARENT)
         val scale = windowState.scale
+        drawFrame(canvas, windowState)
         customTitlebar?.draw(canvas, xdgDesktopSettings, title, scale)
         contentArea.draw(canvas, time, scale, editorState)
     }
@@ -1343,6 +1492,13 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
             appId = "org.jetbrains.desktop.linux.skikoSample1",
             preferClientSideDecoration = useCustomTitlebar,
             renderingMode = renderingMode,
+            clientSideDecorationFrame = WindowFrame.withSameResizerThickness(
+                resizerThickness = LogicalPixelsInt(12),
+                left = LogicalPixelsInt(61),
+                top = LogicalPixelsInt(55),
+                right = LogicalPixelsInt(61),
+                bottom = LogicalPixelsInt(67),
+            ),
         )
 
         val window = RotatingBallWindow.createWindow(

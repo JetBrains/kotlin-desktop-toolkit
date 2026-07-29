@@ -1,7 +1,7 @@
 use crate::linux::{
     application_api::{DataSource, DragAndDropAction},
     desktop_settings_api::FfiDesktopSetting,
-    geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize, Scale},
+    geometry::{LogicalPixels, LogicalPixelsInt, LogicalPoint, LogicalSize, PhysicalSize, Scale},
 };
 use bitflag_attr::bitflag;
 use desktop_common::ffi_utils::BorrowedUtf8;
@@ -67,10 +67,10 @@ pub enum KeyModifiers {
 pub struct KeyCode(pub u32);
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WindowDecorationMode {
     /// The window should draw client side decorations.
-    Client,
+    Client(WindowFrame),
 
     /// The server will draw window decorations.
     Server,
@@ -406,7 +406,7 @@ impl<'a> From<TextInputEvent<'a>> for Event<'a> {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WindowCapabilities {
     /// `show_window_menu` is available.
     pub window_menu: bool,
@@ -446,30 +446,30 @@ impl From<WindowClosedEvent> for Event<'_> {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct WindowFrameSide {
+    pub padding: LogicalPixelsInt,
+    pub resizer_thickness: LogicalPixelsInt,
+    pub tiled: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct WindowFrame {
+    pub left: WindowFrameSide,
+    pub top: WindowFrameSide,
+    pub right: WindowFrameSide,
+    pub bottom: WindowFrameSide,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WindowConfigureEvent {
     pub window_id: WindowId,
     pub size: LogicalSize,
     pub active: bool,
     pub maximized: bool,
     pub fullscreen: bool,
-
-    /// The window is currently in a tiled layout and the left edge is
-    /// considered to be adjacent to another part of the tiling grid.
-    pub tiled_left: bool,
-
-    /// The window is currently in a tiled layout and the right edge is
-    /// considered to be adjacent to another part of the tiling grid.
-    pub tiled_right: bool,
-
-    /// The window is currently in a tiled layout and the top edge is
-    /// considered to be adjacent to another part of the tiling grid.
-    pub tiled_top: bool,
-
-    /// The window is currently in a tiled layout and the bottom edge is
-    /// considered to be adjacent to another part of the tiling grid.
-    pub tiled_bottom: bool,
-
     pub decoration_mode: WindowDecorationMode,
     pub capabilities: WindowCapabilities,
 }

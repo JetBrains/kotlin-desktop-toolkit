@@ -32,14 +32,14 @@ pub struct LogicalPoint {
 }
 
 #[repr(C)]
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub struct LogicalSize {
     pub width: LogicalPixelsInt,
     pub height: LogicalPixelsInt,
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct LogicalRect {
     pub x: LogicalPixelsInt,
     pub y: LogicalPixelsInt,
@@ -171,15 +171,6 @@ impl LogicalSize {
     }
 
     #[must_use]
-    pub const fn as_u32(self) -> Option<(u32, u32)> {
-        if self.width.0 == 0 || self.height.0 == 0 {
-            None
-        } else {
-            Some((self.width.0.cast_unsigned(), self.height.0.cast_unsigned()))
-        }
-    }
-
-    #[must_use]
     pub(crate) fn to_rounded_physical(self, scale: Scale) -> PhysicalSize {
         PhysicalSize {
             width: scale.to_rounded_physical(self.width),
@@ -209,5 +200,35 @@ impl std::cmp::PartialEq<LogicalPixelsInt> for LogicalPixels {
 impl std::cmp::PartialOrd<LogicalPixelsInt> for LogicalPixels {
     fn partial_cmp(&self, other: &LogicalPixelsInt) -> Option<std::cmp::Ordering> {
         self.0.partial_cmp(&f64::from(other.0))
+    }
+}
+
+impl std::ops::Add<Self> for LogicalPixelsInt {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl std::ops::Sub<Self> for LogicalPixelsInt {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self(self.0 - rhs.0)
+    }
+}
+
+impl std::ops::Add<Self> for LogicalPixels {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl From<LogicalPixelsInt> for LogicalPixels {
+    fn from(value: LogicalPixelsInt) -> Self {
+        Self(f64::from(value.0))
     }
 }

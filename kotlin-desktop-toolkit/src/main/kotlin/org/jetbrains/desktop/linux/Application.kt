@@ -38,6 +38,7 @@ public data class WindowParams(
     val minSize: LogicalSize? = null,
     val preferClientSideDecoration: Boolean = false,
     val renderingMode: RenderingMode = RenderingMode.Auto,
+    val clientSideDecorationFrame: WindowFrame,
 ) {
     init {
         size?.let {
@@ -61,6 +62,7 @@ public data class WindowParams(
         NativeWindowParams.prefer_client_side_decoration(nativeWindowParams, preferClientSideDecoration)
         NativeWindowParams.rendering_mode(nativeWindowParams, renderingMode.toNative())
         NativeWindowParams.window_id(nativeWindowParams, windowId)
+        NativeWindowParams.client_side_decoration_frame(nativeWindowParams, clientSideDecorationFrame.toNative(arena))
         return nativeWindowParams
     }
 }

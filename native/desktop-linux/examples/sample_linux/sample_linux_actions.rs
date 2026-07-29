@@ -1,6 +1,7 @@
 use desktop_common::ffi_utils::BorrowedUtf8;
 use desktop_linux::linux::application_api::AppPtr;
-use desktop_linux::linux::window_api::window_minimize;
+use desktop_linux::linux::events::WindowFrame;
+use desktop_linux::linux::window_api::{window_minimize, window_set_client_side_decoration_frame};
 use desktop_linux::linux::{
     application_api::{
         RenderingMode,
@@ -52,10 +53,15 @@ pub enum Action {
         title: String,
         prefer_client_side_decoration: bool,
         rendering_mode: RenderingMode,
+        client_side_decoration_frame: WindowFrame,
     },
     WindowClose(WindowId),
     WindowMaximize(WindowId),
     WindowMinimize(WindowId),
+    WindowSetClientFrame {
+        window_id: WindowId,
+        frame: WindowFrame,
+    },
     WindowSetFullscreen(WindowId),
     WindowUnmaximize(WindowId),
     WindowUnsetFullscreen(WindowId),
@@ -75,6 +81,7 @@ impl Action {
                 title,
                 prefer_client_side_decoration,
                 rendering_mode,
+                client_side_decoration_frame,
             } => {
                 window_create(
                     app_ptr,
@@ -86,6 +93,7 @@ impl Action {
                         app_id: BorrowedUtf8::new(&app_id),
                         rendering_mode,
                         prefer_client_side_decoration,
+                        client_side_decoration_frame,
                     },
                 );
             }
@@ -105,6 +113,7 @@ impl Action {
                 supported_mime_types,
             } => application_primary_selection_paste(app_ptr, serial, BorrowedUtf8::new(supported_mime_types)),
             Self::ApplicationPrimarySelectionPut(mime_types) => application_primary_selection_put(app_ptr, BorrowedUtf8::new(mime_types)),
+            Self::WindowSetClientFrame { window_id, frame } => window_set_client_side_decoration_frame(app_ptr, window_id, frame),
         }
     }
 }

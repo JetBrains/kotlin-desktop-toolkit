@@ -51,30 +51,40 @@ impl Drawable for SkiaOpenglState {
         .expect("Failed to create surface");
 
         let canvas = surface.canvas();
-        let background_color = if window_state.active {
-            colors::WHITE
-        } else {
-            Color4f::from(Color::from_rgb(128, 128, 128))
-        };
-
-        canvas.clear(background_color);
+        canvas.clear(Color::from_argb(128, 128, 128, 128));
 
         #[allow(clippy::cast_precision_loss)]
         let w = physical_size.width.raw_physical() as f32;
         #[allow(clippy::cast_precision_loss)]
         let h = physical_size.height.raw_physical() as f32;
+        let padding_left = scaled(window_state.frame.left.padding, scale);
+        let padding_right = scaled(window_state.frame.right.padding, scale);
+        let padding_top = scaled(window_state.frame.top.padding, scale);
+        let padding_bottom = scaled(window_state.frame.bottom.padding, scale);
+
+        {
+            let background_color = if window_state.active {
+                colors::WHITE
+            } else {
+                Color4f::from(Color::from_rgb(128, 128, 128))
+            };
+
+            let paint = Paint::new(background_color, None);
+
+            canvas.draw_rect(Rect::new(padding_left, padding_top, w - padding_right, h - padding_bottom), &paint);
+        }
 
         let line_thickness = scaled(LogicalPixelsInt::new(2), scale);
-        let drag_and_drop_left_of = scaled(DRAG_AND_DROP_LEFT_OF, scale);
-        let drag_source_indicator_height = scaled(LogicalPixelsInt::new(100), scale);
+        let drag_and_drop_left_of = scaled(DRAG_AND_DROP_LEFT_OF, scale) + padding_left;
+        let drag_source_indicator_height = scaled(LogicalPixelsInt::new(100), scale) + padding_top;
 
         {
             let mut paint = Paint::new(colors::BLACK, None);
             paint.set_stroke_width(line_thickness * 2.);
 
             canvas.draw_line(
-                skia_safe::Point::new(drag_and_drop_left_of, 0.),
-                skia_safe::Point::new(drag_and_drop_left_of, 0.),
+                skia_safe::Point::new(drag_and_drop_left_of, padding_top),
+                skia_safe::Point::new(drag_and_drop_left_of, h - padding_bottom),
                 &paint,
             );
         }
@@ -82,7 +92,10 @@ impl Drawable for SkiaOpenglState {
         if window_state.drag_and_drop_target {
             let paint = Paint::new(colors::BLUE, None);
 
-            canvas.draw_rect(Rect::from_wh(drag_and_drop_left_of, h), &paint);
+            canvas.draw_rect(
+                Rect::new(padding_left, padding_top, drag_and_drop_left_of, h - padding_bottom),
+                &paint,
+            );
         }
 
         if window_state.drag_and_drop_source {
@@ -90,7 +103,7 @@ impl Drawable for SkiaOpenglState {
             paint.set_stroke_width(line_thickness * 2.);
 
             canvas.draw_line(
-                skia_safe::Point::new(line_thickness, drag_source_indicator_height),
+                skia_safe::Point::new(padding_left + line_thickness, drag_source_indicator_height),
                 skia_safe::Point::new(drag_and_drop_left_of, drag_source_indicator_height),
                 &paint,
             );
@@ -101,27 +114,31 @@ impl Drawable for SkiaOpenglState {
             paint.set_stroke_width(line_thickness * 2.);
 
             canvas.draw_line(
-                skia_safe::Point::new(line_thickness, 0.),
-                skia_safe::Point::new(line_thickness, h),
+                skia_safe::Point::new(padding_left + line_thickness, padding_top),
+                skia_safe::Point::new(padding_left + line_thickness, h - padding_bottom),
                 &paint,
             );
             canvas.draw_line(
-                skia_safe::Point::new(w - line_thickness, 0.),
-                skia_safe::Point::new(w - line_thickness, h),
+                skia_safe::Point::new(w - padding_right - line_thickness, padding_top),
+                skia_safe::Point::new(w - padding_right - line_thickness, h - padding_bottom),
                 &paint,
             );
             canvas.draw_line(
-                skia_safe::Point::new(0., line_thickness),
-                skia_safe::Point::new(w, line_thickness),
+                skia_safe::Point::new(padding_left, padding_top + line_thickness),
+                skia_safe::Point::new(w - padding_right, padding_top + line_thickness),
                 &paint,
             );
             canvas.draw_line(
-                skia_safe::Point::new(0., h - line_thickness),
-                skia_safe::Point::new(w, h - line_thickness),
+                skia_safe::Point::new(padding_left, h - padding_bottom - line_thickness),
+                skia_safe::Point::new(w - padding_right, h - padding_bottom - line_thickness),
                 &paint,
             );
 
-            canvas.draw_line(skia_safe::Point::new(0., 0.), skia_safe::Point::new(w, h - line_thickness), &paint);
+            canvas.draw_line(
+                skia_safe::Point::new(padding_left, padding_top),
+                skia_safe::Point::new(w - padding_right, h - padding_bottom - line_thickness),
+                &paint,
+            );
         }
         direct_context.flush_and_submit();
     }

@@ -136,4 +136,11 @@ public data class LogicalRect(
         public fun makeWH(w: Int, h: Int): LogicalRect =
             LogicalRect(x = LogicalPixelsInt.Zero, y = LogicalPixelsInt.Zero, width = LogicalPixelsInt(w), height = LogicalPixelsInt(h))
     }
+
+    public fun contains(p: LogicalPoint): Boolean {
+        return p.x.rawLogical > x.rawLogical.toDouble() &&
+            p.x.rawLogical < (x + width).rawLogical.toDouble() &&
+            p.y.rawLogical > y.rawLogical.toDouble() &&
+            p.y.rawLogical < (y + height).rawLogical.toDouble()
+    }
 }
