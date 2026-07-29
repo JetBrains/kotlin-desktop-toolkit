@@ -403,10 +403,11 @@ impl ShmHandler for ApplicationState {
 impl CompositorHandler for ApplicationState {
     fn scale_factor_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, new_factor: i32) {
         debug!("scale_factor_changed for {}: {new_factor}", surface.id());
-        if self.fractional_scale_manager.is_none()
-            && let Some(window) = self.windows.get_mut(&surface.id())
-        {
-            let new_scale: f64 = f64::from(new_factor);
+        if self.fractional_scale_manager.is_some() {
+            return;
+        }
+        let new_scale: f64 = f64::from(new_factor);
+        if let Some(window) = self.windows.get_mut(&surface.id()) {
             window.scale_changed(new_scale, &self.shm_state);
 
             _ = send_event(
@@ -416,6 +417,10 @@ impl CompositorHandler for ApplicationState {
                     new_scale,
                 },
             );
+        } else if let Some(drag_icon) = &mut self.drag_icon
+            && drag_icon.surface.wl_surface() == surface
+        {
+            drag_icon.scale_changed(new_scale, &self.shm_state);
         }
     }
 
