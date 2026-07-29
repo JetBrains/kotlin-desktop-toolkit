@@ -19,8 +19,8 @@ fn translate_event_coordinates(e: &gdk4::Event, widget: &gtk4::Widget) -> Option
     let p = native.compute_point(widget, &gtk4::graphene::Point::new(event_x as f32, event_y as f32))?;
 
     Some(LogicalPoint {
-        x: LogicalPixels(f64::from(p.x())),
-        y: LogicalPixels(f64::from(p.y())),
+        x: LogicalPixels::new(f64::from(p.x())),
+        y: LogicalPixels::new(f64::from(p.y())),
     })
 }
 
@@ -35,8 +35,8 @@ fn set_motion_events_handler(widget: &gtk4::Widget, window_id: WindowId, event_h
             let event = MouseMovedEvent {
                 window_id,
                 location_in_window: LogicalPoint {
-                    x: LogicalPixels(x),
-                    y: LogicalPixels(y),
+                    x: LogicalPixels::new(x),
+                    y: LogicalPixels::new(y),
                 },
                 timestamp: Timestamp(current_event_time),
             };
@@ -117,8 +117,8 @@ fn set_mouse_button_events_handler(widget: &gtk4::Widget, window_id: WindowId, e
                 let event = ScrollWheelEvent {
                     window_id,
                     timestamp: Timestamp(e.time()),
-                    scroll_delta_x: LogicalPixels(delta_x),
-                    scroll_delta_y: LogicalPixels(delta_y),
+                    scroll_delta_x: LogicalPixels::new(delta_x),
+                    scroll_delta_y: LogicalPixels::new(delta_y),
                     is_stop: scroll_event.is_stop(),
                     is_smooth_scroll,
                 };

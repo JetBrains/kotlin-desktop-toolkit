@@ -3,7 +3,7 @@ use gtk4::prelude::{NativeExt, SurfaceExt};
 
 use crate::gtk::application_api::{RenderingMode, gl_get_proc_address_impl};
 use crate::gtk::events::OpenGlDrawData;
-use crate::gtk::geometry::{LogicalSize, PhysicalSize};
+use crate::gtk::geometry::{LogicalPixelsInt, LogicalSize, PhysicalSize, Scale};
 use anyhow::bail;
 use gtk4::gdk as gdk4;
 use gtk4::glib;
@@ -24,7 +24,7 @@ const GL_FRAMEBUFFER: u32 = 0x8D40;
 impl From<LogicalSize> for gtk4::graphene::Rect {
     fn from(value: LogicalSize) -> Self {
         #[allow(clippy::cast_precision_loss)]
-        Self::new(0., 0., value.width as f32, value.height as f32)
+        Self::new(0., 0., value.width.raw_logical() as f32, value.height.raw_logical() as f32)
     }
 }
 
@@ -124,8 +124,8 @@ impl GlFuncs {
             GL_TEXTURE_2D,
             0,
             GL_RGBA8,
-            physical_size.width.0,
-            physical_size.height.0,
+            physical_size.width.raw_physical(),
+            physical_size.height.raw_physical(),
             0,
             if use_es { GL_RGBA } else { GL_BGRA },
             GL_UNSIGNED_BYTE,
@@ -161,7 +161,7 @@ impl Drop for GlRenderData {
 }
 
 type OnAllocate = Box<dyn Fn(LogicalSize)>;
-type OnDraw = Box<dyn Fn(OpenGlDrawData, PhysicalSize, f64)>;
+type OnDraw = Box<dyn Fn(OpenGlDrawData, PhysicalSize, Scale)>;
 
 #[derive(Default)]
 pub struct GlWidgetImpl {
@@ -209,12 +209,12 @@ impl gtk4::subclass::widget::WidgetImpl for GlWidgetImpl {
 
         let gl = GlFuncs::new();
 
-        let scale = f64::from(obj.scale_factor());
+        let scale = Scale::new(obj.scale_factor());
         let logical_size = LogicalSize {
-            width: obj.width(),
-            height: obj.height(),
+            width: LogicalPixelsInt::new(obj.width()),
+            height: LogicalPixelsInt::new(obj.height()),
         };
-        let physical_size = logical_size.to_physical(scale);
+        let physical_size = logical_size.to_rounded_physical(scale);
         gl.resize_texture(texture_id, physical_size, context.uses_es());
 
         let data = GlRenderData {
@@ -230,7 +230,7 @@ impl gtk4::subclass::widget::WidgetImpl for GlWidgetImpl {
     fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
         self.parent_size_allocate(width, height, baseline);
         if let Some(on_allocate) = self.on_allocate.get() {
-            let alloc_size = LogicalSize { width, height };
+            let alloc_size = LogicalSize::wh(width, height);
             on_allocate(alloc_size);
         }
     }
@@ -241,12 +241,12 @@ impl gtk4::subclass::widget::WidgetImpl for GlWidgetImpl {
 
         let obj = self.obj();
 
-        let scale = f64::from(obj.scale_factor());
+        let scale = Scale::new(obj.scale_factor());
         let logical_size = LogicalSize {
-            width: obj.width(),
-            height: obj.height(),
+            width: LogicalPixelsInt::new(obj.width()),
+            height: LogicalPixelsInt::new(obj.height()),
         };
-        let physical_size = logical_size.to_physical(scale);
+        let physical_size = logical_size.to_rounded_physical(scale);
 
         let opengl_draw_data = {
             let mut data_borrow = self.data.borrow_mut();
@@ -281,7 +281,14 @@ impl gtk4::subclass::widget::WidgetImpl for GlWidgetImpl {
 
         let data_borrow = self.data.borrow();
         let Some(data) = data_borrow.as_ref() else { return };
-        let gl_texture = unsafe { gdk4::GLTexture::new(&data.context, data.texture_id, physical_size.width.0, physical_size.height.0) };
+        let gl_texture = unsafe {
+            gdk4::GLTexture::new(
+                &data.context,
+                data.texture_id,
+                physical_size.width.raw_physical(),
+                physical_size.height.raw_physical(),
+            )
+        };
         snapshot.append_texture(&gl_texture, &gtk4::graphene::Rect::from(logical_size));
     }
 
@@ -302,7 +309,7 @@ impl GlWidget {
     pub fn new(
         rendering_mode: RenderingMode,
         min_size: Option<LogicalSize>,
-        on_draw: impl Fn(OpenGlDrawData, PhysicalSize, f64) + 'static,
+        on_draw: impl Fn(OpenGlDrawData, PhysicalSize, Scale) + 'static,
         on_allocate: Option<Box<dyn Fn(LogicalSize) + 'static>>,
     ) -> Self {
         let obj = glib::Object::new::<Self>();
@@ -315,7 +322,7 @@ impl GlWidget {
         }
 
         if let Some(min_size) = min_size {
-            obj.set_size_request(min_size.width, min_size.height);
+            obj.set_size_request(min_size.width.raw_logical(), min_size.height.raw_logical());
         }
 
         obj

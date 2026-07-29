@@ -28,7 +28,7 @@ impl gtk4::subclass::prelude::LayoutManagerImpl for LayoutManagerWrapperImpl {
         layout_manager.allocate(widget, width, height, baseline);
 
         if let Some(on_allocate) = self.on_allocate.get() {
-            let alloc_size = LogicalSize { width, height };
+            let alloc_size = LogicalSize::wh(width, height);
             on_allocate(alloc_size);
         }
     }

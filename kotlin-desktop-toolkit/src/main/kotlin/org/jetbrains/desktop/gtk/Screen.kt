@@ -11,7 +11,7 @@ public data class Screen internal constructor(
     val name: String?,
     val origin: LogicalPoint,
     val size: LogicalSize,
-    val scale: Double,
+    val scale: Scale,
     val millihertz: UInt,
 ) {
     public companion object {
@@ -26,7 +26,7 @@ public data class Screen internal constructor(
                 },
                 origin = LogicalPoint.fromNative(NativeScreenInfo.origin(s)),
                 size = LogicalSize.fromNative(NativeScreenInfo.size(s)),
-                scale = NativeScreenInfo.scale(s),
+                scale = Scale(NativeScreenInfo.scale(s)),
                 millihertz = NativeScreenInfo.millihertz(s).toUInt(),
             )
         }

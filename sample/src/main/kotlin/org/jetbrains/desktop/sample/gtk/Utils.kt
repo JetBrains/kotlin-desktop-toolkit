@@ -1,14 +1,19 @@
 package org.jetbrains.desktop.sample.gtk
 
 import org.jetbrains.desktop.gtk.Logger
-import org.jetbrains.desktop.gtk.PhysicalPoint
+import org.jetbrains.desktop.gtk.LogicalPixels
+import org.jetbrains.desktop.gtk.LogicalPixelsInt
+import org.jetbrains.desktop.gtk.LogicalPoint
+import org.jetbrains.desktop.gtk.LogicalRect
+import org.jetbrains.desktop.gtk.LogicalSize
+import org.jetbrains.desktop.gtk.Scale
 import org.jetbrains.desktop.gtk.TextInputPreeditAttribute
 import org.jetbrains.desktop.gtk.TextInputPreeditUnderlineType
-import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
 import org.jetbrains.skia.FontMgr
 import org.jetbrains.skia.FontStyle
 import org.jetbrains.skia.Paint
+import org.jetbrains.skia.Rect
 import org.jetbrains.skia.paragraph.DecorationLineStyle
 import org.jetbrains.skia.paragraph.DecorationStyle
 import org.jetbrains.skia.paragraph.FontCollection
@@ -16,13 +21,8 @@ import org.jetbrains.skia.paragraph.Paragraph
 import org.jetbrains.skia.paragraph.ParagraphBuilder
 import org.jetbrains.skia.paragraph.ParagraphStyle
 import org.jetbrains.skia.paragraph.TextStyle
-
-fun Canvas.withTranslated(point: PhysicalPoint, block: Canvas.() -> Unit) = let { canvas ->
-    canvas.save()
-    canvas.translate(point.x.toFloat(), point.y.toFloat())
-    canvas.block()
-    canvas.restore()
-}
+import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 internal class TextLineCreator {
     companion object {
@@ -114,4 +114,52 @@ internal class TextLineCreator {
     fun makeTextLine(text: String, fontSize: Float, color: Int): Paragraph {
         return makeTextLine(listOf(Pair(text, null)), fontSize, color)
     }
+}
+
+internal fun LogicalPixels.round(): LogicalPixelsInt {
+    return LogicalPixelsInt(rawLogical.roundToInt())
+}
+
+internal fun Paragraph.toLogicalSize(scale: Scale): LogicalSize {
+    return LogicalSize(
+        width = scale.rawPhysicalToLogical(ceil(maxIntrinsicWidth).toDouble()).round(),
+        height = scale.rawPhysicalToLogical(ceil(height).toDouble()).round(),
+    )
+}
+
+internal data class LogicalDoubleRect(
+    val x: LogicalPixels,
+    val y: LogicalPixels,
+    val width: LogicalPixels,
+    val height: LogicalPixels,
+) {
+    companion object {
+        val Zero = LogicalDoubleRect(LogicalPixels.Zero, LogicalPixels.Zero, LogicalPixels.Zero, LogicalPixels.Zero)
+    }
+    fun contains(p: LogicalPoint): Boolean {
+        return p.x > x &&
+            p.x < (x + width) &&
+            p.y > y &&
+            p.y < (y + height)
+    }
+
+    internal fun toSkiko(scale: Scale): Rect {
+        return Rect.makeXYWH(x.toSkiko(scale), y.toSkiko(scale), width.toSkiko(scale), height.toSkiko(scale))
+    }
+
+    internal fun round(): LogicalRect {
+        return LogicalRect(x.round(), y.round(), width.round(), height.round())
+    }
+}
+
+internal fun LogicalPixels.toSkiko(scale: Scale): Float {
+    return this.toRawPhysical(scale).toFloat()
+}
+
+internal fun LogicalPixelsInt.toSkiko(scale: Scale): Float {
+    return this.toRawPhysical(scale).toFloat()
+}
+
+internal fun LogicalRect.toSkiko(scale: Scale): Rect {
+    return Rect.makeXYWH(x.toSkiko(scale), y.toSkiko(scale), width.toSkiko(scale), height.toSkiko(scale))
 }

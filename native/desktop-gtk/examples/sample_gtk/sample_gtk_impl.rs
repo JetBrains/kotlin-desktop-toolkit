@@ -18,6 +18,7 @@ use desktop_gtk::gtk::application_api::{
 use desktop_gtk::gtk::desktop_settings_api::{FfiDesktopSetting, XdgDesktopColorScheme};
 use desktop_gtk::gtk::events::{OpenGlDrawData, WindowDecorationMode};
 use desktop_gtk::gtk::file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams};
+use desktop_gtk::gtk::geometry::{LogicalPixelsInt, Scale};
 use desktop_gtk::gtk::text_input_api::{TextInputContentPurpose, TextInputContext, TextInputContextHints};
 use desktop_gtk::gtk::{
     application_api::{
@@ -60,8 +61,8 @@ const URI_LIST_MIME_TYPE: &str = "text/uri-list";
 
 const ALL_MIMES: &str = "text/html,text/plain;charset=utf-8";
 
-const DRAG_WIDTH_NEXT_TO_INSETS: i32 = 50;
-const DRAG_AND_DROP_LEFT_OF: f64 = 100.;
+const DRAG_WIDTH_NEXT_TO_INSETS: LogicalPixelsInt = LogicalPixelsInt::new(50);
+const DRAG_AND_DROP_LEFT_OF: LogicalPixelsInt = LogicalPixelsInt::new(100);
 
 #[derive(Default)]
 struct WindowState {
@@ -69,14 +70,14 @@ struct WindowState {
     text_input_available: bool,
     composed_text: String,
     text: String,
-    animation_progress: f32,
+    animation_progress: f64,
     drag_and_drop_target: bool,
     drag_and_drop_source: bool,
     opengl: Option<OpenglState>,
     last_received_path: Option<String>,
     fullscreen: bool,
     maximized: bool,
-    scale: f64,
+    scale: Scale,
     size: LogicalSize,
     inset_start: LogicalSize,
     inset_end: LogicalSize,
@@ -139,10 +140,10 @@ impl State {
     }
 }
 
-fn draw_with_init(draw_data: &OpenGlDrawData, physical_size: PhysicalSize, scale: f64, window_state: &mut WindowState) {
+fn draw_with_init(draw_data: &OpenGlDrawData, physical_size: PhysicalSize, scale: Scale, window_state: &mut WindowState) {
     let opengl_state = window_state.opengl.get_or_insert_with(|| OpenglState::new(draw_data));
     #[allow(clippy::cast_possible_truncation)]
-    draw(opengl_state, physical_size, scale as f32, window_state.animation_progress);
+    draw(opengl_state, physical_size, scale, window_state.animation_progress);
 }
 
 fn create_text_input_context(text: &str) -> TextInputContext {
@@ -151,10 +152,10 @@ fn create_text_input_context(text: &str) -> TextInputContext {
         hints: TextInputContextHints::WordCompletion | TextInputContextHints::Spellcheck,
         content_purpose: TextInputContentPurpose::Normal,
         cursor_rectangle: LogicalRect {
-            x: (codepoints_count * 10).into(),
-            y: 100,
-            width: 5,
-            height: 10,
+            x: LogicalPixelsInt::new((codepoints_count * 10).into()),
+            y: LogicalPixelsInt::new(100),
+            width: LogicalPixelsInt::new(5),
+            height: LogicalPixelsInt::new(10),
         },
     }
 }
@@ -277,8 +278,14 @@ fn on_keydown(event: &KeyDownEvent, state: &mut State, window_id: WindowId) -> O
             state.windows.insert(new_window_id, WindowState::default());
             Some(Action::WindowCreate {
                 window_id: new_window_id,
-                size: LogicalSize { width: 300, height: 200 },
-                min_size: LogicalSize { width: 0, height: 0 },
+                size: LogicalSize {
+                    width: LogicalPixelsInt::new(300),
+                    height: LogicalPixelsInt::new(200),
+                },
+                min_size: LogicalSize {
+                    width: LogicalPixelsInt::new(0),
+                    height: LogicalPixelsInt::new(0),
+                },
                 title: "Window N".to_owned(),
                 decoration_mode: WindowDecorationMode::Server,
                 rendering_mode: RenderingMode::Auto,
@@ -390,18 +397,18 @@ fn on_application_started(state: &mut State) -> Vec<Action> {
     vec![
         Action::WindowCreate {
             window_id: WindowId(1),
-            size: LogicalSize { width: 200, height: 300 },
-            min_size: LogicalSize { width: 200, height: 100 },
+            size: LogicalSize::wh(200, 300),
+            min_size: LogicalSize::wh(200, 100),
             title: "Window 1".to_owned(),
             decoration_mode: WindowDecorationMode::Server,
             rendering_mode: RenderingMode::Auto,
         },
         Action::WindowCreate {
             window_id: WindowId(2),
-            size: LogicalSize { width: 600, height: 200 },
-            min_size: LogicalSize { width: 200, height: 100 },
+            size: LogicalSize::wh(600, 200),
+            min_size: LogicalSize::wh(200, 100),
             title: "Window 2".to_owned(),
-            decoration_mode: WindowDecorationMode::CustomTitlebar(40),
+            decoration_mode: WindowDecorationMode::CustomTitlebar(LogicalPixelsInt::new(40)),
             rendering_mode: RenderingMode::Auto,
         },
     ]
@@ -475,18 +482,18 @@ fn event_handler_impl(event: &Event) -> Vec<Action> {
         }
         Event::MouseDown(data) => {
             if let Some(window_state) = state.windows.get_mut(&data.window_id) {
-                let x = data.location_in_window.x.0;
-                let y = data.location_in_window.y.0;
+                let x = data.location_in_window.x;
+                let y = data.location_in_window.y;
                 match data.button.0 {
                     MOUSE_BUTTON_LEFT => {
-                        if x < DRAG_AND_DROP_LEFT_OF && y > f64::from(window_state.inset_start.height) {
+                        if x < DRAG_AND_DROP_LEFT_OF && y > window_state.inset_start.height {
                             let mime_types = if state.key_modifiers == KeyModifiers::Shift {
                                 ALL_MIMES
                             } else {
                                 TEXT_MIME_TYPE
                             };
                             let dnd_actions = DragAndDropActions(DragAndDropAction::Copy as u32 | DragAndDropAction::Move as u32);
-                            let drag_icon_size = LogicalSize { width: 300, height: 300 };
+                            let drag_icon_size = LogicalSize::wh(300, 300);
                             window_start_drag_and_drop(
                                 data.window_id,
                                 BorrowedUtf8::new(mime_types),
@@ -498,9 +505,9 @@ fn event_handler_impl(event: &Event) -> Vec<Action> {
                                 window_state.drag_and_drop_source = true;
                             }
                             actions.push(Action::Dummy);
-                        } else if y <= f64::from(window_state.inset_start.height)
-                            && x > f64::from(window_state.inset_start.width + DRAG_WIDTH_NEXT_TO_INSETS)
-                            && x < f64::from(window_state.size.width - window_state.inset_end.width - DRAG_WIDTH_NEXT_TO_INSETS)
+                        } else if y <= window_state.inset_start.height
+                            && x > window_state.inset_start.width + DRAG_WIDTH_NEXT_TO_INSETS
+                            && x < window_state.size.width - window_state.inset_end.width - DRAG_WIDTH_NEXT_TO_INSETS
                         {
                             actions.push(Action::Dummy);
                         }
@@ -640,10 +647,10 @@ extern "C" fn query_drag_and_drop_target(data: &DragAndDropQueryData) -> FfiDrag
     let inset_height = with_borrow_mut_state(|state| {
         state.with_mut_window_state(data.window_id, |window_state| {
             window_state.drag_and_drop_target = true;
-            f64::from(window_state.inset_start.height)
+            window_state.inset_start.height
         })
     });
-    if data.location_in_window.x.0 < DRAG_AND_DROP_LEFT_OF && data.location_in_window.y.0 > inset_height.unwrap_or_default() {
+    if data.location_in_window.x < DRAG_AND_DROP_LEFT_OF && data.location_in_window.y > inset_height.unwrap_or_default() {
         const SUPPORTED_ACTIONS_PER_MIME: [FfiSupportedActionsForMime; 4] = [
             FfiSupportedActionsForMime {
                 supported_mime_type: BorrowedUtf8::new(URI_LIST_MIME_TYPE),

@@ -13,7 +13,7 @@ use crate::gtk::events::{
 use crate::gtk::ffi_return_conversions::{QueryDragAndDropTarget, RetrieveSurroundingText, TransferDataGetter};
 use crate::gtk::file_dialog::show_file_dialog_impl;
 use crate::gtk::file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams};
-use crate::gtk::geometry::{LogicalSize, PhysicalSize};
+use crate::gtk::geometry::{LogicalSize, PhysicalSize, Scale};
 use crate::gtk::gl_widget::GlWidget;
 use crate::gtk::keyboard::key_modifiers_from_gdk;
 use crate::gtk::mime_types::MimeTypes;
@@ -289,7 +289,7 @@ impl ApplicationState {
 
     pub fn new_window(&self, params: &WindowParams) -> anyhow::Result<()> {
         let window_id = params.window_id;
-        let min_size = if params.min_size.height == 0 { None } else { Some(params.min_size) };
+        let min_size = params.min_size.validate();
 
         if self.window_id_to_window.borrow().contains_key(&window_id) {
             bail!("Window with {window_id:?} already exists");
@@ -413,8 +413,8 @@ impl ApplicationState {
                 },
             );
         });
-        *self.drag_icon.borrow_mut() = if drag_icon_size.width > 0 && drag_icon_size.height > 0 {
-            let on_draw = move |opengl_draw_data: OpenGlDrawData, physical_size: PhysicalSize, scale: f64| {
+        *self.drag_icon.borrow_mut() = if let Some(drag_icon_size) = drag_icon_size.validate() {
+            let on_draw = move |opengl_draw_data: OpenGlDrawData, physical_size: PhysicalSize, scale: Scale| {
                 send_event(
                     event_handler,
                     DragIconDrawEvent {

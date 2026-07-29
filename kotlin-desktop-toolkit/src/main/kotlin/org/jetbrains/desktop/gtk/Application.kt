@@ -42,11 +42,11 @@ public data class WindowParams(
     val renderingMode: RenderingMode,
 ) {
     init {
-        require(size.width > 0 && size.height > 0) {
+        require(size.width.rawLogical > 0 && size.height.rawLogical > 0) {
             "Invalid size (both width and height must be greater than zero)"
         }
         minSize?.let {
-            require(it.width > 0 && it.height > 0) {
+            require(it.width.rawLogical > 0 && it.height.rawLogical > 0) {
                 "Invalid min size (both width and height must be greater than zero)"
             }
         }

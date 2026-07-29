@@ -37,14 +37,10 @@ pub struct ScreenInfo {
 }
 
 impl ScreenInfo {
-    #[must_use]
     fn new(monitor: &gdk4::Monitor) -> Self {
         let geometry = monitor.geometry();
         let origin = LogicalPoint::new(geometry.x(), geometry.y());
-        let size = LogicalSize {
-            width: geometry.width(),
-            height: geometry.height(),
-        };
+        let size = LogicalSize::wh(geometry.width(), geometry.height());
 
         Self {
             screen_id: ScreenId::new(monitor),

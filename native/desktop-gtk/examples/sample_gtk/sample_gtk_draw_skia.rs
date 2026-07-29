@@ -1,7 +1,7 @@
 use desktop_common::ffi_utils::BorrowedStrPtr;
 use desktop_gtk::gtk::application_api::application_get_egl_proc_func;
 use desktop_gtk::gtk::events::OpenGlDrawData;
-use desktop_gtk::gtk::geometry::PhysicalSize;
+use desktop_gtk::gtk::geometry::{LogicalPixels, PhysicalSize, Scale};
 use skia_safe::gpu::ganesh::gl::{backend_render_targets, direct_contexts};
 use skia_safe::gpu::gl::{Format, FramebufferInfo, Interface};
 use skia_safe::gpu::{DirectContext, SurfaceOrigin, surfaces};
@@ -26,11 +26,21 @@ impl OpenglState {
     }
 }
 
-pub fn draw(gl_state: &mut OpenglState, physical_size: PhysicalSize, scale: f32, animation_progress: f32) {
+#[allow(clippy::cast_possible_truncation)]
+fn scaled(v: LogicalPixels, scale: Scale) -> f32 {
+    v.to_raw_physical(scale) as f32
+}
+
+pub fn draw(gl_state: &mut OpenglState, physical_size: PhysicalSize, scale: Scale, animation_progress: f64) {
     let direct_context = &mut gl_state.direct_context;
     let mut framebuffer_info = FramebufferInfo::from_fboid(gl_state.fb);
     framebuffer_info.format = Format::RGBA8.into();
-    let backend_render_target = backend_render_targets::make_gl((physical_size.width.0, physical_size.height.0), 1, 0, framebuffer_info);
+    let backend_render_target = backend_render_targets::make_gl(
+        (physical_size.width.raw_physical(), physical_size.height.raw_physical()),
+        1,
+        0,
+        framebuffer_info,
+    );
     let mut surface = surfaces::wrap_backend_render_target(
         direct_context,
         &backend_render_target,
@@ -46,25 +56,39 @@ pub fn draw(gl_state: &mut OpenglState, physical_size: PhysicalSize, scale: f32,
 
     {
         let paint = Paint::new(colors::RED, None);
-        canvas.draw_rect(Rect::from_xywh(0., 0., 100. * scale, 50. * scale), &paint);
+        canvas.draw_rect(
+            Rect::from_xywh(
+                0.,
+                0.,
+                scaled(LogicalPixels::new(100.), scale),
+                scaled(LogicalPixels::new(50.), scale),
+            ),
+            &paint,
+        );
     }
 
     {
         let paint = Paint::new(colors::GREEN, None);
         canvas.draw_circle(
-            skia_safe::Point::new((100. + animation_progress) * scale, 100.),
-            50. * scale,
+            skia_safe::Point::new(
+                scaled(LogicalPixels::new(100. + animation_progress), scale),
+                scaled(LogicalPixels::new(100.), scale),
+            ),
+            scaled(LogicalPixels::new(50.), scale),
             &paint,
         );
     }
 
     {
         let mut paint = Paint::new(colors::WHITE, None);
-        paint.set_stroke_width(2. * scale);
+        paint.set_stroke_width(scaled(LogicalPixels::new(2.), scale));
         canvas.draw_line(
             skia_safe::Point::new(0., 0.),
             #[allow(clippy::cast_precision_loss)]
-            skia_safe::Point::new(physical_size.width.0 as f32, physical_size.height.0 as f32),
+            skia_safe::Point::new(
+                physical_size.width.raw_physical() as f32,
+                physical_size.height.raw_physical() as f32,
+            ),
             &paint,
         );
     }

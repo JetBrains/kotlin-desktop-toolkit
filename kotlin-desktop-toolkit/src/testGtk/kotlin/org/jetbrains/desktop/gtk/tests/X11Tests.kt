@@ -22,15 +22,17 @@ import org.jetbrains.desktop.gtk.KeyModifiers
 import org.jetbrains.desktop.gtk.KeySym
 import org.jetbrains.desktop.gtk.KotlinDesktopToolkit
 import org.jetbrains.desktop.gtk.LogLevel
-import org.jetbrains.desktop.gtk.LogicalPoint
+import org.jetbrains.desktop.gtk.LogicalPixels
+import org.jetbrains.desktop.gtk.LogicalPixelsInt
 import org.jetbrains.desktop.gtk.LogicalRect
 import org.jetbrains.desktop.gtk.LogicalSize
 import org.jetbrains.desktop.gtk.MouseButton
 import org.jetbrains.desktop.gtk.OpenGlDrawData
-import org.jetbrains.desktop.gtk.PhysicalPoint
+import org.jetbrains.desktop.gtk.PhysicalPixels
 import org.jetbrains.desktop.gtk.PhysicalSize
 import org.jetbrains.desktop.gtk.PointerShape
 import org.jetbrains.desktop.gtk.RenderingMode
+import org.jetbrains.desktop.gtk.Scale
 import org.jetbrains.desktop.gtk.ShowNotificationParams
 import org.jetbrains.desktop.gtk.StartDragAndDropParams
 import org.jetbrains.desktop.gtk.SupportedActionsForMime
@@ -75,6 +77,7 @@ import kotlin.io.path.readBytes
 import kotlin.io.path.readLines
 import kotlin.io.path.readText
 import kotlin.io.path.writeBytes
+import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -554,17 +557,24 @@ private fun getActiveWindowTitle(): String {
     return runCommandWithOutput(listOf("xdotool", "getactivewindow", "getwindowname"))!!.decodeToString().trimEnd('\n')
 }
 
-private fun screenshot(
-    outPath: Path,
-    rect: Pair<PhysicalPoint, PhysicalSize>? = null,
-    hideCursor: Boolean = true,
-    windowId: ULong? = null,
-) {
+internal data class PhysicalPoint(
+    val x: PhysicalPixels,
+    val y: PhysicalPixels,
+)
+
+internal data class PhysicalRect(
+    val x: PhysicalPixels,
+    val y: PhysicalPixels,
+    val width: PhysicalPixels,
+    val height: PhysicalPixels,
+)
+
+private fun screenshot(outPath: Path, rect: PhysicalRect? = null, hideCursor: Boolean = true, windowId: ULong? = null) {
     val cmd = buildList {
         add("maim")
-        rect?.let { (point, size) ->
+        if (rect != null) {
             add("-g")
-            add("${size.width}x${size.height}+${point.x}+${point.y}")
+            add("${rect.width.rawPhysical}x${rect.height.rawPhysical}+${rect.x.rawPhysical}+${rect.y.rawPhysical}")
         }
         if (hideCursor) {
             add("--hidecursor")
@@ -671,7 +681,7 @@ private fun defaultWindowParams(): WindowParams {
     return WindowParams(
         windowId = 0,
         title = "Test Window 1",
-        size = LogicalSize(width = 200, height = 300),
+        size = LogicalSize.makeWH(width = 200, height = 300),
         minSize = null,
         decorationMode = WindowDecorationMode.Server,
         renderingMode = RenderingMode.GL_ES,
@@ -750,7 +760,7 @@ abstract class X11TestsBase {
         internal const val HTML_TEXT_MIME_TYPE = "text/html"
         internal const val PNG_MIME_TYPE = "image/png"
 
-        internal val physicalScreenSize = PhysicalSize(3000, 1500)
+        internal val physicalScreenSize = PhysicalSize(PhysicalPixels(3000), PhysicalPixels(1500))
         private val appExecutor = SingleThreadTaskQueue()
 
         @BeforeAll
@@ -805,7 +815,7 @@ abstract class X11TestsBase {
 
     internal fun run(applicationConfig: ApplicationConfig): InitialSettings {
         // Reset the mouse position
-        moveMouseTo(49, 49)
+        moveMouseTo(PhysicalPixels(49), PhysicalPixels(49))
         appExecutingResult = appExecutor.add {
             try {
                 app.runEventLoop(applicationConfig)
@@ -962,16 +972,16 @@ abstract class X11TestsBase {
             display, rootWindow, rootReturn, childReturn, rootXReturn, rootYReturn, winXReturn, winYReturn, maskReturn,
         )
         return if (ret) {
-            PhysicalPoint(rootXReturn.value, rootYReturn.value)
+            PhysicalPoint(PhysicalPixels(rootXReturn.value), PhysicalPixels(rootYReturn.value))
         } else {
             null
         }
     }
 
-    internal fun moveMouseTo(x: Int, y: Int) {
+    internal fun moveMouseTo(x: PhysicalPixels, y: PhysicalPixels) {
         withXtest(
             { xtest, display ->
-                xtest.XTestFakeMotionEvent(display, 0, x, y, NativeLong(0))
+                xtest.XTestFakeMotionEvent(display, 0, x.rawPhysical, y.rawPhysical, NativeLong(0))
                 val expectedPosition = PhysicalPoint(x, y)
                 while (getMousePosition() != expectedPosition) {
                     Thread.sleep(1)
@@ -983,14 +993,14 @@ abstract class X11TestsBase {
         )
     }
 
-    internal fun wiggleMouseUntil(x: Int, y: Int, timeout: Duration = 5.seconds, predicate: () -> Boolean): Boolean {
+    internal fun wiggleMouseUntil(x: PhysicalPixels, y: PhysicalPixels, timeout: Duration = 5.seconds, predicate: () -> Boolean): Boolean {
         val startTime = TimeSource.Monotonic.markNow()
         var moveToRight = false
         while (startTime.elapsedNow() < timeout) {
             if (predicate()) {
                 return true
             }
-            val offset = if (moveToRight) 5 else 0
+            val offset = if (moveToRight) PhysicalPixels(5) else PhysicalPixels(0)
             moveMouseTo(x + offset, y + offset)
             ui {}
             Thread.sleep(1)
@@ -1097,7 +1107,7 @@ abstract class X11TestsBase {
         val otherEvents: List<Event>,
     )
 
-    internal fun createWindowAndWaitForFocus(windowParams: WindowParams, onScale: ((Double) -> Unit)? = null): InitialWindowData {
+    internal fun createWindowAndWaitForFocus(windowParams: WindowParams, onScale: ((Scale) -> Unit)? = null): InitialWindowData {
         val window = ui { app.createWindow(windowParams) }
         lateinit var scale: Event.WindowScaleChanged
         lateinit var configure: Event.WindowConfigure
@@ -1113,7 +1123,8 @@ abstract class X11TestsBase {
 
                 is Event.MouseEntered -> {
                     if (windowParams.windowId == event.windowId) {
-                        assertEquals(LogicalPoint(50f, 50f), event.locationInWindow)
+                        assertEquals(50.0, event.locationInWindow.x.rawLogical)
+                        assertEquals(50.0, event.locationInWindow.y.rawLogical)
                         checklist.checkEntry("mouseEnter")
                     }
                 }
@@ -1122,7 +1133,8 @@ abstract class X11TestsBase {
                     if (windowParams.windowId == event.windowId) {
                         checklist.checkEntry("mouseMove")
                         assertNotEquals(Duration.ZERO, event.timestamp.toDuration())
-                        assertEquals(LogicalPoint(50f, 50f), event.locationInWindow)
+                        assertEquals(50.0, event.locationInWindow.x.rawLogical)
+                        assertEquals(50.0, event.locationInWindow.y.rawLogical)
                     }
                 }
 
@@ -1145,7 +1157,10 @@ abstract class X11TestsBase {
                         assertTrue(checklist.isChecked("scale"), "Draw event has to be after scale")
                         draw = event
                         checklist.checkEntry("draw")
-                        moveMouseTo((50 * scale.newScale).roundToInt(), (50 * scale.newScale).roundToInt())
+                        moveMouseTo(
+                            x = PhysicalPixels(LogicalPixels(50.0).toRawPhysical(scale.newScale).roundToInt()),
+                            y = PhysicalPixels(LogicalPixels(50.0).toRawPhysical(scale.newScale).roundToInt()),
+                        )
                     }
                 }
 
@@ -1543,10 +1558,16 @@ class X11Tests : X11TestsBase() {
         assertFalse(initialIsComposited.value) // started without compositor
 
         val initialScale = initialWindowData.scale.newScale
-        assertEquals(2.0, initialScale)
+        assertEquals(2.0, initialScale.rawValue)
 
-        assertEquals(initialWindowData.configure.size.width * initialScale, initialWindowData.draw.size.width.toDouble())
-        assertEquals(initialWindowData.configure.size.height * initialScale, initialWindowData.draw.size.height.toDouble())
+        assertEquals(
+            initialWindowData.configure.size.width.toRawPhysical(initialScale),
+            initialWindowData.draw.size.width.rawPhysical.toDouble(),
+        )
+        assertEquals(
+            initialWindowData.configure.size.height.toRawPhysical(initialScale),
+            initialWindowData.draw.size.height.rawPhysical.toDouble(),
+        )
 
         XSettingsD.withChangedSettings(
             mapOf(
@@ -1558,15 +1579,18 @@ class X11Tests : X11TestsBase() {
             val event = getNextEvent()
             assertIs<Event.WindowScaleChanged>(event)
             assertEquals(windowParams.windowId, event.windowId)
-            assertEquals(1.0, event.newScale)
+            assertEquals(1.0, event.newScale.rawValue)
 
             ui { initialWindowData.window.requestRedraw() }
 
             withNextEvent { event ->
                 assertIs<Event.WindowDraw>(event)
                 assertEquals(windowParams.windowId, event.windowId)
-                assertEquals(initialWindowData.configure.size.width, event.size.width)
-                assertEquals(initialWindowData.configure.size.height, event.size.height)
+                assertEquals(initialWindowData.configure.size.width.toRawPhysical(Scale.NO_SCALE), event.size.width.rawPhysical.toDouble())
+                assertEquals(
+                    initialWindowData.configure.size.height.toRawPhysical(Scale.NO_SCALE),
+                    event.size.height.rawPhysical.toDouble(),
+                )
             }
         }
         awaitEventOfType<Event.WindowScaleChanged> { event ->
@@ -1630,12 +1654,13 @@ class X11Tests : X11TestsBase() {
         val screen = screens.firstOrNull()
         assertNotNull(screen)
         val fullscreenWindowSize = screen.size
-        assertEquals(LogicalPoint(0f, 0f), screen.origin)
-        assertNotEquals(0.0, screen.scale)
+        assertEquals(LogicalPixels.Zero, screen.origin.x)
+        assertEquals(LogicalPixels.Zero, screen.origin.y)
+        assertNotEquals(0.0, screen.scale.rawValue)
         assertNotNull(screen.name)
         assertNotEquals(0U, screen.screenId)
 
-        val minSize = LogicalSize(width = 100, height = 70)
+        val minSize = LogicalSize.makeWH(width = 100, height = 70)
         val windowParams = defaultWindowParams().copy(minSize = minSize)
 
         var expectedConfigureEvent = ExpectedWindowConfigure(
@@ -1645,8 +1670,8 @@ class X11Tests : X11TestsBase() {
             maximized = true,
             fullscreen = false,
             decorationMode = WindowDecorationMode.Server,
-            insetStart = LogicalSize(width = 0, height = 0),
-            insetEnd = LogicalSize(width = 0, height = 0),
+            insetStart = LogicalSize.makeWH(width = 0, height = 0),
+            insetEnd = LogicalSize.makeWH(width = 0, height = 0),
         )
 
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
@@ -1694,7 +1719,7 @@ class X11Tests : X11TestsBase() {
             assertEquals(MouseButton.LEFT, event.button)
         }
 
-        moveMouseTo(physicalScreenSize.width - 50, physicalScreenSize.height - 50)
+        moveMouseTo(physicalScreenSize.width - PhysicalPixels(50), physicalScreenSize.height - PhysicalPixels(50))
         withNextEvent { event ->
             assertInstanceOf<Event.MouseExited>(event)
             assertEquals(windowParams.windowId, event.windowId)
@@ -1749,7 +1774,7 @@ class X11Tests : X11TestsBase() {
                         } else if (fullscreenEnterChecklist.checkEntry("resized")) {
                             expectedConfigureEvent = expectedConfigureEvent.copy(size = fullscreenWindowSize)
                             expectedConfigureEvent.assertEquals(event, failMsg())
-                            moveMouseTo(physicalScreenSize.width - 51, physicalScreenSize.height - 51)
+                            moveMouseTo(physicalScreenSize.width - PhysicalPixels(51), physicalScreenSize.height - PhysicalPixels(51))
                         } else {
                             fail(withTimestamp("Unexpected event: $event, ${failMsg()}"))
                         }
@@ -1839,7 +1864,7 @@ class X11Tests : X11TestsBase() {
                         }
                         assertTrue(fullscreenExitChecklist.isChecked("resized"), failMsg())
                         assertEquals(windowParams.windowId, event.windowId, failMsg())
-                        moveMouseTo(physicalScreenSize.width - 52, physicalScreenSize.height - 52)
+                        moveMouseTo(physicalScreenSize.width - PhysicalPixels(52), physicalScreenSize.height - PhysicalPixels(52))
                     }
 
                     else -> {
@@ -1866,9 +1891,9 @@ class X11Tests : X11TestsBase() {
     fun testWindowMinSizeWithInitialMinSize() {
         run(defaultApplicationConfig())
 
-        val minSize = LogicalSize(width = 200, height = 150)
+        val minSize = LogicalSize.makeWH(width = 200, height = 150)
         val windowParams = defaultWindowParams().copy(
-            size = LogicalSize(width = 50, height = 50),
+            size = LogicalSize.makeWH(width = 50, height = 50),
             minSize = minSize,
         )
 
@@ -1880,7 +1905,7 @@ class X11Tests : X11TestsBase() {
             event.active && event.size == minSize
         }
 
-        val newMinSize = LogicalSize(minSize.width + 10, minSize.height + 10)
+        val newMinSize = LogicalSize(minSize.width + LogicalPixelsInt(10), minSize.height + LogicalPixelsInt(10))
         ui { window.setMinSize(newMinSize) }
 
         awaitEventOfType<Event.WindowConfigure> { event ->
@@ -1888,7 +1913,7 @@ class X11Tests : X11TestsBase() {
             event.active && event.size == newMinSize
         }
 
-        val newMinSize2 = LogicalSize(newMinSize.width + 10, newMinSize.height + 10)
+        val newMinSize2 = LogicalSize(newMinSize.width + LogicalPixelsInt(10), newMinSize.height + LogicalPixelsInt(10))
         ui { window.setMinSize(newMinSize2) }
 
         awaitEventOfType<Event.WindowConfigure> { event ->
@@ -1901,16 +1926,16 @@ class X11Tests : X11TestsBase() {
     fun testWindowMinSizeWithInitialMinSizeNewSizeSmaller() {
         run(defaultApplicationConfig())
 
-        val minSize = LogicalSize(width = 200, height = 150)
+        val minSize = LogicalSize.makeWH(width = 200, height = 150)
         val windowParams = defaultWindowParams().copy(
-            size = LogicalSize(width = 50, height = 50),
+            size = LogicalSize.makeWH(width = 50, height = 50),
             minSize = minSize,
         )
 
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
         val window = initialWindowData.window
 
-        val newMinSize = LogicalSize(minSize.width - 10, minSize.height - 10)
+        val newMinSize = LogicalSize(minSize.width - LogicalPixelsInt(10), minSize.height - LogicalPixelsInt(10))
         ui { window.setMinSize(newMinSize) }
         awaitEventOfType<Event.WindowDraw>(msg = "WindowDraw after setMinSize") { true }
 
@@ -1931,12 +1956,12 @@ class X11Tests : X11TestsBase() {
         run(defaultApplicationConfig())
 
         val windowParams = defaultWindowParams().copy(
-            size = LogicalSize(width = 50, height = 50),
+            size = LogicalSize.makeWH(width = 50, height = 50),
         )
 
         val window = createWindowAndWaitForFocus(windowParams).window
 
-        val newMinSize = LogicalSize(150, 90)
+        val newMinSize = LogicalSize.makeWH(150, 90)
         ui { window.setMinSize(newMinSize) }
         awaitEventOfType<Event.WindowDraw>(msg = "WindowDraw after setMinSize") { true }
 
@@ -1956,7 +1981,7 @@ class X11Tests : X11TestsBase() {
         val windowParams = defaultWindowParams()
         val window = createWindowAndWaitForFocus(windowParams).window
 
-        moveMouseTo(physicalScreenSize.width - 100, physicalScreenSize.height - 100)
+        moveMouseTo(physicalScreenSize.width - PhysicalPixels(100), physicalScreenSize.height - PhysicalPixels(100))
         awaitEventOfType<Event.MouseMoved> { event ->
             assertEquals(windowParams.windowId, event.windowId)
             true
@@ -1966,11 +1991,15 @@ class X11Tests : X11TestsBase() {
         val tempDir = Files.createTempDirectory("test_linux_screenshots")
 
         val blank = tempDir.resolve("_blank.png").also {
-            screenshot(it, Pair(PhysicalPoint(0, 0), PhysicalSize(100, 100)), hideCursor = false)
+            screenshot(
+                it,
+                PhysicalRect(x = PhysicalPixels.Zero, y = PhysicalPixels.Zero, width = PhysicalPixels(100), height = PhysicalPixels(100)),
+                hideCursor = false,
+            )
             screenshots.add(it)
         }
 
-        moveMouseTo(50, 50)
+        moveMouseTo(PhysicalPixels(50), PhysicalPixels(50))
         awaitEventOfType<Event.MouseMoved> { event ->
             assertEquals(windowParams.windowId, event.windowId)
             true
@@ -1983,7 +2012,16 @@ class X11Tests : X11TestsBase() {
             tempDir.resolve("$shape.png").also { shapeScreenshotPath ->
                 var retryCount = 20
                 while (retryCount > 0) {
-                    screenshot(shapeScreenshotPath, Pair(PhysicalPoint(0, 0), PhysicalSize(100, 100)), hideCursor = false)
+                    screenshot(
+                        shapeScreenshotPath,
+                        PhysicalRect(
+                            x = PhysicalPixels.Zero,
+                            y = PhysicalPixels.Zero,
+                            width = PhysicalPixels(100),
+                            height = PhysicalPixels(100),
+                        ),
+                        hideCursor = false,
+                    )
                     val same = screenshots.find {
                         val isIdentical = Files.mismatch(shapeScreenshotPath, it) == -1L
                         if (shape == PointerShape.Hidden && it == blank) {
@@ -2092,9 +2130,11 @@ class X11Tests : X11TestsBase() {
     fun testWindowCreationLargeSizeValues() {
         run(defaultApplicationConfig())
 
+        val maxVal = LogicalPixelsUInt(Int.MAX_VALUE.toUInt())
+
         val windowParams = defaultWindowParams().copy(
-            size = LogicalSize(width = Int.MAX_VALUE, height = Int.MAX_VALUE),
-            minSize = LogicalSize(width = Int.MAX_VALUE, height = Int.MAX_VALUE),
+            size = LogicalSize(width = maxVal, height = maxVal),
+            minSize = LogicalSize(width = maxVal, height = maxVal),
         )
         val w = ui { app.createWindow(windowParams) }
 
@@ -2150,9 +2190,9 @@ class X11Tests : X11TestsBase() {
         val window2Params = WindowParams(
             windowId = 1,
             title = "Test Window 2",
-            size = LogicalSize(width = 300, height = 200),
+            size = LogicalSize.makeWH(width = 300, height = 200),
             minSize = null,
-            decorationMode = WindowDecorationMode.CustomTitlebar(40),
+            decorationMode = WindowDecorationMode.CustomTitlebar(LogicalPixelsInt(40)),
             renderingMode = RenderingMode.Auto,
         )
         val window2 = ui { app.createWindow(window2Params) }
@@ -3029,25 +3069,25 @@ text/plain;charset=utf-8
         }
     }
 
-    private fun getExpectedImePopupPositionLogLine(pos: LogicalRect, scale: Double): String {
-        val x = (pos.x * scale).roundToInt()
-        val y = (pos.y * scale).roundToInt()
-        val w = (pos.width * scale).roundToInt()
-        val h = (pos.height * scale).roundToInt()
+    private fun getExpectedImePopupPositionLogLine(pos: LogicalRect, scale: Scale): String {
+        val x = pos.x.toRawPhysical(scale).roundToInt()
+        val y = pos.y.toRawPhysical(scale).roundToInt()
+        val w = pos.width.toRawPhysical(scale).roundToInt()
+        val h = pos.height.toRawPhysical(scale).roundToInt()
         return "do_set_cursor_location: x=$x, y=$y, w=$w, h=$h"
     }
 
     /** Returns `expectedLine` if the actual line is expected, otherwise `actualLine` */
-    private fun checkImePopupPosition(expectedLine: String, actualLine: String?, pos: LogicalRect, scale: Double): String? {
+    private fun checkImePopupPosition(expectedLine: String, actualLine: String?, pos: LogicalRect, scale: Scale): String? {
         return if (actualLine == expectedLine) {
             expectedLine
         } else {
             // Before IBus 1.5.29, the IBus implementation manually adjusted the popup positioning, see
             // https://github.com/ibus/ibus/commit/86d9bb9a1cbd4ffbd6bc2a4de85cb76a43bc2ced#diff-38bdd5907be96a96f7865645bc04415affe87a1a63be05cbc3b01e7bddff6d22L1633
-            val x = (pos.x * scale).roundToInt()
-            val y = ((pos.y + 32) * scale).roundToInt()
-            val w = (50 * scale).roundToInt()
-            val h = (physicalScreenSize.height * scale).roundToInt()
+            val x = pos.x.toRawPhysical(scale).roundToInt()
+            val y = (pos.y + LogicalPixelsInt(32)).toRawPhysical(scale).roundToInt()
+            val w = LogicalPixelsInt(50).toRawPhysical(scale).roundToInt()
+            val h = (physicalScreenSize.height.rawPhysical * scale.rawValue).roundToInt()
             val adjustedExpectedLine = "do_set_cursor_location: x=$x, y=$y, w=$w, h=$h"
             if (actualLine == adjustedExpectedLine) {
                 expectedLine
@@ -3057,7 +3097,7 @@ text/plain;charset=utf-8
         }
     }
 
-    private fun assertImePopupPosition(actualLine: String?, pos: LogicalRect, scale: Double) {
+    private fun assertImePopupPosition(actualLine: String?, pos: LogicalRect, scale: Scale) {
         val expectedLine = getExpectedImePopupPositionLogLine(pos, scale)
         assertEquals(expectedLine, checkImePopupPosition(expectedLine, actualLine, pos, scale))
     }
@@ -3088,12 +3128,13 @@ text/plain;charset=utf-8
             var textInputContext = TextInputContext(
                 hints = setOf(TextInputContextHint.WordCompletion, TextInputContextHint.Spellcheck),
                 contentPurpose = TextInputContentPurpose.Normal,
-                cursorRectangle = LogicalRect(x = 50, y = 20, width = 5, height = 10),
+                cursorRectangle = LogicalRect.makeXYWH(x = 50, y = 20, width = 5, height = 10),
             )
 
             val initialWindowData = createWindowAndWaitForFocus(windowParams)
             val window = initialWindowData.window
             val scale = initialWindowData.scale.newScale
+            val maxValue = floor(Short.MAX_VALUE / scale).roundToInt().toUInt()
             ui { window.textInputEnable(textInputContext) }
 
             assertEquals("do_set_capabilities: ['PREEDIT_TEXT', 'FOCUS', 'SURROUNDING_TEXT']", capsTextOutput.read())
@@ -3136,7 +3177,7 @@ text/plain;charset=utf-8
             textInputContext = textInputContext.copy(
                 contentPurpose = TextInputContentPurpose.Alpha,
                 hints = setOf(TextInputContextHint.Spellcheck),
-                cursorRectangle = LogicalRect(x = 0, y = 0, width = 0, height = 0),
+                cursorRectangle = LogicalRect.makeXYWH(x = 0, y = 0, width = 0, height = 0),
             )
             ui { window.textInputUpdate(textInputContext) }
             assertEquals("do_set_content_type: purpose = ALPHA, hints = ['SPELLCHECK']", contentTypeTextOutput.read(2))
@@ -3145,11 +3186,9 @@ text/plain;charset=utf-8
             textInputContext = textInputContext.copy(
                 contentPurpose = TextInputContentPurpose.Digits,
                 hints = setOf(TextInputContextHint.NoSpellcheck),
-                cursorRectangle = LogicalRect(x = -1, y = -1, width = -1, height = -1),
             )
             ui { window.textInputUpdate(textInputContext) }
             assertEquals("do_set_content_type: purpose = DIGITS, hints = ['NO_SPELLCHECK']", contentTypeTextOutput.read(2))
-            assertImePopupPosition(cursorLocTextOutput.read(), textInputContext.cursorRectangle, scale)
 
             textInputContext = textInputContext.copy(
                 contentPurpose = TextInputContentPurpose.Number,
@@ -3161,7 +3200,7 @@ text/plain;charset=utf-8
             textInputContext = textInputContext.copy(
                 contentPurpose = TextInputContentPurpose.Phone,
                 hints = setOf(TextInputContextHint.UppercaseChars),
-                cursorRectangle = LogicalRect(x = 1000000000, y = 1000000000, width = 1000000000, height = 1000000000),
+                cursorRectangle = LogicalRect.makeXYWH(x = maxValue, y = maxValue, width = maxValue, height = maxValue),
             )
             ui { window.textInputUpdate(textInputContext) }
             assertEquals("do_set_content_type: purpose = PHONE, hints = ['UPPERCASE_CHARS']", contentTypeTextOutput.read(2))
@@ -3175,16 +3214,14 @@ text/plain;charset=utf-8
             textInputContext = textInputContext.copy(
                 contentPurpose = TextInputContentPurpose.Email,
                 hints = setOf(TextInputContextHint.UppercaseSentences),
-                cursorRectangle = LogicalRect(x = -1000000000, y = -1000000000, width = -1000000000, height = -1000000000),
             )
             ui { window.textInputUpdate(textInputContext) }
             assertEquals("do_set_content_type: purpose = EMAIL, hints = ['UPPERCASE_SENTENCES']", contentTypeTextOutput.read(2))
-            assertImePopupPosition(cursorLocTextOutput.read(), textInputContext.cursorRectangle, scale)
 
             textInputContext = textInputContext.copy(
                 contentPurpose = TextInputContentPurpose.Name,
                 hints = setOf(TextInputContextHint.UppercaseWords),
-                cursorRectangle = LogicalRect(x = 1, y = 2, width = 3, height = 4),
+                cursorRectangle = LogicalRect.makeXYWH(x = 1, y = 2, width = 3, height = 4),
             )
             ui { window.textInputUpdate(textInputContext) }
             assertEquals("do_set_content_type: purpose = NAME, hints = ['UPPERCASE_WORDS']", contentTypeTextOutput.read(2))
@@ -3218,7 +3255,7 @@ text/plain;charset=utf-8
             textInputContext = textInputContext.copy(
                 contentPurpose = TextInputContentPurpose.Normal,
                 hints = setOf(TextInputContextHint.VerticalWriting),
-                cursorRectangle = LogicalRect(x = 0, y = 0, width = 0, height = 0),
+                cursorRectangle = LogicalRect.makeXYWH(x = 0, y = 0, width = 0, height = 0),
             )
             ui { window.textInputUpdate(textInputContext) }
             assertEquals("do_set_content_type: purpose = FREE_FORM, hints = ['VERTICAL_WRITING']", contentTypeTextOutput.read(2))
@@ -3248,7 +3285,7 @@ text/plain;charset=utf-8
             val defaultTextInputContext = TextInputContext(
                 hints = emptySet(),
                 contentPurpose = TextInputContentPurpose.Normal,
-                cursorRectangle = LogicalRect(x = 200, y = 100, width = 10, height = 20),
+                cursorRectangle = LogicalRect.makeXYWH(x = 200, y = 100, width = 10, height = 20),
             )
 
             val window = createWindowAndWaitForFocus(windowParams).window
@@ -3946,7 +3983,7 @@ text/plain;charset=utf-8
 
             // Move the mouse to the left part of the screen
             val mouseY = physicalScreenSize.height / 2
-            moveMouseTo((physicalScreenSize.width / 2) - 100, mouseY)
+            moveMouseTo((physicalScreenSize.width / 2) - PhysicalPixels(100), mouseY)
 
             withMouseButtonDown(MouseButton.LEFT) {
                 waitForWindowFocusAfterMouseDown(windowParams.windowId)
@@ -3962,7 +3999,7 @@ text/plain;charset=utf-8
                 awaitEventOfType<Event.MouseExited> { true }
 
                 assertTrue(
-                    wiggleMouseUntil(physicalScreenSize.width - 100, mouseY) {
+                    wiggleMouseUntil(physicalScreenSize.width - PhysicalPixels(100), mouseY) {
                         readTestAppOutputLastLine(10.milliseconds) == "Received DRAG_MOTION event"
                     },
                     "Test app produced a DRAG_MOTION event",
@@ -4022,14 +4059,14 @@ text/plain;charset=utf-8
             waitForTestAppFocus(windowParams.windowId, originalWindowSize)
 
             // Move the mouse to the right part of the screen
-            var mouseX = (physicalScreenSize.width / 2) + 100
+            var mouseX = (physicalScreenSize.width / 2) + PhysicalPixels(100)
             val mouseY = physicalScreenSize.height / 2
             moveMouseTo(mouseX, mouseY)
             withMouseButtonDown(MouseButton.LEFT) {
                 assertEquals("TestAppDragSource drag begin", readTestAppOutputLastLine(5.seconds))
-                moveMouseTo(mouseX + 2, mouseY)
-                moveMouseTo(mouseX + 5, mouseY)
-                mouseX = (physicalScreenSize.width / 2) - 100
+                moveMouseTo(mouseX + PhysicalPixels(2), mouseY)
+                moveMouseTo(mouseX + PhysicalPixels(5), mouseY)
+                mouseX = (physicalScreenSize.width / 2) - PhysicalPixels(100)
                 assertTrue(
                     wiggleMouseUntil(mouseX, mouseY) {
                         !queryDragAndDropTargetTriggered.isEmpty()
@@ -4038,13 +4075,13 @@ text/plain;charset=utf-8
                 )
                 for (data in queryDragAndDropTargetTriggered.drainAll()) {
                     assertEquals(windowParams.windowId, data.windowId)
-                    assertNotEquals(0f, data.locationInWindow.x)
-                    assertNotEquals(0f, data.locationInWindow.y)
+                    assertNotEquals(0.0, data.locationInWindow.x.rawLogical)
+                    assertNotEquals(0.0, data.locationInWindow.y.rawLogical)
                     assertEquals(expectedSourceMimeTypes, data.mimeTypes)
                     assertEquals(setOf(DragAndDropAction.Copy, DragAndDropAction.Move), data.actions)
                 }
 
-                mouseX = (physicalScreenSize.width / 2) + 100
+                mouseX = (physicalScreenSize.width / 2) + PhysicalPixels(100)
                 var dragAndDropLeaveEvent: Event.DragAndDropLeave? = null
                 assertTrue(
                     wiggleMouseUntil(mouseX, mouseY) {
@@ -4061,7 +4098,7 @@ text/plain;charset=utf-8
 //                assertTrue(queryDragAndDropTargetTriggered.isEmpty(), "${queryDragAndDropTargetTriggered.drainAll()}")
                 queryDragAndDropTargetTriggered.clear()
 
-                mouseX = (physicalScreenSize.width / 2) - 100
+                mouseX = (physicalScreenSize.width / 2) - PhysicalPixels(100)
                 assertTrue(
                     wiggleMouseUntil(mouseX, mouseY) {
                         !queryDragAndDropTargetTriggered.isEmpty()
@@ -4072,8 +4109,8 @@ text/plain;charset=utf-8
                 ui {}
                 for (data in queryDragAndDropTargetTriggered.drainAll()) {
                     assertEquals(windowParams.windowId, data.windowId)
-                    assertNotEquals(0f, data.locationInWindow.x)
-                    assertNotEquals(0f, data.locationInWindow.y)
+                    assertNotEquals(0.0, data.locationInWindow.x.rawLogical)
+                    assertNotEquals(0.0, data.locationInWindow.y.rawLogical)
                     assertEquals(listOf(TEXT_UTF8_MIME_TYPE, "text/plain"), data.mimeTypes)
                     assertEquals(setOf(DragAndDropAction.Copy, DragAndDropAction.Move), data.actions)
                 }
@@ -4140,7 +4177,7 @@ text/plain;charset=utf-8
 
             // Move the mouse to the left part of the screen
             val mouseY = physicalScreenSize.height / 2
-            moveMouseTo((physicalScreenSize.width / 2) - 100, mouseY)
+            moveMouseTo((physicalScreenSize.width / 2) - PhysicalPixels(100), mouseY)
 
             awaitEventOfType<Event.MouseMoved> { true }
 
@@ -4158,7 +4195,7 @@ text/plain;charset=utf-8
                 awaitEventOfType<Event.MouseExited> { true }
 
                 assertTrue(
-                    wiggleMouseUntil(physicalScreenSize.width - 100, mouseY) {
+                    wiggleMouseUntil(physicalScreenSize.width - PhysicalPixels(100), mouseY) {
                         readTestAppOutputLastLine(10.milliseconds) == "Received DRAG_MOTION event"
                     },
                     "Test app produced a DRAG_MOTION event",
@@ -4194,8 +4231,8 @@ text/plain;charset=utf-8
 
         val draw: (PhysicalSize, OpenGlDrawData, (Canvas) -> Unit) -> Unit = { size, openGlDrawData, f ->
             SkBackendRenderTarget.makeGL(
-                width = size.width,
-                height = size.height,
+                width = size.width.rawPhysical,
+                height = size.height.rawPhysical,
                 sampleCnt = 1,
                 stencilBits = 0,
                 fbId = openGlDrawData.framebuffer,
@@ -4268,9 +4305,9 @@ text/plain;charset=utf-8
         val windowParams = defaultWindowParams()
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
         val window = initialWindowData.window
-        val scale = initialWindowData.scale.newScale.toFloat()
+        val scale = initialWindowData.scale.newScale.rawValue.toFloat()
 
-        var mouseX = 100
+        var mouseX = PhysicalPixels(100)
         val mouseY = physicalScreenSize.height / 2
         moveMouseTo(mouseX, mouseY)
 
@@ -4284,19 +4321,19 @@ text/plain;charset=utf-8
                         actions = setOf(DragAndDropAction.Copy, DragAndDropAction.Move),
                         dragIconParams = DragIconParams(
                             renderingMode = RenderingMode.GL_ES,
-                            size = LogicalSize(100, 50),
+                            size = LogicalSize.makeWH(100, 50),
                         ),
                     ),
                 )
             }
-            mouseX += 100
+            mouseX += PhysicalPixels(100)
             moveMouseTo(mouseX, mouseY)
             awaitEventOfType<Event.MouseExited> { true }
             waitUntilEq(true) { dragIconDrawTriggered.isNotEmpty() }
 
-            mouseX += 100
+            mouseX += PhysicalPixels(100)
             moveMouseTo(mouseX, mouseY)
-            mouseX += 100
+            mouseX += PhysicalPixels(100)
             moveMouseTo(mouseX, mouseY)
             waitUntilEq(true) { queryDragAndDropTargetTriggered.isNotEmpty() }
         }
@@ -4308,13 +4345,8 @@ text/plain;charset=utf-8
             assertNotNull(content)
             assertEquals(TEXT_UTF8_MIME_TYPE, content.mimeType)
             assertContentEquals(textContent, content.data)
-            assertEquals(
-                LogicalPoint(
-                    x = mouseX / scale,
-                    y = mouseY / scale,
-                ),
-                event.locationInWindow,
-            )
+            assertEquals(LogicalPixels(mouseX.rawPhysical.toDouble() / scale), event.locationInWindow.x)
+            assertEquals(LogicalPixels(mouseY.rawPhysical.toDouble() / scale), event.locationInWindow.y)
             true
         }
         awaitEventOfType<Event.DragAndDropFinished> { event ->
@@ -4340,8 +4372,8 @@ text/plain;charset=utf-8
         withNextEvent { event ->
             assertInstanceOf<Event.ScrollWheel>(event)
             assertEquals(windowParams.windowId, event.windowId)
-            assertEquals(0f, event.scrollingDeltaX)
-            assertEquals(1f, event.scrollingDeltaY)
+            assertEquals(0.0, event.scrollingDeltaX.rawLogical)
+            assertEquals(1.0, event.scrollingDeltaY.rawLogical)
             assertNotEquals(Duration.ZERO, event.timestamp.toDuration())
             assertFalse(event.isStop)
             assertFalse(event.isSmoothScroll)
@@ -4351,8 +4383,8 @@ text/plain;charset=utf-8
         withNextEvent { event ->
             assertInstanceOf<Event.ScrollWheel>(event)
             assertEquals(windowParams.windowId, event.windowId)
-            assertEquals(0f, event.scrollingDeltaX)
-            assertEquals(-1f, event.scrollingDeltaY)
+            assertEquals(0.0, event.scrollingDeltaX.rawLogical)
+            assertEquals(-1.0, event.scrollingDeltaY.rawLogical)
             assertFalse(event.isStop)
             assertFalse(event.isSmoothScroll)
             assertNotEquals(Duration.ZERO, event.timestamp.toDuration())
@@ -4595,8 +4627,8 @@ text/plain;charset=utf-8
     fun testRendering() {
         val backgroundColor = SkColor.BLUE
         val rectColor = SkColor.RED
-        val rectSize = LogicalSize(100, 50)
-        var scale: Float? = null
+        val rectSize = LogicalSize.makeWH(100, 50)
+        var scale: Scale? = null
 
         val directContext: SkDirectContext by lazy {
             val glProcFunc = app.getEglProcFunc()
@@ -4607,8 +4639,8 @@ text/plain;charset=utf-8
 
         val draw: (Event.WindowDraw) -> Unit = { event ->
             SkBackendRenderTarget.makeGL(
-                width = event.size.width,
-                height = event.size.height,
+                width = event.size.width.rawPhysical,
+                height = event.size.height.rawPhysical,
                 sampleCnt = 1,
                 stencilBits = 0,
                 fbId = event.openGlDrawData.framebuffer,
@@ -4627,7 +4659,15 @@ text/plain;charset=utf-8
                     SkPaint().use { paint ->
                         paint.color = rectColor
                         log("Draw window: scale=$scale")
-                        canvas.drawRect(SkRect.makeXYWH(0f, 0f, rectSize.width * scale!!, rectSize.height * scale!!), paint)
+                        canvas.drawRect(
+                            SkRect.makeXYWH(
+                                0f,
+                                0f,
+                                rectSize.width.toRawPhysical(scale!!).toFloat(),
+                                rectSize.height.toRawPhysical(scale!!).toFloat(),
+                            ),
+                            paint,
+                        )
                     }
                     surface.flushAndSubmit()
                 }
@@ -4645,7 +4685,7 @@ text/plain;charset=utf-8
 
         val windowParams = defaultWindowParams()
         val initialWindowData = createWindowAndWaitForFocus(windowParams, onScale = { drawScale ->
-            scale = drawScale.toFloat()
+            scale = drawScale
         })
 
         assertNotNull(scale)
@@ -4658,17 +4698,17 @@ text/plain;charset=utf-8
         screenshot(screenshotPath, windowId = getActiveWindowNumber())
 
         val image = SkImage.makeFromEncoded(screenshotPath.readBytes())
-        assertEquals(initialWindowData.draw.size.width, image.width)
-        assertEquals(initialWindowData.draw.size.height, image.height)
+        assertEquals(initialWindowData.draw.size.width.rawPhysical, image.width)
+        assertEquals(initialWindowData.draw.size.height.rawPhysical, image.height)
         val bitmap = SkBitmap.makeFromImage(image, directContext)
-        assertEquals(initialWindowData.draw.size.width, bitmap.width)
-        assertEquals(initialWindowData.draw.size.height, bitmap.height)
+        assertEquals(initialWindowData.draw.size.width.rawPhysical, bitmap.width)
+        assertEquals(initialWindowData.draw.size.height.rawPhysical, bitmap.height)
 
         val path = screenshotPath.absolutePathString()
 
         val bottomRightRectColor = bitmap.getColor(
-            ((rectSize.width - 1) * scale).roundToInt(),
-            ((rectSize.height - 1) * scale).roundToInt(),
+            ((rectSize.width.rawLogical - 1).toDouble() * scale.rawValue).roundToInt(),
+            ((rectSize.height.rawLogical - 1).toDouble() * scale.rawValue).roundToInt(),
         )
         assertEquals(
             rectColor,

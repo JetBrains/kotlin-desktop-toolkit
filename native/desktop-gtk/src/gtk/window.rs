@@ -7,7 +7,7 @@ use crate::gtk::events::{
     WindowKeyboardEnterEvent, WindowKeyboardLeaveEvent, WindowScaleChangedEvent, WindowScreenChangeEvent,
 };
 use crate::gtk::ffi_return_conversions::{QueryDragAndDropTarget, RetrieveSurroundingText};
-use crate::gtk::geometry::{LogicalRect, LogicalSize, PhysicalSize};
+use crate::gtk::geometry::{LogicalPixelsInt, LogicalRect, LogicalSize, PhysicalSize, Scale};
 use crate::gtk::gl_widget::GlWidget;
 use crate::gtk::keyboard::set_keyboard_event_handlers;
 use crate::gtk::layout_manager_wrapper::LayoutManagerWrapper;
@@ -29,7 +29,12 @@ use std::rc::Rc;
 
 impl From<LogicalRect> for gdk4::Rectangle {
     fn from(value: LogicalRect) -> Self {
-        Self::new(value.x, value.y, value.width, value.height)
+        Self::new(
+            value.x.raw_logical(),
+            value.y.raw_logical(),
+            value.width.raw_logical(),
+            value.height.raw_logical(),
+        )
     }
 }
 
@@ -54,7 +59,7 @@ fn create_gl_widget(
         });
     };
 
-    let on_draw = move |opengl_draw_data: OpenGlDrawData, physical_size: PhysicalSize, _scale: f64| {
+    let on_draw = move |opengl_draw_data: OpenGlDrawData, physical_size: PhysicalSize, _scale: Scale| {
         send_event(
             event_handler,
             WindowDrawEvent {
@@ -98,7 +103,7 @@ impl WindowConfigureEvent {
 
         Self {
             window_id,
-            size: LogicalSize { width, height },
+            size: LogicalSize::wh(width, height),
             active: false,
             maximized,
             fullscreen,
@@ -147,20 +152,20 @@ fn update_window_configure(
         let mut last_configure_event = last_window_configure_event.borrow_mut();
         if f(&mut last_configure_event) {
             let inset_height = last_configure_event.inset_start.height.max(last_configure_event.inset_end.height);
-            if inset_height > 0 {
+            if inset_height.raw_logical() > 0 {
                 last_configure_event.decoration_mode = WindowDecorationMode::CustomTitlebar(inset_height);
             }
             let mut value = last_configure_event.clone();
-            if value.size.width == 0 || value.size.height == 0 {
+            if value.size.validate().is_none() {
                 None
             } else {
                 if value.fullscreen {
                     value.inset_start = LogicalSize {
-                        width: 0,
+                        width: LogicalPixelsInt::new(0),
                         height: inset_height,
                     };
                     value.inset_end = LogicalSize {
-                        width: 0,
+                        width: LogicalPixelsInt::new(0),
                         height: inset_height,
                     };
                 }
@@ -194,7 +199,7 @@ fn on_realize(
     let scale = window.scale_factor();
     let scale_event = WindowScaleChangedEvent {
         window_id,
-        new_scale: scale.into(),
+        new_scale: Scale::new(scale),
     };
     send_event(event_handler, scale_event);
 
@@ -235,7 +240,7 @@ fn on_realize(
 
 fn set_custom_titlebar(
     window: &gtk4::ApplicationWindow,
-    height: i32,
+    height: LogicalPixelsInt,
     event_handler: EventHandler,
     overlay: gtk4::Overlay,
     last_window_configure_event: &Rc<RefCell<WindowConfigureEvent>>,
@@ -278,7 +283,7 @@ fn set_custom_titlebar(
     titlebar_layout.set_end_widget(Some(&window_controls_end));
     overlay_controls.push(window_controls_start.upcast());
     overlay_controls.push(window_controls_end.upcast());
-    titlebar_layout.set_size_request(height, height);
+    titlebar_layout.set_size_request(height.raw_logical(), height.raw_logical());
 
     let window_handle = gtk4::WindowHandle::builder().child(&titlebar_layout).build();
     window_handle.set_valign(gtk4::Align::Start);
@@ -320,8 +325,8 @@ impl SimpleWindow {
         let mut window_builder = gtk4::ApplicationWindow::builder()
             .application(gtk_application)
             .resizable(true)
-            .default_width(size.width)
-            .default_height(size.height);
+            .default_width(size.width.raw_logical())
+            .default_height(size.height.raw_logical());
         if let Some(title) = title {
             window_builder = window_builder.title(title);
         }
@@ -384,7 +389,7 @@ impl SimpleWindow {
             let scale = window.scale_factor();
             let event = WindowScaleChangedEvent {
                 window_id,
-                new_scale: f64::from(scale),
+                new_scale: Scale::new(scale),
             };
             send_event(event_handler, event);
         });
@@ -475,7 +480,7 @@ impl SimpleWindow {
 
     pub fn set_min_size(&self, size: LogicalSize) {
         if let Some(gl_widget) = self.gl_widget.upgrade() {
-            gl_widget.set_size_request(size.width, size.height);
+            gl_widget.set_size_request(size.width.raw_logical(), size.height.raw_logical());
         }
     }
 

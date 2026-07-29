@@ -25,8 +25,8 @@ internal fun performOpenGlDrawing(
     draw: (Surface) -> Boolean,
 ): Boolean {
     return BackendRenderTarget.makeGL(
-        width = size.width,
-        height = size.height,
+        width = size.width.rawPhysical,
+        height = size.height.rawPhysical,
         sampleCnt = 1,
         stencilBits = 0,
         fbId = framebuffer,
@@ -56,10 +56,10 @@ abstract class SkikoWindowGtk(
     private val creationTime = TimeSource.Monotonic.markNow()
     private val renderingMode = params.renderingMode
 
-    fun performDrawing(event: Event.WindowDraw, scale: Double): Boolean {
+    fun performDrawing(event: Event.WindowDraw): Boolean {
         val draw = { surface: Surface ->
             val time = creationTime.elapsedNow().inWholeMilliseconds
-            surface.canvas.draw(event.size, scale, time)
+            surface.canvas.draw(event.size, time)
             surface.flushAndSubmit()
             true
         }
@@ -71,7 +71,7 @@ abstract class SkikoWindowGtk(
         return performOpenGlDrawing(framebuffer = event.openGlDrawData.framebuffer, event.size, SurfaceOrigin.TOP_LEFT, directContext, draw)
     }
 
-    abstract fun Canvas.draw(size: PhysicalSize, scale: Double, time: Long)
+    abstract fun Canvas.draw(size: PhysicalSize, time: Long)
 
     override fun close() {
         window.close()
