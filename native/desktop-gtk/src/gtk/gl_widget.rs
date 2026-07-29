@@ -209,7 +209,7 @@ impl gtk4::subclass::widget::WidgetImpl for GlWidgetImpl {
 
         let gl = GlFuncs::new();
 
-        let scale = f64::from(surface.scale_factor());
+        let scale = f64::from(obj.scale_factor());
         let logical_size = LogicalSize {
             width: obj.width(),
             height: obj.height(),

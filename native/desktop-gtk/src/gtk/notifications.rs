@@ -1,7 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use anyhow::anyhow;
-use gdk4::prelude::{CancellableExt, DBusProxyExt};
+use gdk4::prelude::DBusProxyExt;
 use gdk4::subclass::prelude::{ObjectSubclassExt, ObjectSubclassIsExt};
 use gdk4::{gio, glib};
 use gtk4::gdk as gdk4;
@@ -279,13 +279,6 @@ enum NotificationsServiceState {
     Ready(DBusNotifications),
 }
 
-impl Drop for Notifications {
-    fn drop(&mut self) {
-        debug!("NotificationsState::drop");
-        self.cancellable.cancel();
-    }
-}
-
 pub struct Notifications {
     state: Rc<RefCell<NotificationsServiceState>>,
     cancellable: gio::Cancellable,
@@ -293,13 +286,11 @@ pub struct Notifications {
 }
 
 impl Notifications {
-    pub fn new(on_notification_interaction: impl Fn(NotificationData) + Clone + 'static) -> Self {
+    pub fn new(cancellable: gio::Cancellable, on_notification_interaction: impl Fn(NotificationData) + Clone + 'static) -> Self {
         let state = Rc::new(RefCell::new(NotificationsServiceState::Pending(PendingNotificationService {
             actions: Vec::new(),
             should_try_connecting: true,
         })));
-
-        let cancellable = gio::Cancellable::new();
 
         Self {
             state,
