@@ -292,12 +292,10 @@ pub extern "C" fn application_request_show_notification(
 ) -> RequestId {
     debug!("application_show_notification");
     ffi_boundary("application_show_notification", || {
-        let summary = title.get("application_show_notification: title")?.to_owned();
-        let body = body.get("application_show_notification: body")?.to_owned();
-        let sound_file_path_opt = sound_file_path
-            .get_optional("application_show_notification: sound_file_path")?
-            .map(ToOwned::to_owned);
-        with_app_state(|app| app.request_show_notification(summary, body, sound_file_path_opt))
+        let summary = title.get("application_show_notification: title")?;
+        let body = body.get("application_show_notification: body")?;
+        let sound_file_path_opt = sound_file_path.get_optional("application_show_notification: sound_file_path")?;
+        with_app_state(|app| Ok(app.request_show_notification(summary, body, sound_file_path_opt)))
     })
 }
 
@@ -305,7 +303,10 @@ pub extern "C" fn application_request_show_notification(
 pub extern "C" fn application_close_notification(notification_id: u32) {
     debug!("application_close_notification");
     ffi_boundary("application_close_notification", || {
-        with_app_state(|app| app.request_close_notification(notification_id))
+        with_app_state(|app| {
+            app.request_close_notification(notification_id);
+            Ok(())
+        })
     });
 }
 

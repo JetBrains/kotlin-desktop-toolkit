@@ -19,7 +19,6 @@ log.workspace = true
 desktop-common = { path = "../desktop-common" }
 
 [target.'cfg(target_os="linux")'.dependencies]
-async-channel = "2.5.0"
 bitflag-attr = "0.14.0"
 keycode = "1.0.0"
 khronos-egl = { version = "6.0.0", features = ["dynamic"] }
