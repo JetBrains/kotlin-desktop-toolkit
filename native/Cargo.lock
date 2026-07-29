@@ -480,6 +480,7 @@ dependencies = [
  "khronos-egl",
  "log",
  "log4rs",
+ "skia-safe",
  "smithay-client-toolkit",
  "tempfile",
  "tiny_http",

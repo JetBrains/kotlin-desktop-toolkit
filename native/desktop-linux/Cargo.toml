@@ -10,6 +10,9 @@ name = "desktop_linux"
 [lints]
 workspace = true
 
+[features]
+skia = ['dep:skia-safe']
+
 [dependencies]
 anyhow.workspace = true
 log.workspace = true
@@ -25,6 +28,7 @@ wayland-egl = "0.32.9"
 khronos-egl = { version = "6.0.0", features = ["dynamic"] }
 tokio = { version = "1.49.0", features = ["rt-multi-thread"] }
 zbus = { version = "5.12.0", default-features = false, features = ["tokio"] }
+skia-safe = { optional = true, version = "0.99.0", default-features = true, features = ["gl"] }
 
 [target.'cfg(target_os="linux")'.dependencies.calloop]
 version = "*"
