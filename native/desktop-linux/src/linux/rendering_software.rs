@@ -23,19 +23,26 @@ struct SoftwareBuffer<'a> {
 }
 
 impl SoftwareRendering {
-    /// cbindgen:ignore
-    const BYTES_PER_PIXEL: i32 = 4;
+    fn size_to_stride(size: PhysicalSize) -> anyhow::Result<i32> {
+        const BYTES_PER_PIXEL: i32 = 4;
+        size.width.raw_physical().checked_mul(BYTES_PER_PIXEL).context("stride")
+    }
 
     fn create_buffer(pool: &mut SlotPool, size: PhysicalSize) -> anyhow::Result<SoftwareBuffer<'_>> {
-        let stride = size.width.0.checked_mul(Self::BYTES_PER_PIXEL).context("stride")?;
-        let (buffer, canvas) = pool.create_buffer(size.width.0, size.height.0, stride, wl_shm::Format::Argb8888)?;
+        let stride = Self::size_to_stride(size)?;
+        let (buffer, canvas) = pool.create_buffer(
+            size.width.raw_physical(),
+            size.height.raw_physical(),
+            stride,
+            wl_shm::Format::Argb8888,
+        )?;
         Ok(SoftwareBuffer { buffer, canvas })
     }
 
     pub fn new(shm: &Shm, size: PhysicalSize) -> anyhow::Result<Self> {
-        let stride = size.width.0.checked_mul(Self::BYTES_PER_PIXEL).context("stride")?;
+        let stride = Self::size_to_stride(size)?;
         let mut pool = SlotPool::new(
-            usize::try_from(stride)? * usize::try_from(size.height.0)? * 2, // double buffered
+            usize::try_from(stride * size.height.raw_physical() * 2)?, // double buffered
             shm,
         )?;
         let buffer = Self::create_buffer(&mut pool, size)?.buffer;
@@ -43,8 +50,8 @@ impl SoftwareRendering {
     }
 
     pub fn resize(&mut self, shm: &Shm, size: PhysicalSize) -> anyhow::Result<()> {
-        let stride = size.width.0.checked_mul(Self::BYTES_PER_PIXEL).context("stride")?;
-        if self.buffer.height() != size.height.0 || self.buffer.stride() != stride {
+        let stride = Self::size_to_stride(size)?;
+        if self.buffer.height() != size.height.raw_physical() || self.buffer.stride() != stride {
             *self = Self::new(shm, size)?;
         }
         Ok(())

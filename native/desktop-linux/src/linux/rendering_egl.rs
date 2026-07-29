@@ -40,7 +40,7 @@ impl EglRendering {
         let egl = &egl_data.instance;
         let egl_display = egl_data.display;
 
-        let wl_egl_surface = WlEglSurface::new(surface.id(), size.width.0, size.height.0)
+        let wl_egl_surface = WlEglSurface::new(surface.id(), size.width.raw_physical(), size.height.raw_physical())
             .with_context(|| format!("WlEglSurface::new (surface.id() = {})", surface.id()))?;
 
         let egl_attributes = [
@@ -84,7 +84,8 @@ impl EglRendering {
     }
 
     pub fn resize(&self, size: PhysicalSize) {
-        self.wl_egl_surface.resize(size.width.0, size.height.0, 0, 0);
+        self.wl_egl_surface
+            .resize(size.width.raw_physical(), size.height.raw_physical(), 0, 0);
     }
 
     pub fn draw<F>(&self, surface: &WlSurface, do_draw: F)

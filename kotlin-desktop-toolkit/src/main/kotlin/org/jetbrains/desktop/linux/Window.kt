@@ -11,7 +11,7 @@ public class DragIconParams(
     public val size: LogicalSize,
 ) {
     init {
-        require(size.width > 0 && size.height > 0) {
+        require(size.width.rawLogical > 0 && size.height.rawLogical > 0) {
             "Invalid size (both width and height must be greater than zero)"
         }
     }

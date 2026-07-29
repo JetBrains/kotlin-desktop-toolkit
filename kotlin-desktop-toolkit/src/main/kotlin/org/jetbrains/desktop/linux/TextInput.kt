@@ -1,25 +1,34 @@
 package org.jetbrains.desktop.linux
 
-@ConsistentCopyVisibility
-public data class TextInputPreeditStringData internal constructor(
+public class TextInputPreeditStringData internal constructor(
     public val text: String?,
     public val cursorBeginBytePos: Int,
     public val cursorEndBytePos: Int,
 ) {
-    internal companion object
+    internal companion object;
+
+    override fun toString(): String {
+        return "TextInputPreeditStringData(text=$text, cursorBeginBytePos=$cursorBeginBytePos, cursorEndBytePos=$cursorEndBytePos)"
+    }
 }
 
-@ConsistentCopyVisibility
-public data class TextInputCommitStringData internal constructor(public val text: String?) {
-    internal companion object
+public class TextInputCommitStringData internal constructor(public val text: String?) {
+    internal companion object;
+
+    override fun toString(): String {
+        return "TextInputCommitStringData(text=$text)"
+    }
 }
 
-@ConsistentCopyVisibility
-public data class TextInputDeleteSurroundingTextData internal constructor(
+public class TextInputDeleteSurroundingTextData internal constructor(
     public val beforeLengthInBytes: UInt,
     public val afterLengthInBytes: UInt,
 ) {
-    internal companion object
+    internal companion object;
+
+    override fun toString(): String {
+        return "TextInputDeleteSurroundingTextData(beforeLengthInBytes=$beforeLengthInBytes, afterLengthInBytes=$afterLengthInBytes)"
+    }
 }
 
 public enum class TextInputContentHint {

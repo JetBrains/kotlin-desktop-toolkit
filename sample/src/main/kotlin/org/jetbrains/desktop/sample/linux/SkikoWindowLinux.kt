@@ -24,8 +24,8 @@ import kotlin.time.TimeSource
 internal fun performSoftwareDrawing(size: PhysicalSize, softwareDrawData: SoftwareDrawData, draw: (Surface) -> Boolean): Boolean {
     return Surface.makeRasterDirect(
         imageInfo = ImageInfo(
-            width = size.width,
-            height = size.height,
+            width = size.width.rawPhysical,
+            height = size.height.rawPhysical,
             colorType = ColorType.BGRA_8888,
             alphaType = ColorAlphaType.OPAQUE,
             colorSpace = ColorSpace.sRGB,
@@ -38,8 +38,8 @@ internal fun performSoftwareDrawing(size: PhysicalSize, softwareDrawData: Softwa
 
 internal fun performOpenGlDrawing(size: PhysicalSize, context: DirectContext, draw: (Surface) -> Boolean): Boolean {
     return BackendRenderTarget.makeGL(
-        width = size.width,
-        height = size.height,
+        width = size.width.rawPhysical,
+        height = size.height.rawPhysical,
         sampleCnt = 1,
         stencilBits = 8,
         fbId = 0,
@@ -69,7 +69,7 @@ abstract class SkikoWindowLinux(
     private val creationTime = TimeSource.Monotonic.markNow()
 
     init {
-        window.setMinSize(LogicalSize(320, 240))
+        window.setMinSize(LogicalSize.makeWH(320, 240))
     }
 
     fun performDrawing(event: Event.WindowDraw): Boolean {

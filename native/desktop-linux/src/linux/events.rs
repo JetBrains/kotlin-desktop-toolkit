@@ -1,10 +1,9 @@
 use crate::linux::{
     application_api::{DataSource, DragAndDropAction},
     desktop_settings_api::FfiDesktopSetting,
-    geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize},
+    geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize, Scale},
 };
 use bitflag_attr::bitflag;
-use core::f64;
 use desktop_common::ffi_utils::BorrowedUtf8;
 use desktop_common::{ffi_utils::BorrowedArray, logger::PanicDefault};
 use std::ffi::c_int;
@@ -495,7 +494,6 @@ pub struct WindowDrawEvent {
     pub window_id: WindowId,
     pub software_draw_data: SoftwareDrawData,
     pub physical_size: PhysicalSize,
-    pub scale: f64,
 }
 
 impl From<WindowDrawEvent> for Event<'_> {
@@ -509,7 +507,7 @@ impl From<WindowDrawEvent> for Event<'_> {
 pub struct DragIconDrawEvent {
     pub software_draw_data: SoftwareDrawData,
     pub physical_size: PhysicalSize,
-    pub scale: f64,
+    pub scale: Scale,
 }
 
 impl From<DragIconDrawEvent> for Event<'_> {
@@ -558,7 +556,7 @@ impl From<WindowKeyboardLeaveEvent> for Event<'_> {
 #[derive(Debug)]
 pub struct WindowScaleChangedEvent {
     pub window_id: WindowId,
-    pub new_scale: f64,
+    pub new_scale: Scale,
 }
 
 impl From<WindowScaleChangedEvent> for Event<'_> {

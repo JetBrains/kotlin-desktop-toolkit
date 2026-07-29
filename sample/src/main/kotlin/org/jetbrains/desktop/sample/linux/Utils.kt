@@ -2,9 +2,11 @@ package org.jetbrains.desktop.sample.linux
 
 import org.jetbrains.desktop.linux.Logger
 import org.jetbrains.desktop.linux.LogicalPixels
+import org.jetbrains.desktop.linux.LogicalPixelsInt
 import org.jetbrains.desktop.linux.LogicalPoint
 import org.jetbrains.desktop.linux.LogicalRect
 import org.jetbrains.desktop.linux.LogicalSize
+import org.jetbrains.desktop.linux.Scale
 import org.jetbrains.skia.Color
 import org.jetbrains.skia.FontMgr
 import org.jetbrains.skia.FontStyle
@@ -113,15 +115,15 @@ internal class TextLineCreator {
     }
 }
 
-internal fun Paragraph.toLogicalSize(scale: Double): LogicalSize {
-    return LogicalSize(
-        width = ceil(maxIntrinsicWidth).toLogicalPixels(scale).roundToInt(),
-        height = ceil(height).toLogicalPixels(scale).roundToInt(),
-    )
+internal fun LogicalPixels.round(): LogicalPixelsInt {
+    return LogicalPixelsInt(rawLogical.roundToInt())
 }
 
-internal fun Float.toLogicalPixels(scale: Double): LogicalPixels {
-    return this / scale
+internal fun Paragraph.toLogicalSize(scale: Scale): LogicalSize {
+    return LogicalSize(
+        width = scale.rawPhysicalToLogical(ceil(maxIntrinsicWidth).toDouble()).round(),
+        height = scale.rawPhysicalToLogical(ceil(height).toDouble()).round(),
+    )
 }
 
 internal data class LogicalDoubleRect(
@@ -131,7 +133,7 @@ internal data class LogicalDoubleRect(
     val height: LogicalPixels,
 ) {
     companion object {
-        val Zero = LogicalDoubleRect(0.0, 0.0, 0.0, 0.0)
+        val Zero = LogicalDoubleRect(LogicalPixels.Zero, LogicalPixels.Zero, LogicalPixels.Zero, LogicalPixels.Zero)
     }
     fun contains(p: LogicalPoint): Boolean {
         return p.x > x &&
@@ -140,17 +142,25 @@ internal data class LogicalDoubleRect(
             p.y < (y + height)
     }
 
-    internal fun toSkiko(scale: Double): Rect {
-        return Rect.makeXYWH((x * scale).toFloat(), (y * scale).toFloat(), (width * scale).toFloat(), (height * scale).toFloat())
+    internal fun toSkiko(scale: Scale): Rect {
+        return Rect.makeXYWH(x.toSkiko(scale), y.toSkiko(scale), width.toSkiko(scale), height.toSkiko(scale))
     }
 
     internal fun round(): LogicalRect {
-        return LogicalRect(x.roundToInt(), y.roundToInt(), width.roundToInt(), height.roundToInt())
+        return LogicalRect(x.round(), y.round(), width.round(), height.round())
     }
 }
 
-internal fun LogicalPixels.toSkiko(scale: Double): Float {
-    return (this * scale).toFloat()
+internal fun LogicalPixels.toSkiko(scale: Scale): Float {
+    return this.toRawPhysical(scale).toFloat()
+}
+
+internal fun LogicalPixelsInt.toSkiko(scale: Scale): Float {
+    return this.toRawPhysical(scale).toFloat()
+}
+
+internal fun LogicalRect.toSkiko(scale: Scale): Rect {
+    return Rect.makeXYWH(x.toSkiko(scale), y.toSkiko(scale), width.toSkiko(scale), height.toSkiko(scale))
 }
 
 internal data class StringBuilderCharacterIterator(private val text: StringBuilder) : CharacterIterator {

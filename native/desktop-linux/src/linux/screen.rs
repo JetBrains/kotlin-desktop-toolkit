@@ -4,7 +4,7 @@ use smithay_client_toolkit::output::{Mode, OutputInfo};
 use crate::linux::{
     application::Application,
     application_api::AppPtr,
-    geometry::{LogicalPoint, LogicalSize},
+    geometry::{LogicalPixelsInt, LogicalPoint, LogicalSize},
 };
 
 pub type ScreenId = u32;
@@ -35,12 +35,15 @@ impl ScreenInfo {
             name: info
                 .name
                 .map_or_else(AutoDropArray::null, |s| AutoDropArray::new(s.into_bytes().into())),
-            origin: info.logical_position.map(Into::into).unwrap_or_default(),
+            origin: info
+                .logical_position
+                .map(|(x, y)| LogicalPoint::new((x.into(), y.into())))
+                .unwrap_or_default(),
             size: info
                 .logical_size
                 .map(|size| LogicalSize {
-                    width: u32::try_from(size.0).unwrap(),
-                    height: u32::try_from(size.1).unwrap(),
+                    width: LogicalPixelsInt::new(size.0),
+                    height: LogicalPixelsInt::new(size.1),
                 })
                 .unwrap_or_default(),
             maximum_frames_per_second: current_mode.map(Self::get_refresh_rate_fps).unwrap_or_default(),

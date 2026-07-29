@@ -19,6 +19,7 @@ use crate::linux::{
         WindowScreenChangeEvent,
         //
     },
+    geometry::Scale,
     keyboard::send_key_down_event,
     text_input::PendingTextInputEvent,
     window::SimpleWindow,
@@ -434,7 +435,7 @@ impl CompositorHandler for ApplicationState {
         if self.fractional_scale_manager.is_some() {
             return;
         }
-        let new_scale: f64 = f64::from(new_factor);
+        let new_scale = Scale::from_scale_factor(new_factor);
         if let Some(window) = self.windows.get_mut(&surface.id()) {
             window.scale_changed(new_scale, &self.shm_state);
 
@@ -550,22 +551,22 @@ impl Dispatch<WpFractionalScaleV1, ObjectId> for ApplicationState {
         _: &QueueHandle<Self>,
     ) {
         if let wp_fractional_scale_v1::Event::PreferredScale { scale } = event {
-            let new_scale = f64::from(scale) / 120.0;
-            debug!("wp_fractional_scale_v1::Event::PreferredScale: {scale}/120 ({new_scale})");
+            let scale = Scale::from_value120(scale);
+            debug!("wp_fractional_scale_v1::Event::PreferredScale: {scale:?}");
             if let Some(window) = state.windows.get_mut(surface_id) {
-                window.scale_changed(new_scale, &state.shm_state);
+                window.scale_changed(scale, &state.shm_state);
 
                 _ = send_event(
                     state.callbacks.event_handler,
                     WindowScaleChangedEvent {
                         window_id: window.window_id,
-                        new_scale,
+                        new_scale: scale,
                     },
                 );
             } else if let Some(drag_icon) = &mut state.drag_icon
                 && drag_icon.surface.wl_surface().id() == *surface_id
             {
-                drag_icon.scale_changed(new_scale, &state.shm_state);
+                drag_icon.scale_changed(scale, &state.shm_state);
             }
         }
     }

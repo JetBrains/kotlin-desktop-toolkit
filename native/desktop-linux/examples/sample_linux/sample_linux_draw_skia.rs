@@ -1,6 +1,6 @@
 use crate::sample_linux::{DRAG_AND_DROP_LEFT_OF, Drawable, WindowState};
 use desktop_linux::linux::application_api::{AppPtr, application_get_egl_proc_func};
-use desktop_linux::linux::geometry::PhysicalSize;
+use desktop_linux::linux::geometry::{LogicalPixelsInt, PhysicalSize, Scale};
 use skia_safe::gpu::ganesh::gl::{backend_render_targets, direct_contexts};
 use skia_safe::gpu::gl::{Format, FramebufferInfo, Interface};
 use skia_safe::gpu::{DirectContext, SurfaceOrigin, surfaces};
@@ -21,9 +21,9 @@ impl SkiaOpenglState {
     }
 }
 
-#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-fn scaled(v: f64, scale: f64) -> f32 {
-    (v * scale) as f32
+#[allow(clippy::cast_possible_truncation)]
+fn scaled(v: LogicalPixelsInt, scale: Scale) -> f32 {
+    v.to_raw_physical(scale) as f32
 }
 
 impl Drawable for SkiaOpenglState {
@@ -34,8 +34,12 @@ impl Drawable for SkiaOpenglState {
         let direct_context = &mut self.direct_context;
         let mut framebuffer_info = FramebufferInfo::from_fboid(self.fb);
         framebuffer_info.format = Format::RGBA8.into();
-        let backend_render_target =
-            backend_render_targets::make_gl((physical_size.width.0, physical_size.height.0), 1, 0, framebuffer_info);
+        let backend_render_target = backend_render_targets::make_gl(
+            (physical_size.width.raw_physical(), physical_size.height.raw_physical()),
+            1,
+            0,
+            framebuffer_info,
+        );
         let mut surface = surfaces::wrap_backend_render_target(
             direct_context,
             &backend_render_target,
@@ -56,13 +60,13 @@ impl Drawable for SkiaOpenglState {
         canvas.clear(background_color);
 
         #[allow(clippy::cast_precision_loss)]
-        let w = physical_size.width.0 as f32;
+        let w = physical_size.width.raw_physical() as f32;
         #[allow(clippy::cast_precision_loss)]
-        let h = physical_size.height.0 as f32;
+        let h = physical_size.height.raw_physical() as f32;
 
-        let line_thickness = scaled(2., scale);
+        let line_thickness = scaled(LogicalPixelsInt::new(2), scale);
         let drag_and_drop_left_of = scaled(DRAG_AND_DROP_LEFT_OF, scale);
-        let drag_source_indicator_height = scaled(100., scale);
+        let drag_source_indicator_height = scaled(LogicalPixelsInt::new(100), scale);
 
         {
             let mut paint = Paint::new(colors::BLACK, None);

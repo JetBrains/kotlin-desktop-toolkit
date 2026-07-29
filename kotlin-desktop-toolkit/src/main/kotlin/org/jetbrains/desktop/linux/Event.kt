@@ -55,14 +55,17 @@ public class DataTransferContent(
     }
 }
 
-@ConsistentCopyVisibility
-public data class DragAndDropQueryData internal constructor(
+public class DragAndDropQueryData internal constructor(
     public val windowId: WindowId,
     public val locationInWindow: LogicalPoint,
     public val mimeTypes: List<String>,
     public val actions: Set<DragAndDropAction>,
 ) {
     internal companion object;
+
+    override fun toString(): String {
+        return "DragAndDropQueryData(windowId=$windowId, locationInWindow=$locationInWindow, mimeTypes=$mimeTypes, actions=$actions)"
+    }
 }
 
 public enum class DragAndDropAction {
@@ -179,7 +182,7 @@ public sealed class Event {
     public data class DragIconDraw internal constructor(
         val softwareDrawData: SoftwareDrawData?,
         val size: PhysicalSize,
-        val scale: Double,
+        val scale: Scale,
     ) : Event()
 
     @ConsistentCopyVisibility
@@ -345,13 +348,12 @@ public sealed class Event {
         val windowId: WindowId,
         val softwareDrawData: SoftwareDrawData?,
         val size: PhysicalSize,
-        val scale: Double,
     ) : Event()
 
     @ConsistentCopyVisibility
     public data class WindowScaleChanged internal constructor(
         val windowId: WindowId,
-        val newScale: Double,
+        val newScale: Scale,
     ) : Event()
 
     @ConsistentCopyVisibility
