@@ -1,10 +1,10 @@
+use crate::gtk::geometry::{LogicalPixelsInt, Scale};
 use crate::gtk::{
     data_transfer_api::{DataSource, DragAndDropAction},
     desktop_settings_api::FfiDesktopSetting,
     geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize},
 };
 use bitflag_attr::bitflag;
-use core::f64;
 use desktop_common::ffi_utils::{BorrowedArray, BorrowedUtf8};
 use desktop_common::logger::PanicDefault;
 use std::ffi::c_int;
@@ -68,12 +68,12 @@ pub enum KeyModifiers {
 pub struct KeyCode(pub u32);
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum WindowDecorationMode {
     /// The server will draw window decorations.
     Server,
 
-    CustomTitlebar(i32),
+    CustomTitlebar(LogicalPixelsInt),
 }
 
 #[repr(C)]
@@ -438,15 +438,15 @@ impl TryFrom<WindowConfigureEvent> for Event<'_> {
     type Error = ();
 
     fn try_from(mut value: WindowConfigureEvent) -> Result<Self, Self::Error> {
-        if value.size.width == 0 || value.size.height == 0 {
+        if value.size.validate().is_none() {
             Err(())
         } else {
             if value.decoration_mode != WindowDecorationMode::Server {
                 value.decoration_mode = WindowDecorationMode::CustomTitlebar(value.inset_start.height.max(value.inset_end.height));
             }
             if value.fullscreen {
-                value.inset_start = LogicalSize { width: 0, height: 0 };
-                value.inset_end = LogicalSize { width: 0, height: 0 };
+                value.inset_start = LogicalSize::wh(0, 0);
+                value.inset_end = LogicalSize::wh(0, 0);
             }
             Ok(Self::WindowConfigure(value))
         }
@@ -492,7 +492,7 @@ impl From<WindowDrawEvent> for Event<'_> {
 pub struct DragIconDrawEvent {
     pub opengl_draw_data: OpenGlDrawData,
     pub physical_size: PhysicalSize,
-    pub scale: f64,
+    pub scale: Scale,
 }
 
 impl From<DragIconDrawEvent> for Event<'_> {
@@ -529,7 +529,7 @@ impl From<WindowKeyboardLeaveEvent> for Event<'_> {
 #[derive(Debug)]
 pub struct WindowScaleChangedEvent {
     pub window_id: WindowId,
-    pub new_scale: f64,
+    pub new_scale: Scale,
 }
 
 impl From<WindowScaleChangedEvent> for Event<'_> {

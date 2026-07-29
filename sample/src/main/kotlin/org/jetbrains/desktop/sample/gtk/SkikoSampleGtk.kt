@@ -21,15 +21,17 @@ import org.jetbrains.desktop.gtk.KeyModifiers
 import org.jetbrains.desktop.gtk.KotlinDesktopToolkit
 import org.jetbrains.desktop.gtk.LogLevel
 import org.jetbrains.desktop.gtk.Logger
+import org.jetbrains.desktop.gtk.LogicalPixels
+import org.jetbrains.desktop.gtk.LogicalPixelsInt
 import org.jetbrains.desktop.gtk.LogicalPoint
 import org.jetbrains.desktop.gtk.LogicalRect
 import org.jetbrains.desktop.gtk.LogicalSize
 import org.jetbrains.desktop.gtk.MouseButton
-import org.jetbrains.desktop.gtk.PhysicalPoint
 import org.jetbrains.desktop.gtk.PhysicalSize
 import org.jetbrains.desktop.gtk.PointerShape
 import org.jetbrains.desktop.gtk.RenderingMode
 import org.jetbrains.desktop.gtk.RequestId
+import org.jetbrains.desktop.gtk.Scale
 import org.jetbrains.desktop.gtk.ShowNotificationParams
 import org.jetbrains.desktop.gtk.StartDragAndDropParams
 import org.jetbrains.desktop.gtk.SupportedActionsForMime
@@ -58,7 +60,6 @@ import org.jetbrains.skia.Surface
 import org.jetbrains.skia.SurfaceOrigin
 import org.jetbrains.skia.TextLine
 import org.jetbrains.skia.makeGLWithInterface
-import org.jetbrains.skia.paragraph.Paragraph
 import org.jetbrains.skia.paragraph.RectHeightMode
 import org.jetbrains.skia.paragraph.RectWidthMode
 import org.jetbrains.skia.paragraph.TextStyle
@@ -68,8 +69,6 @@ import java.text.BreakIterator
 import kotlin.Array
 import kotlin.Boolean
 import kotlin.ByteArray
-import kotlin.Double
-import kotlin.Float
 import kotlin.Int
 import kotlin.Long
 import kotlin.Pair
@@ -84,9 +83,7 @@ import kotlin.error
 import kotlin.io.path.Path
 import kotlin.let
 import kotlin.math.PI
-import kotlin.math.ceil
 import kotlin.math.cos
-import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.run
 import kotlin.time.Duration.Companion.seconds
@@ -98,7 +95,6 @@ import kotlin.use
 const val TEXT_MIME_TYPE = "text/plain;charset=utf-8"
 const val URI_LIST_MIME_TYPE = "text/uri-list"
 const val PNG_MIME_TYPE = "image/png"
-const val TEXT_TOP_OFFSET = 200f
 
 // TODO
 val EXAMPLE_FILES: List<String> = listOf(
@@ -174,7 +170,7 @@ private interface ClipboardHandler {
     fun copyToPrimarySelection(content: DataTransferContentType)
     fun paste(supportedMimeTypes: List<String>, windowId: WindowId)
     fun pasteFromPrimarySelection(supportedMimeTypes: List<String>, windowId: WindowId)
-    fun startDrag(content: DataTransferContentType, params: StartDragAndDropParams, draw: (Canvas, PhysicalSize, Double) -> Unit)
+    fun startDrag(content: DataTransferContentType, params: StartDragAndDropParams, draw: (Canvas, Scale) -> Unit)
     fun stopDrag()
 }
 
@@ -188,7 +184,7 @@ private class EditorState {
     private var preedit: PreeditData? = null
     private var text: StringBuilder = StringBuilder()
     private var cursorOffset: Int = 0
-    private var cursorRectangle = Rect(0f, 0f, 0f, 0f)
+    private var cursorRectangle = LogicalDoubleRect.Zero
     private var selectionStartOffset: Int? = null
     private var textLineCreator = TextLineCreator()
     private var textLine = textLineCreator.makeTextLine("", 0f, Color.WHITE)
@@ -201,7 +197,8 @@ private class EditorState {
     private var pastedImage: Image? = null
 
     companion object {
-        const val FONT_SIZE = 50
+        val FONT_SIZE = LogicalPixels(50.0)
+
         private fun codepointFromOffset(sb: StringBuilder, offset: Int): UShort {
             if (offset == 0) {
                 return 0U
@@ -244,12 +241,7 @@ private class EditorState {
         return TextInputContext(
             hints = setOf(TextInputContextHint.Spellcheck, TextInputContextHint.WordCompletion),
             contentPurpose = TextInputContentPurpose.Normal,
-            cursorRectangle = LogicalRect(
-                x = cursorRectangle.left.roundToInt(),
-                y = cursorRectangle.top.roundToInt(),
-                width = (cursorRectangle.right - cursorRectangle.left).roundToInt(),
-                height = (cursorRectangle.bottom - cursorRectangle.top).roundToInt(),
-            ),
+            cursorRectangle = cursorRectangle.round(),
         )
     }
 
@@ -268,12 +260,15 @@ private class EditorState {
         return s.toString()
     }
 
-    fun onTextChanged(windowState: WindowState) {
-        val scale = windowState.scale.toFloat()
+    fun onTextChanged(container: LogicalDoubleRect, scale: Scale) {
         val selectionRange = getSelectionRange()
-        textLineStats = statsTextLineCreator.makeTextLine(getTextLineStatsString(selectionRange), 20 * scale, Color.WHITE)
+        var yOffset = container.y
+        textLineStats =
+            statsTextLineCreator.makeTextLine(getTextLineStatsString(selectionRange), LogicalPixelsInt(20).toSkiko(scale), Color.WHITE)
+        yOffset += scale.rawPhysicalToLogical(textLineStats.height.toDouble())
+
         val cursorOffset = cursorOffset
-        val fontSize = FONT_SIZE * scale
+        val fontSize = FONT_SIZE.toSkiko(scale)
         val preedit = preedit
         val stringLine: List<Pair<String, TextStyle?>> = if (selectionRange != null) {
             listOf(
@@ -287,7 +282,7 @@ private class EditorState {
                 if (cursorOffset != 0) {
                     add(Pair(text.substring(0, cursorOffset), null))
                 }
-                preedit.text.forEach { it.second?.fontSize = fontSize }
+                preedit.text.forEach { it.second?.fontSize = FONT_SIZE.toSkiko(scale) }
                 addAll(preedit.text)
                 if (cursorOffset != text.length) {
                     add(Pair(text.substring(cursorOffset, text.length), null))
@@ -318,15 +313,15 @@ private class EditorState {
             }
         }
 
-        cursorRectangle = Rect.makeXYWH(
-            l = x / scale,
-            t = TEXT_TOP_OFFSET / scale,
-            w = 2f,
-            h = textLine.ideographicBaseline / scale,
+        cursorRectangle = LogicalDoubleRect(
+            x = container.x + scale.rawPhysicalToLogical(x.toDouble()),
+            y = yOffset,
+            width = LogicalPixels(2.0),
+            height = scale.rawPhysicalToLogical(textLine.ideographicBaseline.toDouble()),
         )
     }
 
-    fun draw(canvas: Canvas, y: Float, w: Float, scale: Float) {
+    fun draw(canvas: Canvas, container: LogicalDoubleRect, scale: Scale) {
         val now = TimeSource.Monotonic.markNow()
         drawCallCount += 1
         if (now - lastDrawMeasureTime >= 1.seconds) {
@@ -341,7 +336,7 @@ private class EditorState {
                 canvas.drawImageRect(
                     it,
                     src = imageRect.toRect(),
-                    dst = Rect(0f, 0f, imageRect.width * scale, imageRect.height * scale),
+                    dst = LogicalRect.makeWH(imageRect.width, imageRect.height).toSkiko(scale),
                     paint,
                 )
             }
@@ -350,21 +345,29 @@ private class EditorState {
         // Draw text caret
         Paint().use { paint ->
             paint.color = Color.GREEN
-            paint.strokeWidth = cursorRectangle.width * scale
+            paint.strokeWidth = cursorRectangle.width.toSkiko(scale)
+
+            val x = cursorRectangle.x.toSkiko(scale)
+            val y = cursorRectangle.y.toSkiko(scale)
+            val h = cursorRectangle.height.toSkiko(scale)
 
             canvas.drawLine(
-                x0 = cursorRectangle.left * scale,
-                y0 = cursorRectangle.top * scale,
-                x1 = cursorRectangle.left * scale,
-                y1 = cursorRectangle.bottom * scale,
+                x0 = x,
+                y0 = y,
+                x1 = x,
+                y1 = y + h,
                 paint = paint,
             )
         }
 
-        val textLineFps = fpsTextLineCreator.makeTextLine("$lastFps FPS", 20 * scale, Color.WHITE)
-        textLineStats.paint(canvas, 10f * scale, FONT_SIZE * scale)
-        textLineFps.paint(canvas, w - (100f * scale), FONT_SIZE * scale)
-        textLine.paint(canvas, 0f, y)
+        val textLineFps = fpsTextLineCreator.makeTextLine("$lastFps FPS", LogicalPixelsInt(20).toSkiko(scale), Color.WHITE)
+        textLineStats.paint(canvas, (container.x + LogicalPixels(10.0)).toSkiko(scale), container.y.toSkiko(scale))
+        textLineFps.paint(
+            canvas,
+            (container.x + container.width - LogicalPixels(100.0)).toSkiko(scale),
+            (container.y + FONT_SIZE).toSkiko(scale),
+        )
+        textLine.paint(canvas, container.x.toSkiko(scale), container.y.toSkiko(scale) + textLineStats.height)
         Paint().use { paint ->
             paint.color = Color.WHITE
         }
@@ -409,6 +412,7 @@ private class EditorState {
         windowState: WindowState,
         modifiers: Set<KeyModifiers>,
         clipboardHandler: ClipboardHandler,
+        container: LogicalDoubleRect,
     ): EventHandlerResult {
         if (preedit != null && event.keyCode.value == KeyCode.Shift_L) {
             val disableTextInput = modifiers.contains(KeyModifiers.Alt)
@@ -571,14 +575,14 @@ private class EditorState {
             selectionStartOffset = null
         }
 
-        onTextChanged(windowState)
+        onTextChanged(container, windowState.scale)
         if (textInputEnabled) {
             window.textInputUpdate(createTextInputContext())
         }
         return EventHandlerResult.Stop
     }
 
-    fun onDataTransfer(content: DataTransferContent, window: Window, windowState: WindowState): EventHandlerResult {
+    fun onDataTransfer(content: DataTransferContent, window: Window, container: LogicalDoubleRect, scale: Scale): EventHandlerResult {
         when (content.mimeType) {
             URI_LIST_MIME_TYPE -> {
                 val files = content.data.decodeToString().trimEnd().split("\r\n")
@@ -594,7 +598,7 @@ private class EditorState {
                 val pastedText = content.data.decodeToString()
                 text.insert(cursorOffset, pastedText)
                 cursorOffset += pastedText.length
-                onTextChanged(windowState)
+                onTextChanged(container, scale)
                 if (textInputEnabled) {
                     window.textInputUpdate(createTextInputContext())
                 }
@@ -614,13 +618,13 @@ private class EditorState {
         return EventHandlerResult.Stop
     }
 
-    fun onKeyboardFocusChanged(focused: Boolean, window: Window, windowState: WindowState): EventHandlerResult {
+    fun onKeyboardFocusChanged(focused: Boolean, window: Window, container: LogicalDoubleRect, scale: Scale): EventHandlerResult {
         if (focused && textInputEnabled) {
             window.textInputEnable(createTextInputContext())
         } else {
             window.textInputDisable()
         }
-        onTextChanged(windowState)
+        onTextChanged(container, scale)
         return EventHandlerResult.Stop
     }
 
@@ -637,7 +641,7 @@ private class EditorState {
         }
     }
 
-    fun onTextInput(event: Event.TextInput, window: Window, windowState: WindowState): EventHandlerResult {
+    fun onTextInput(event: Event.TextInput, window: Window, container: LogicalDoubleRect, scale: Scale): EventHandlerResult {
         preedit = null
         deleteSelection()
         event.deleteSurroundingTextData?.let { deleteSurroundingTextData ->
@@ -706,7 +710,7 @@ private class EditorState {
                 } ?: 0,
             )
         }
-        onTextChanged(windowState)
+        onTextChanged(container, scale)
         if (textInputEnabled && (preedit != null || event.deleteSurroundingTextData != null || event.commitStringData != null)) {
             window.textInputUpdate(createTextInputContext())
         }
@@ -719,10 +723,10 @@ internal class WindowState {
     var maximized: Boolean = false
     var fullscreen: Boolean = false
     var pointerShape: PointerShape = PointerShape.Default
-    var scale: Double = 1.0
-    var size: LogicalSize = LogicalSize(width = 0, height = 0)
-    var insetStart: LogicalSize = LogicalSize(width = 0, height = 0)
-    var insetEnd: LogicalSize = LogicalSize(width = 0, height = 0)
+    var scale: Scale = Scale.NO_SCALE
+    var size: LogicalSize = LogicalSize.makeWH(0, 0)
+    var insetStart: LogicalSize = LogicalSize.makeWH(0, 0)
+    var insetEnd: LogicalSize = LogicalSize.makeWH(0, 0)
 
     fun configure(event: Event.WindowConfigure) {
         active = event.active
@@ -734,22 +738,13 @@ internal class WindowState {
     }
 }
 
-fun Paragraph.toLogicalSize(): LogicalSize {
-    return LogicalSize(width = ceil(maxIntrinsicWidth).roundToInt(), height = ceil(height).roundToInt())
-}
-
-private class ContentArea(
-    var origin: LogicalPoint,
-    var size: LogicalSize,
-) {
+private class ContentArea {
+    var contentRect = LogicalDoubleRect.Zero
     private var markerPosition: LogicalPoint? = null
     private var dragIconTextLineCreator = TextLineCreator()
 
     fun onMouseMoved(locationInWindow: LogicalPoint): EventHandlerResult {
-        markerPosition = LogicalPoint(
-            locationInWindow.x - origin.x,
-            locationInWindow.y - origin.y,
-        )
+        markerPosition = locationInWindow
         return EventHandlerResult.Continue
     }
 
@@ -761,8 +756,11 @@ private class ContentArea(
         windowState: WindowState,
     ): EventHandlerResult {
         val x = event.locationInWindow.x
-        return if (event.locationInWindow.y <= windowState.insetStart.height &&
-            (x <= windowState.insetStart.width || x >= windowState.size.width - windowState.insetEnd.width)
+        return if (event.locationInWindow.y <= windowState.insetStart.height.toLogicalPixels() &&
+            (
+                x <= windowState.insetStart.width.toLogicalPixels() ||
+                    x >= (windowState.size.width - windowState.insetEnd.width).toLogicalPixels()
+                )
         ) {
             EventHandlerResult.Continue
         } else {
@@ -771,31 +769,23 @@ private class ContentArea(
                     setOf(KeyModifiers.Alt) -> {
                         val skikoTextLine = dragIconTextLineCreator.makeTextLine(
                             EXAMPLE_FILES.joinToString("\n"),
-                            10f,
+                            LogicalPixelsInt(30).toSkiko(windowState.scale),
                             Color.BLACK,
                         )
                         val dragIconParams = DragIconParams(
                             renderingMode = RenderingMode.Auto,
-                            size = skikoTextLine.toLogicalSize(),
+                            size = skikoTextLine.toLogicalSize(windowState.scale),
                         )
-                        println(dragIconParams)
                         val content = DataTransferContentType.UriList(EXAMPLE_FILES)
                         val startDragAndDropParams = StartDragAndDropParams(
                             mimeTypes = content.mimeTypes(),
                             actions = setOf(DragAndDropAction.Copy),
                             dragIconParams,
                         )
-                        clipboardHandler.startDrag(content, startDragAndDropParams) { canvas, physicalSize, scale ->
-                            Paint().use { paint ->
-                                paint.color = Color.GREEN
-                                canvas.drawRect(
-                                    Rect.makeXYWH(0f, 0f, physicalSize.width.toFloat(), physicalSize.height.toFloat()),
-                                    paint,
-                                )
-                            }
+                        clipboardHandler.startDrag(content, startDragAndDropParams) { canvas, scale ->
                             val skikoTextLine = dragIconTextLineCreator.makeTextLine(
                                 EXAMPLE_FILES.joinToString("\n"),
-                                (10f * scale).toFloat(),
+                                LogicalPixelsInt(10).toSkiko(scale),
                                 Color.BLACK,
                             )
                             skikoTextLine.paint(canvas, 0f, 0f)
@@ -807,12 +797,12 @@ private class ContentArea(
                         editorState.getCurrentSelection()?.let {
                             val skikoTextLine = dragIconTextLineCreator.makeTextLine(
                                 it,
-                                EditorState.FONT_SIZE.toFloat(),
+                                LogicalPixelsInt(30).toSkiko(windowState.scale),
                                 Color.WHITE,
                             )
                             val dragIconParams = DragIconParams(
                                 renderingMode = RenderingMode.Auto,
-                                size = skikoTextLine.toLogicalSize(),
+                                size = skikoTextLine.toLogicalSize(windowState.scale),
                             )
                             val content = DataTransferContentType.Text(it)
                             val startDragAndDropParams = StartDragAndDropParams(
@@ -820,17 +810,11 @@ private class ContentArea(
                                 actions = setOf(DragAndDropAction.Copy, DragAndDropAction.Move),
                                 dragIconParams,
                             )
-                            clipboardHandler.startDrag(content, startDragAndDropParams) { canvas, physicalSize, scale ->
-                                Paint().use { paint ->
-                                    paint.color = Color.BLUE
-                                    canvas.drawRect(
-                                        Rect.makeXYWH(0f, 0f, physicalSize.width.toFloat(), physicalSize.height.toFloat()),
-                                        paint,
-                                    )
-                                }
+                            clipboardHandler.startDrag(content, startDragAndDropParams) { canvas, scale ->
+                                canvas.clear(Color.BLUE)
                                 val skikoTextLine = dragIconTextLineCreator.makeTextLine(
                                     it,
-                                    (EditorState.FONT_SIZE * scale).toFloat(),
+                                    LogicalPixelsInt(30).toSkiko(scale),
                                     Color.WHITE,
                                 )
                                 skikoTextLine.paint(canvas, 0f, 0f)
@@ -845,101 +829,101 @@ private class ContentArea(
         }
     }
 
-    fun draw(canvas: Canvas, time: Long, scale: Float, editorState: EditorState, accentColor: Int) {
-        val contentOrigin = origin.toPhysical(scale)
-        val contentSize = size.toPhysical(scale)
+    fun draw(canvas: Canvas, time: Long, scale: Scale, editorState: EditorState, accentColor: Int) {
         Paint().use { paint ->
-            paint.color = 0x77264653
-            canvas.drawRect(
-                Rect.makeXYWH(
-                    contentOrigin.x.toFloat(),
-                    contentOrigin.y.toFloat(),
-                    contentSize.width.toFloat(),
-                    contentSize.height.toFloat(),
-                ),
-                paint,
-            )
+            paint.color = 0xaa264653.toInt()
+            canvas.drawRect(contentRect.toSkiko(scale), paint)
         }
-        canvas.withTranslated(contentOrigin) {
-            Paint().use { paint ->
-                paint.color = Color.WHITE
-                paint.strokeWidth = scale
-                canvas.drawLine(
-                    contentSize.width.toFloat(),
-                    0f,
-                    0f,
-                    contentSize.height.toFloat(),
-                    paint,
-                )
-            }
-        }
-        canvas.drawSpinningCircle(contentOrigin, contentSize, time)
-        editorState.draw(canvas, TEXT_TOP_OFFSET, contentSize.width.toFloat(), scale)
-        canvas.drawWindowBorders(contentOrigin, contentSize, scale, accentColor)
-        canvas.drawCursor(contentOrigin, contentSize, scale)
+//        Paint().use { paint ->
+//            paint.color = Color.WHITE
+//            paint.strokeWidth = scale.toFloat()
+//            canvas.drawLine(
+//                contentRect.width.toSkiko(scale),
+//                0f,
+//                0f,
+//                contentRect.height.toSkiko(scale),
+//                paint,
+//            )
+//        }
+        drawSpinningCircle(canvas, contentRect, scale, time)
+        val borderThickness = LogicalPixels(3.0)
+        editorState.draw(canvas, contentRect.copy(x = contentRect.x + borderThickness), scale)
+        drawWindowBorders(canvas, contentRect, scale, borderThickness, accentColor)
+        drawCursor(canvas, contentRect, scale)
     }
 
-    private fun Canvas.drawSpinningCircle(origin: PhysicalPoint, size: PhysicalSize, t: Long) = withTranslated(origin) {
-        val width = size.width.toFloat()
-        val height = size.height.toFloat()
+    private fun drawSpinningCircle(canvas: Canvas, container: LogicalDoubleRect, scale: Scale, t: Long) {
+        val width = container.width.toSkiko(scale)
+        val height = container.height.toSkiko(scale)
         val angle = (t / 2000f) * 2f * PI
         val r = width / 4
         val x = r * sin(angle).toFloat() + width / 2f
         val y = r * cos(angle).toFloat() + height / 2f
         Paint().use { paint ->
             paint.color = Color.GREEN
-            drawCircle(x, y, 30f, paint)
+            canvas.drawCircle(container.x.toSkiko(scale) + x, container.y.toSkiko(scale) + y, LogicalPixels(30.0).toSkiko(scale), paint)
         }
     }
 
-    private fun Canvas.drawWindowBorders(origin: PhysicalPoint, size: PhysicalSize, scale: Float, accentColor: Int) =
-        withTranslated(origin) {
-            val width = size.width.toFloat()
-            val height = size.height.toFloat()
-            Paint().use { paint ->
-                val barSize = 3 * scale
+    private fun drawWindowBorders(canvas: Canvas, container: LogicalDoubleRect, scale: Scale, thickness: LogicalPixels, accentColor: Int) {
+        Paint().use { paint ->
+            val len = LogicalPixels(100.0)
 
-                // left
-                paint.color = 0xFFe76f51.toInt()
-                drawRect(Rect.makeXYWH(0f, 0f, barSize, 100 * scale), paint)
-                drawRect(Rect.makeXYWH(0f, height / 2 - 50 * scale, barSize, 100 * scale), paint)
-                drawRect(Rect.makeXYWH(0f, height - 100 * scale, barSize, 100 * scale), paint)
+            val verticalCenterY = container.y + (container.height / 2) - (len / 2)
+            val verticalBottomY = container.y + (container.height - len)
+            // left
+            paint.color = 0xFFe76f51.toInt()
+            canvas.drawRect(LogicalDoubleRect(container.x, container.y, thickness, len).toSkiko(scale), paint)
+            canvas.drawRect(LogicalDoubleRect(container.x, verticalCenterY, thickness, len).toSkiko(scale), paint)
+            canvas.drawRect(LogicalDoubleRect(container.x, verticalBottomY, thickness, len).toSkiko(scale), paint)
 
-                // top
-                paint.color = 0xFF2a9d8f.toInt()
-                drawRect(Rect.makeXYWH(0f, 0f, 100 * scale, barSize), paint)
-                drawRect(Rect.makeXYWH(width / 2 - 50 * scale, 0f, 100 * scale, barSize), paint)
-                drawRect(Rect.makeXYWH(width - 100 * scale, 0f, 100 * scale, barSize), paint)
+            // right
+            paint.color = 0xFFe9c46a.toInt()
+            val rightX = container.x + (container.width - thickness)
+            canvas.drawRect(LogicalDoubleRect(rightX, container.y, thickness, len).toSkiko(scale), paint)
+            canvas.drawRect(LogicalDoubleRect(rightX, verticalCenterY, thickness, len).toSkiko(scale), paint)
+            canvas.drawRect(LogicalDoubleRect(rightX, verticalBottomY, thickness, len).toSkiko(scale), paint)
 
-                // right
-                paint.color = 0xFFe9c46a.toInt()
-                drawRect(Rect.makeXYWH(width - barSize, 0f, barSize, 100 * scale), paint)
-                drawRect(Rect.makeXYWH(width - barSize, height / 2 - 50 * scale, barSize, 100 * scale), paint)
-                drawRect(Rect.makeXYWH(width - barSize, height - 100 * scale, barSize, 100 * scale), paint)
+            val horizontalCenterX = container.x + (container.width / 2) - (len / 2)
+            val horizontalRightX = container.x + (container.width - len)
+            // top
+            paint.color = 0xFF2a9d8f.toInt()
+            canvas.drawRect(LogicalDoubleRect(container.x, container.y, len, thickness).toSkiko(scale), paint)
+            canvas.drawRect(LogicalDoubleRect(horizontalCenterX, container.y, len, thickness).toSkiko(scale), paint)
+            canvas.drawRect(LogicalDoubleRect(horizontalRightX, container.y, len, thickness).toSkiko(scale), paint)
 
-                // bottom
-                paint.color = accentColor
-                drawRect(Rect.makeXYWH(0f, height - barSize, 100 * scale, barSize), paint)
-                drawRect(Rect.makeXYWH(width / 2 - 50 * scale, height - barSize, 100 * scale, barSize), paint)
-                drawRect(Rect.makeXYWH(width - 100 * scale, height - barSize, 100 * scale, barSize), paint)
-            }
+            // bottom
+            paint.color = accentColor
+            val bottomY = container.y + (container.height - thickness)
+            canvas.drawRect(LogicalDoubleRect(container.x, bottomY, len, thickness).toSkiko(scale), paint)
+            canvas.drawRect(LogicalDoubleRect(horizontalCenterX, bottomY, len, thickness).toSkiko(scale), paint)
+            canvas.drawRect(LogicalDoubleRect(horizontalRightX, bottomY, len, thickness).toSkiko(scale), paint)
         }
+    }
 
-    private fun Canvas.drawCursor(origin: PhysicalPoint, size: PhysicalSize, scale: Float) = withTranslated(origin) {
-        val canvas = this
+    private fun drawCursor(canvas: Canvas, container: LogicalDoubleRect, scale: Scale) {
         markerPosition?.let { curs ->
-            val positive = curs.x > 0 && curs.y > 0
-            val inBox = curs.x < size.width && curs.y < size.height
-            if (positive && inBox) {
-                val x = curs.x
-                val y = curs.y
-                val width = size.width.toFloat()
-                val height = size.height.toFloat()
-
+            if (container.contains(curs)) {
                 Paint().use { paint ->
                     paint.color = 0x40FFFFFF
-                    canvas.drawRect(Rect.makeXYWH(0f, y * scale, width, 2 * scale), paint)
-                    canvas.drawRect(Rect.makeXYWH(x * scale, 0f, 2 * scale, height), paint)
+                    canvas.drawRect(
+                        LogicalDoubleRect(
+                            container.x,
+                            curs.y,
+                            container.width,
+                            LogicalPixels(2.0),
+                        ).toSkiko(scale),
+                        paint,
+                    )
+                    canvas.drawRect(
+                        LogicalDoubleRect(
+                            curs.x,
+                            container.y,
+                            LogicalPixels(2.0),
+                            container.height,
+                        ).toSkiko(scale),
+                        paint,
+                    )
                 }
             }
         }
@@ -955,8 +939,8 @@ private class WindowContainer(
     companion object {
         val COLOR_LIGHT_GRAY = Color.makeRGB(211, 211, 211)
 
-        fun create(windowContentSize: LogicalSize, desktopSettings: DesktopSettings, requestClose: () -> Unit): WindowContainer {
-            val contentArea = ContentArea(LogicalPoint.Zero, windowContentSize)
+        fun create(desktopSettings: DesktopSettings, requestClose: () -> Unit): WindowContainer {
+            val contentArea = ContentArea()
             return WindowContainer(
                 customTitle = null,
                 contentArea,
@@ -970,27 +954,38 @@ private class WindowContainer(
         this.desktopSettings = desktopSettings
     }
 
-    fun configure(event: Event.WindowConfigure, title: String, scale: Double) {
-        val decorationMode = event.decorationMode
-        customTitle = when (decorationMode) {
+    fun configure(event: Event.WindowConfigure, title: String, scale: Scale) {
+        when (val decorationMode = event.decorationMode) {
             WindowDecorationMode.Server -> {
-                null
+                customTitle = null
+                contentArea.contentRect =
+                    LogicalDoubleRect(
+                        LogicalPixels.Zero,
+                        LogicalPixels.Zero,
+                        event.size.width.toLogicalPixels(),
+                        event.size.height.toLogicalPixels(),
+                    )
             }
 
             is WindowDecorationMode.CustomTitlebar -> {
                 val font = FontMgr.default.matchFamilyStyle("sans-serif", FontStyle.BOLD)?.let { typeface ->
-                    Font(typeface, (decorationMode.height * scale).toFloat())
+                    Font(typeface, (decorationMode.height.toSkiko(scale)))
                 }
-                TextLine.make(title, font)
+                customTitle = TextLine.make(title, font)
+                contentArea.contentRect =
+                    LogicalDoubleRect(
+                        LogicalPixels.Zero,
+                        decorationMode.height.toLogicalPixels(),
+                        event.size.width.toLogicalPixels(),
+                        event.size.height.toLogicalPixels(),
+                    )
             }
         }
-        contentArea.origin = LogicalPoint(x = 0f, y = 0f)
-        contentArea.size = event.size
     }
 
     fun onScaleChange(windowState: WindowState, title: String) {
         val font = FontMgr.default.matchFamilyStyle("sans-serif", FontStyle.BOLD)?.let { typeface ->
-            Font(typeface, (windowState.insetStart.height * windowState.scale).toFloat())
+            Font(typeface, windowState.insetStart.height.toSkiko(windowState.scale))
         }
         customTitle = TextLine.make(title, font)
     }
@@ -1059,7 +1054,8 @@ private class WindowContainer(
         }
     }
 
-    fun draw(canvas: Canvas, time: Long, scale: Float, editorState: EditorState, windowState: WindowState) {
+    fun draw(canvas: Canvas, time: Long, editorState: EditorState, windowState: WindowState) {
+        val scale = windowState.scale
         val backgroundColor = if (desktopSettings.colorScheme == ColorSchemeValue.PreferDark) {
             Color.makeARGB(
                 240,
@@ -1077,13 +1073,16 @@ private class WindowContainer(
         Paint().use { paint ->
             paint.color = if (desktopSettings.colorScheme == ColorSchemeValue.PreferDark) Color.BLACK else Color.WHITE
 
-            canvas.drawRect(Rect.makeXYWH(0f, 0f, windowState.insetStart.width * scale, windowState.insetStart.height * scale), paint)
+            canvas.drawRect(
+                Rect.makeXYWH(0f, 0f, windowState.insetStart.width.toSkiko(scale), windowState.insetStart.height.toSkiko(scale)),
+                paint,
+            )
             canvas.drawRect(
                 Rect.makeXYWH(
-                    (windowState.size.width - windowState.insetEnd.width) * scale,
+                    (windowState.size.width - windowState.insetEnd.width).toSkiko(scale),
                     0f,
-                    windowState.insetEnd.width * scale,
-                    windowState.insetEnd.height * scale,
+                    windowState.insetEnd.width.toSkiko(scale),
+                    windowState.insetEnd.height.toSkiko(scale),
                 ),
                 paint,
             )
@@ -1094,8 +1093,8 @@ private class WindowContainer(
                 paint.color = if (windowState.active) Color.WHITE else COLOR_LIGHT_GRAY
                 canvas.drawTextLine(
                     it,
-                    windowState.insetStart.width.toFloat() * scale,
-                    windowState.insetStart.height.toFloat() * scale,
+                    windowState.insetStart.width.toSkiko(scale),
+                    windowState.insetStart.height.toSkiko(scale),
                     paint,
                 )
             }
@@ -1121,7 +1120,7 @@ private class RotatingBallWindow(
             desktopSettings: DesktopSettings,
             requestClose: () -> Unit,
         ): RotatingBallWindow {
-            val container = WindowContainer.create(windowParams.size, desktopSettings, requestClose)
+            val container = WindowContainer.create(desktopSettings, requestClose)
             return RotatingBallWindow(container, app, windowParams, glProcFunc)
         }
     }
@@ -1131,7 +1130,7 @@ private class RotatingBallWindow(
     }
 
     fun queryDragAndDropTarget(locationInWindow: LogicalPoint): DragAndDropQueryResponse {
-        val response = if (locationInWindow.x < windowContainer.contentArea.size.width / 2) {
+        val response = if (locationInWindow.x < (windowContainer.contentArea.contentRect.width / 2)) {
             DragAndDropQueryResponse(
                 supportedActionsPerMime = listOf(
                     SupportedActionsForMime(
@@ -1170,13 +1169,13 @@ private class RotatingBallWindow(
         return editorState.getSurroundingText()
     }
 
-    override fun Canvas.draw(size: PhysicalSize, scale: Double, time: Long) {
+    override fun Canvas.draw(size: PhysicalSize, time: Long) {
         val canvas = this
-        windowContainer.draw(canvas, time, scale.toFloat(), editorState, windowState)
+        windowContainer.draw(canvas, time, editorState, windowState)
     }
 
     fun onWindowDraw(event: Event.WindowDraw): EventHandlerResult {
-        return if (performDrawing(event, windowState.scale)) {
+        return if (performDrawing(event)) {
             EventHandlerResult.Stop
         } else {
             EventHandlerResult.Continue
@@ -1199,7 +1198,7 @@ private class RotatingBallWindow(
 
     fun onDataTransfer(content: DataTransferContent?): EventHandlerResult {
         return content?.let {
-            editorState.onDataTransfer(it, window, windowState)
+            editorState.onDataTransfer(it, window, windowContainer.contentArea.contentRect, windowState.scale)
         } ?: EventHandlerResult.Stop
     }
 
@@ -1220,7 +1219,7 @@ private class RotatingBallWindow(
         if (windowContainer.onKeyDown(event, clipboardHandler, modifiers) == EventHandlerResult.Stop) {
             return EventHandlerResult.Stop
         }
-        return editorState.onKeyDown(event, window, windowState, modifiers, clipboardHandler)
+        return editorState.onKeyDown(event, window, windowState, modifiers, clipboardHandler, windowContainer.contentArea.contentRect)
     }
 
     fun onScreenChange(event: Event.WindowScreenChange, app: Application): EventHandlerResult {
@@ -1235,11 +1234,11 @@ private class RotatingBallWindow(
     }
 
     fun onKeyboardFocusChanged(focused: Boolean): EventHandlerResult {
-        return editorState.onKeyboardFocusChanged(focused, window, windowState)
+        return editorState.onKeyboardFocusChanged(focused, window, windowContainer.contentArea.contentRect, windowState.scale)
     }
 
     fun onTextInput(event: Event.TextInput): EventHandlerResult {
-        return editorState.onTextInput(event, window, windowState)
+        return editorState.onTextInput(event, window, windowContainer.contentArea.contentRect, windowState.scale)
     }
 
     fun onMouseEntered(locationInWindow: LogicalPoint): EventHandlerResult {
@@ -1275,7 +1274,7 @@ private class ApplicationState(
     private val clipboardPasteSerialToWindow = mutableMapOf<Int, WindowId>()
     private var currentDragContent: DataTransferContentType? = null
     private var currentPrimarySelectionContent: DataTransferContentType? = null
-    private var currentDragIconDraw: ((Canvas, PhysicalSize, Double) -> Unit)? = null
+    private var currentDragIconDraw: ((Canvas, Scale) -> Unit)? = null
     private var dragIconDirectContext: DirectContext? = null
     private val requestSources = mutableMapOf<RequestId, WindowId>()
     private val notificationSources = mutableMapOf<UInt, WindowId>()
@@ -1285,8 +1284,8 @@ private class ApplicationState(
         nextWindowId += 1
         val windowParams = WindowParams(
             windowId = windowId,
-            size = LogicalSize(width = 640, height = 480),
-            minSize = LogicalSize(320, 240),
+            size = LogicalSize.makeWH(width = 640, height = 480),
+            minSize = LogicalSize.makeWH(width = 320, height = 240),
             title = "Window $windowId",
             decorationMode = decorationMode,
             renderingMode = renderingMode,
@@ -1327,11 +1326,7 @@ private class ApplicationState(
                 app.primarySelectionPaste(currentClipboardPasteSerial, supportedMimeTypes)
             }
 
-            override fun startDrag(
-                content: DataTransferContentType,
-                params: StartDragAndDropParams,
-                draw: (Canvas, PhysicalSize, Double) -> Unit,
-            ) {
+            override fun startDrag(content: DataTransferContentType, params: StartDragAndDropParams, draw: (Canvas, Scale) -> Unit) {
                 currentDragContent = content
                 currentDragIconDraw = draw
                 window.window.startDragAndDrop(params)
@@ -1350,7 +1345,7 @@ private class ApplicationState(
 
         return when (event) {
             is Event.ApplicationStarted -> {
-                createWindow(decorationMode = WindowDecorationMode.CustomTitlebar(50))
+                createWindow(decorationMode = WindowDecorationMode.CustomTitlebar(LogicalPixelsInt(50)))
                 EventHandlerResult.Stop
             }
 
@@ -1383,7 +1378,7 @@ private class ApplicationState(
             is Event.DragIconDraw -> {
                 currentDragIconDraw?.let { draw ->
                     val drawImpl = { surface: Surface ->
-                        draw(surface.canvas, event.size, event.scale)
+                        draw(surface.canvas, event.scale)
                         surface.flushAndSubmit()
                         true
                     }
@@ -1435,7 +1430,7 @@ private class ApplicationState(
             is Event.KeyDown -> {
                 val windowId = event.windowId
                 if (modifiers.shortcutModifiers() == setOf(KeyModifiers.Control) && event.keyCode.value == KeyCode.N) {
-                    createWindow(WindowDecorationMode.CustomTitlebar(50))
+                    createWindow(WindowDecorationMode.Server)
                     EventHandlerResult.Stop
                 } else if (modifiers.shortcutModifiers() == setOf(KeyModifiers.Control) && event.keyCode.value == KeyCode.P) {
                     val params = ShowNotificationParams(

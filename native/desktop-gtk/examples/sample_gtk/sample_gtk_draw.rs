@@ -1,7 +1,7 @@
 use desktop_common::ffi_utils::{BorrowedStrPtr, BorrowedUtf8};
 use desktop_gtk::gtk::application_api::{application_get_egl_proc_func, application_init_gl};
 use desktop_gtk::gtk::events::OpenGlDrawData;
-use desktop_gtk::gtk::geometry::PhysicalSize;
+use desktop_gtk::gtk::geometry::{PhysicalSize, Scale};
 use gles30::{
     GL_ARRAY_BUFFER, GL_COLOR_BUFFER_BIT, GL_COMPILE_STATUS, GL_DEPTH_BUFFER_BIT, GL_FLOAT, GL_FRAGMENT_SHADER, GL_LINK_STATUS,
     GL_STATIC_DRAW, GL_TRIANGLES, GL_VERTEX_SHADER, GLchar, GLenum, GLint, GLsizeiptr, GLuint, GlFns,
@@ -164,7 +164,7 @@ void main() {
 }
 
 /// Draw a triangle using the shader pair created in `Init()`
-pub fn draw(gl_state: &OpenglState, physical_size: PhysicalSize, _scale: f32, animation_progress: f32) {
+pub fn draw(gl_state: &OpenglState, physical_size: PhysicalSize, _scale: Scale, animation_progress: f64) {
     // let mut screen_fb = 0;
     // unsafe { (gl.glGetIntegerv)(GL_FRAMEBUFFER_BINDING, &raw mut screen_fb) };
     // dbg!(screen_fb);
@@ -174,15 +174,16 @@ pub fn draw(gl_state: &OpenglState, physical_size: PhysicalSize, _scale: f32, an
     // );
     let gl = &gl_state.gl;
     unsafe {
-        gl.Viewport(0, 0, physical_size.width.0, physical_size.height.0);
+        gl.Viewport(0, 0, physical_size.width.raw_physical(), physical_size.height.raw_physical());
         gl.ClearColor(0.0, 1.0, 0.0, 1.0);
         gl.Clear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
         gl.UseProgram(gl_state.program);
 
+        #[allow(clippy::cast_possible_truncation)]
         let mvp = compute_mvp(
-            0.0,                // rotation_angles[X_AXIS],
-            0.0,                // rotation_angles[Y_AXIS],
-            animation_progress, // rotation_angles[Z_AXIS]);
+            0.0,                       // rotation_angles[X_AXIS],
+            0.0,                       // rotation_angles[Y_AXIS],
+            animation_progress as f32, // rotation_angles[Z_AXIS]);
         );
 
         gl.UniformMatrix4fv(gl_state.mvp_location, 1, 0, &raw const mvp[0]);

@@ -100,13 +100,13 @@ internal fun splitCsv(s: String): List<String> {
 }
 
 internal fun LogicalSize.Companion.fromNative(s: MemorySegment) = LogicalSize(
-    width = NativeLogicalSize.width(s),
-    height = NativeLogicalSize.height(s),
+    width = LogicalPixelsInt(NativeLogicalSize.width(s)),
+    height = LogicalPixelsInt(NativeLogicalSize.height(s)),
 )
 
 internal fun LogicalSize?.toNative(arena: Arena): MemorySegment {
-    val width = this?.width ?: 0
-    val height = this?.height ?: 0
+    val width = this?.width?.rawLogical ?: 0
+    val height = this?.height?.rawLogical ?: 0
     val result = NativeLogicalSize.allocate(arena)
     NativeLogicalSize.width(result, width)
     NativeLogicalSize.height(result, height)
@@ -114,22 +114,22 @@ internal fun LogicalSize?.toNative(arena: Arena): MemorySegment {
 }
 
 internal fun LogicalPoint.Companion.fromNative(s: MemorySegment) = LogicalPoint(
-    x = NativeLogicalPoint.x(s).toFloat(),
-    y = NativeLogicalPoint.y(s).toFloat(),
+    x = LogicalPixels(NativeLogicalPoint.x(s)),
+    y = LogicalPixels(NativeLogicalPoint.y(s)),
 )
 
 internal fun LogicalRect.toNative(arena: Arena): MemorySegment {
     val result = NativeLogicalRect.allocate(arena)
-    NativeLogicalRect.x(result, x)
-    NativeLogicalRect.y(result, y)
-    NativeLogicalRect.width(result, width)
-    NativeLogicalRect.height(result, height)
+    NativeLogicalRect.x(result, x.rawLogical)
+    NativeLogicalRect.y(result, y.rawLogical)
+    NativeLogicalRect.width(result, width.rawLogical)
+    NativeLogicalRect.height(result, height.rawLogical)
     return result
 }
 
 internal fun PhysicalSize.Companion.fromNative(s: MemorySegment) = PhysicalSize(
-    width = NativePhysicalSize.width(s),
-    height = NativePhysicalSize.height(s),
+    width = PhysicalPixels(NativePhysicalSize.width(s)),
+    height = PhysicalPixels(NativePhysicalSize.height(s)),
 )
 
 private fun bitmaskContains(mask: Int, value: Int): Boolean {
@@ -210,8 +210,10 @@ internal fun RenderingMode.toNative() = when (this) {
 private fun WindowDecorationMode.Companion.fromNative(native: MemorySegment): WindowDecorationMode {
     return when (val nativeTag = NativeWindowDecorationMode.tag(native)) {
         desktop_gtk_h.NativeWindowDecorationMode_CustomTitlebar() -> WindowDecorationMode.CustomTitlebar(
-            NativeWindowDecorationMode.custom_titlebar(
-                native,
+            LogicalPixelsInt(
+                NativeWindowDecorationMode.custom_titlebar(
+                    native,
+                ),
             ),
         )
 
@@ -226,7 +228,7 @@ internal fun WindowDecorationMode.toNative(arena: Arena): MemorySegment {
         WindowDecorationMode.Server -> NativeWindowDecorationMode.tag(result, desktop_gtk_h.NativeWindowDecorationMode_Server())
         is WindowDecorationMode.CustomTitlebar -> {
             NativeWindowDecorationMode.tag(result, desktop_gtk_h.NativeWindowDecorationMode_CustomTitlebar())
-            NativeWindowDecorationMode.custom_titlebar(result, height)
+            NativeWindowDecorationMode.custom_titlebar(result, height.rawLogical)
         }
     }
     return result
@@ -685,7 +687,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             Event.DragIconDraw(
                 openGlDrawData = OpenGlDrawData.fromNative(NativeDragIconDrawEvent.opengl_draw_data(nativeEvent)),
                 size = PhysicalSize.fromNative(NativeDragIconDrawEvent.physical_size(nativeEvent)),
-                scale = NativeDragIconDrawEvent.scale(nativeEvent),
+                scale = Scale(NativeDragIconDrawEvent.scale(nativeEvent)),
             )
         }
 
@@ -833,8 +835,8 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             val nativeEvent = NativeEvent.scroll_wheel(s)
             Event.ScrollWheel(
                 windowId = NativeScrollWheelEvent.window_id(nativeEvent),
-                scrollingDeltaX = NativeScrollWheelEvent.scroll_delta_x(nativeEvent).toFloat(),
-                scrollingDeltaY = NativeScrollWheelEvent.scroll_delta_y(nativeEvent).toFloat(),
+                scrollingDeltaX = LogicalPixels(NativeScrollWheelEvent.scroll_delta_x(nativeEvent)),
+                scrollingDeltaY = LogicalPixels(NativeScrollWheelEvent.scroll_delta_y(nativeEvent)),
                 timestamp = Timestamp.fromNative(NativeScrollWheelEvent.timestamp(nativeEvent)),
                 isStop = NativeScrollWheelEvent.is_stop(nativeEvent),
                 isSmoothScroll = NativeScrollWheelEvent.is_smooth_scroll(nativeEvent),
@@ -907,7 +909,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             val nativeEvent = NativeEvent.window_scale_changed(s)
             Event.WindowScaleChanged(
                 windowId = NativeWindowScaleChangedEvent.window_id(nativeEvent),
-                newScale = NativeWindowScaleChangedEvent.new_scale(nativeEvent),
+                newScale = Scale(NativeWindowScaleChangedEvent.new_scale(nativeEvent)),
             )
         }
 

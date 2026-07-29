@@ -155,8 +155,8 @@ pub fn handle_drop_target_drop(
     y: f64,
 ) -> bool {
     let location_in_window = LogicalPoint {
-        x: LogicalPixels(x),
-        y: LogicalPixels(y),
+        x: LogicalPixels::new(x),
+        y: LogicalPixels::new(y),
     };
     let mime_type_and_actions = get_drag_offer_actions(query_drag_and_drop_target, drop, location_in_window, window_id);
     let Some(mime_type) = mime_type_and_actions.mime_type.as_ref() else {
