@@ -131,6 +131,9 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
                 });
             }
             zwp_text_input_v3::Event::Leave { surface } => {
+                if !surface.is_alive() {
+                    return;
+                }
                 debug!("zwp_text_input_v3::Event::Leave: {}", surface.id());
                 let Some(window_id) = this.get_window_id(surface) else {
                     warn!("Couldn't find window for: {event:?}");
