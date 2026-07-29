@@ -38,6 +38,10 @@ impl<'a> EglRendering<'a> {
         egl.initialize(egl_display).context("egl.initialize")?;
 
         let egl_attributes = [
+            egl::SURFACE_TYPE,
+            egl::WINDOW_BIT,
+            egl::COLOR_BUFFER_TYPE,
+            egl::RGB_BUFFER,
             egl::RED_SIZE,
             8,
             egl::GREEN_SIZE,
