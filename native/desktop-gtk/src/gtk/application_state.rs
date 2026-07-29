@@ -3,7 +3,7 @@ use crate::gtk::application_api::{ApplicationCallbacks, FfiWindowCloseRequest, R
 use crate::gtk::async_event_result::AsyncEventResult;
 use crate::gtk::clipboard::{ClipboardContentProvider, KdtClipboard};
 use crate::gtk::data_transfer_api::{DataSource, DragAndDropAction, DragAndDropActions};
-use crate::gtk::desktop_settings::DesktopSettings;
+use crate::gtk::desktop_settings::{DesktopSettings, InternalDesktopSetting};
 use crate::gtk::desktop_settings_api::FfiDesktopSetting;
 use crate::gtk::events::Event::DragIconFrameTick;
 use crate::gtk::events::{
@@ -146,13 +146,15 @@ impl ApplicationState {
                 .build();
             gtk_app.add_action_entries([quit]);
 
-            let initial_settings = with_app_state_mut(Self::read_and_subscribe_to_desktop_settings).unwrap();
+            let initial_settings = with_app_state_mut(|state| Ok(state.read_and_subscribe_to_desktop_settings())).unwrap();
 
             send_event(event_handler, Event::ApplicationStarted);
             debug!("After ApplicationStarted");
 
-            for initial_setting in initial_settings {
-                send_event(event_handler, Event::DesktopSettingChange(initial_setting));
+            for setting in initial_settings {
+                FfiDesktopSetting::with(setting, move |setting| {
+                    send_event(event_handler, Event::DesktopSettingChange(setting));
+                });
             }
 
             if let Some(keyboard) = default_seat.as_ref().and_then(SeatExt::keyboard) {
@@ -280,10 +282,12 @@ impl ApplicationState {
         request_id
     }
 
-    pub fn read_and_subscribe_to_desktop_settings(&mut self) -> anyhow::Result<Vec<FfiDesktopSetting>> {
+    pub fn read_and_subscribe_to_desktop_settings(&mut self) -> Vec<InternalDesktopSetting> {
         let event_handler = self.event_handler;
         self.desktop_settings.read_and_subscribe(move |setting| {
-            send_event(event_handler, Event::DesktopSettingChange(setting));
+            FfiDesktopSetting::with(setting, move |setting| {
+                send_event(event_handler, Event::DesktopSettingChange(setting));
+            });
         })
     }
 

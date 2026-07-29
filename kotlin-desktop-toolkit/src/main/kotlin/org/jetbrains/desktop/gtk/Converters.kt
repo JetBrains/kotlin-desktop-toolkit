@@ -207,6 +207,16 @@ internal fun RenderingMode.toNative() = when (this) {
     RenderingMode.GL_ES -> desktop_gtk_h.NativeRenderingMode_GlEs()
 }
 
+private fun DesktopTitlebarAction.Companion.fromNative(raw: Int): DesktopTitlebarAction {
+    return when (raw) {
+        desktop_gtk_h.NativeDesktopTitlebarAction_Minimize() -> DesktopTitlebarAction.Minimize
+        desktop_gtk_h.NativeDesktopTitlebarAction_ToggleMaximize() -> DesktopTitlebarAction.ToggleMaximize
+        desktop_gtk_h.NativeDesktopTitlebarAction_Menu() -> DesktopTitlebarAction.Menu
+        desktop_gtk_h.NativeDesktopTitlebarAction_None() -> DesktopTitlebarAction.None
+        else -> error("Unexpected desktop titlebar action value: $raw")
+    }
+}
+
 private fun WindowDecorationMode.Companion.fromNative(native: MemorySegment): WindowDecorationMode {
     return when (val nativeTag = NativeWindowDecorationMode.tag(native)) {
         desktop_gtk_h.NativeWindowDecorationMode_CustomTitlebar() -> WindowDecorationMode.CustomTitlebar(
@@ -236,6 +246,28 @@ internal fun WindowDecorationMode.toNative(arena: Arena): MemorySegment {
 
 internal fun DesktopSetting.Companion.fromNative(s: MemorySegment): DesktopSetting {
     return when (val nativeTag = NativeFfiDesktopSetting.tag(s)) {
+        desktop_gtk_h.NativeFfiDesktopSetting_TitlebarLayout() -> {
+            DesktopSetting.TitlebarLayout(readStringFromNativeU8Array(NativeFfiDesktopSetting.titlebar_layout(s))!!)
+        }
+
+        desktop_gtk_h.NativeFfiDesktopSetting_ActionDoubleClickTitlebar() -> {
+            DesktopSetting.ActionDoubleClickTitlebar(
+                DesktopTitlebarAction.fromNative(NativeFfiDesktopSetting.action_double_click_titlebar(s)),
+            )
+        }
+
+        desktop_gtk_h.NativeFfiDesktopSetting_ActionRightClickTitlebar() -> {
+            DesktopSetting.ActionRightClickTitlebar(
+                DesktopTitlebarAction.fromNative(NativeFfiDesktopSetting.action_right_click_titlebar(s)),
+            )
+        }
+
+        desktop_gtk_h.NativeFfiDesktopSetting_ActionMiddleClickTitlebar() -> {
+            DesktopSetting.ActionMiddleClickTitlebar(
+                DesktopTitlebarAction.fromNative(NativeFfiDesktopSetting.action_middle_click_titlebar(s)),
+            )
+        }
+
         desktop_gtk_h.NativeFfiDesktopSetting_DoubleClickIntervalMs() -> DesktopSetting.DoubleClickInterval(
             value = NativeFfiDesktopSetting.double_click_interval_ms(s).milliseconds,
         )
