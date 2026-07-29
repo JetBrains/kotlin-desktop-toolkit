@@ -17,7 +17,6 @@ use crate::linux::{
 use log::debug;
 use smithay_client_toolkit::{
     compositor::SurfaceData,
-    delegate_pointer,
     reexports::client::{
         Connection, Dispatch, Proxy as _, QueueHandle,
         protocol::{
@@ -69,7 +68,7 @@ impl PointerHandler for ApplicationState {
                                 factor: scale.round() as i32,
                             };
                             debug!("Setting cursor scale to {scale:?}");
-                            Dispatch::<WlSurface, SurfaceData>::event(
+                            Dispatch::<WlSurface, SurfaceData<()>>::event(
                                 self,
                                 pointer_surface,
                                 pointer_surface_event,
@@ -140,5 +139,3 @@ impl PointerHandler for ApplicationState {
         }
     }
 }
-
-delegate_pointer!(ApplicationState);

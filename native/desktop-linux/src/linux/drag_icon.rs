@@ -1,13 +1,3 @@
-use log::{debug, info, trace, warn};
-use smithay_client_toolkit::{
-    compositor::Surface,
-    reexports::{
-        client::{Proxy as _, QueueHandle, protocol::wl_display::WlDisplay},
-        protocols::wp::viewporter::client::wp_viewport::WpViewport,
-    },
-    shm::Shm,
-};
-
 use crate::linux::{
     application_state::{ApplicationState, EglInstance},
     events::{DragIconDrawEvent, SoftwareDrawData},
@@ -15,6 +5,15 @@ use crate::linux::{
     rendering_egl::EglRendering,
     rendering_software::SoftwareRendering,
     window::RenderingData,
+};
+use log::{debug, info, trace, warn};
+use smithay_client_toolkit::{
+    compositor::{FrameCallbackData, Surface},
+    reexports::{
+        client::{Proxy as _, QueueHandle, protocol::wl_display::WlDisplay},
+        protocols::wp::viewporter::client::wp_viewport::WpViewport,
+    },
+    shm::Shm,
 };
 
 pub struct DragIcon {
@@ -102,7 +101,7 @@ impl DragIcon {
                 }
 
                 // Request our next frame
-                wl_surface.frame(qh, wl_surface.clone());
+                wl_surface.frame(qh, FrameCallbackData(wl_surface.clone()));
                 did_draw
             });
 

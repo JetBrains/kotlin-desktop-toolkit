@@ -45,7 +45,7 @@ impl gtk4::subclass::prelude::LayoutManagerImpl for LayoutManagerWrapperImpl {
 glib::wrapper! {
     pub struct LayoutManagerWrapper(ObjectSubclass<LayoutManagerWrapperImpl>)
     @extends gtk4::Widget, gtk4::LayoutManager,
-    @implements gtk4::Accessible, gtk4::Buildable, gtk4::ConstraintTarget;
+    @implements gtk4::Buildable, gtk4::ConstraintTarget;
 }
 
 impl LayoutManagerWrapper {

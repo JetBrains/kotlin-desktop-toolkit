@@ -3,7 +3,7 @@
 use anyhow::{anyhow, bail};
 use log::{debug, error};
 use smithay_client_toolkit::{
-    delegate_input_method, delegate_registry, delegate_seat,
+    delegate_dispatch2, delegate_registry,
     reexports::{
         calloop::{self, EventLoop},
         calloop_wayland_source::WaylandSource,
@@ -176,7 +176,7 @@ impl SeatHandler for TestHelperState {
     fn remove_seat(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _seat: WlSeat) {}
 }
 
-delegate_seat!(TestHelperState);
+delegate_dispatch2!(TestHelperState);
 impl ProvidesRegistryState for TestHelperState {
     fn registry(&mut self) -> &mut RegistryState {
         &mut self.registry_state
@@ -185,7 +185,6 @@ impl ProvidesRegistryState for TestHelperState {
 }
 
 delegate_registry!(TestHelperState);
-delegate_input_method!(TestHelperState);
 
 delegate_noop!(TestHelperState: ignore zwp_virtual_keyboard_manager_v1::ZwpVirtualKeyboardManagerV1);
 delegate_noop!(TestHelperState: ignore zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1);
@@ -373,7 +372,7 @@ impl TestHelperState {
         if let Some(v) = data.delete_surrounding_text {
             input_method.delete_surrounding_text(v.before_length, v.after_length);
         }
-        input_method.commit();
+        input_method.commit::<()>();
         Ok(())
     }
 
@@ -421,7 +420,7 @@ impl TestHelperState {
             }
             input_method.commit_string(uppercased);
         }
-        input_method.commit();
+        input_method.commit::<()>();
         Ok(())
     }
 

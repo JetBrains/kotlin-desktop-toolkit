@@ -24,7 +24,6 @@ use smithay_client_toolkit::{
         data_offer::{DataOfferHandler, DragOffer},
         data_source::{CopyPasteSource, DataSourceHandler, DragSource},
     },
-    delegate_data_device, delegate_primary_selection,
     primary_selection::{
         device::{PrimarySelectionDeviceData, PrimarySelectionDeviceHandler},
         selection::PrimarySelectionSourceHandler,
@@ -41,9 +40,6 @@ use smithay_client_toolkit::{
         },
     },
 };
-
-delegate_data_device!(ApplicationState);
-delegate_primary_selection!(ApplicationState);
 
 impl From<DragAndDropAction> for DndAction {
     fn from(value: DragAndDropAction) -> Self {

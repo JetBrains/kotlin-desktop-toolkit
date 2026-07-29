@@ -50,7 +50,7 @@ plugins {
     `maven-publish`
 }
 group = "org.jetbrains.kotlin-desktop-toolkit"
-version = (project.properties["version"] as? String)?.takeIf { it.isNotBlank() && it != "unspecified" } ?: "SNAPSHOT"
+version = (project.findProperty("version") as? String)?.takeIf { it.isNotBlank() && it != "unspecified" } ?: "SNAPSHOT"
 
 repositories {
     mavenCentral()
@@ -282,7 +282,7 @@ val installCbindgenTask = tasks.register<InstallCargoProgram>("installCbindgen")
     dependsOn(installRustTaskByPlatform[hostPlatform()]!!)
     cargoCommand = providers.cargoCommand().get()
     crate = "cbindgen"
-    version = "0.29.0"
+    version = "0.29.4"
 }
 
 val generateBindingsTasks = Backend.entries.map { backend ->
@@ -355,8 +355,8 @@ tasks.compileKotlin {
     dependsOn(generateBindingsTasks)
 }
 
-val spaceUsername: String? by project
-val spacePassword: String? by project
+val spaceUsername = project.findProperty("spaceUsername") as String?
+val spacePassword = project.findProperty("spacePassword") as String?
 publishing {
     publications {
         configureEach {
@@ -877,10 +877,10 @@ sourceSets {
     }
 }
 
-val testGtkImplementation by configurations.getting {
+val testGtkImplementation = configurations.getByName("testGtkImplementation") {
     extendsFrom(configurations.implementation.get())
 }
-val testGtkRuntimeOnly by configurations.getting
+val testGtkRuntimeOnly = configurations.getByName("testGtkRuntimeOnly")
 
 configurations["testGtkRuntimeOnly"].extendsFrom(configurations.runtimeOnly.get())
 
@@ -938,10 +938,10 @@ sourceSets {
     }
 }
 
-val testWaylandImplementation by configurations.getting {
+val testWaylandImplementation = configurations.getByName("testWaylandImplementation") {
     extendsFrom(configurations.implementation.get())
 }
-val testWaylandRuntimeOnly by configurations.getting
+val testWaylandRuntimeOnly = configurations.getByName("testWaylandRuntimeOnly")
 
 configurations["testWaylandRuntimeOnly"].extendsFrom(configurations.runtimeOnly.get())
 
