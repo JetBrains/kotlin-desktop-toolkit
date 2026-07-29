@@ -1,7 +1,8 @@
+use crate::sample_gtk_impl::{Drawable, WindowState};
 use desktop_common::ffi_utils::{BorrowedStrPtr, BorrowedUtf8};
 use desktop_gtk::gtk::application_api::{application_get_egl_proc_func, application_init_gl};
 use desktop_gtk::gtk::events::OpenGlDrawData;
-use desktop_gtk::gtk::geometry::{PhysicalSize, Scale};
+use desktop_gtk::gtk::geometry::PhysicalSize;
 use gles30::{
     GL_ARRAY_BUFFER, GL_COLOR_BUFFER_BIT, GL_COMPILE_STATUS, GL_DEPTH_BUFFER_BIT, GL_FLOAT, GL_FRAGMENT_SHADER, GL_LINK_STATUS,
     GL_STATIC_DRAW, GL_TRIANGLES, GL_VERTEX_SHADER, GLchar, GLenum, GLint, GLsizeiptr, GLuint, GlFns,
@@ -163,40 +164,42 @@ void main() {
     }
 }
 
-/// Draw a triangle using the shader pair created in `Init()`
-pub fn draw(gl_state: &OpenglState, physical_size: PhysicalSize, _scale: Scale, animation_progress: f64) {
-    // let mut screen_fb = 0;
-    // unsafe { (gl.glGetIntegerv)(GL_FRAMEBUFFER_BINDING, &raw mut screen_fb) };
-    // dbg!(screen_fb);
-    // debug!(
-    //     "draw_opengl_triangle, program = {}, physical_size = {physical_size:?}",
-    //     gl_state.program
-    // );
-    let gl = &gl_state.gl;
-    unsafe {
-        gl.Viewport(0, 0, physical_size.width.raw_physical(), physical_size.height.raw_physical());
-        gl.ClearColor(0.0, 1.0, 0.0, 1.0);
-        gl.Clear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-        gl.UseProgram(gl_state.program);
-
+impl Drawable for OpenglState {
+    fn draw(&mut self, physical_size: PhysicalSize, window_state: &WindowState) {
+        // let mut screen_fb = 0;
+        // unsafe { (gl.glGetIntegerv)(GL_FRAMEBUFFER_BINDING, &raw mut screen_fb) };
+        // dbg!(screen_fb);
+        // debug!(
+        //     "draw_opengl_triangle, program = {}, physical_size = {physical_size:?}",
+        //     gl_state.program
+        // );
+        let gl = &self.gl;
         #[allow(clippy::cast_possible_truncation)]
-        let mvp = compute_mvp(
-            0.0,                       // rotation_angles[X_AXIS],
-            0.0,                       // rotation_angles[Y_AXIS],
-            animation_progress as f32, // rotation_angles[Z_AXIS]);
-        );
+        let animation_progress = window_state.animation_progress as f32;
+        unsafe {
+            gl.Viewport(0, 0, physical_size.width.raw_physical(), physical_size.height.raw_physical());
+            gl.ClearColor(0.0, 1.0, 0.0, 1.0);
+            gl.Clear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+            gl.UseProgram(self.program);
 
-        gl.UniformMatrix4fv(gl_state.mvp_location, 1, 0, &raw const mvp[0]);
+            let mvp = compute_mvp(
+                0.0,                // rotation_angles[X_AXIS],
+                0.0,                // rotation_angles[Y_AXIS],
+                animation_progress, // rotation_angles[Z_AXIS]);
+            );
 
-        gl.BindBuffer(GL_ARRAY_BUFFER, gl_state.position_buffer);
-        gl.EnableVertexAttribArray(V_POSITION);
-        gl.VertexAttribPointer(0, 4, GL_FLOAT, 0, 0, std::ptr::null());
-        gl.DrawArrays(GL_TRIANGLES, 0, 3);
+            gl.UniformMatrix4fv(self.mvp_location, 1, 0, &raw const mvp[0]);
 
-        /* We finished using the buffers and program */
-        gl.DisableVertexAttribArray(0);
-        gl.BindBuffer(GL_ARRAY_BUFFER, 0);
-        gl.UseProgram(0);
+            gl.BindBuffer(GL_ARRAY_BUFFER, self.position_buffer);
+            gl.EnableVertexAttribArray(V_POSITION);
+            gl.VertexAttribPointer(0, 4, GL_FLOAT, 0, 0, std::ptr::null());
+            gl.DrawArrays(GL_TRIANGLES, 0, 3);
+
+            /* We finished using the buffers and program */
+            gl.DisableVertexAttribArray(0);
+            gl.BindBuffer(GL_ARRAY_BUFFER, 0);
+            gl.UseProgram(0);
+        }
     }
 }
 

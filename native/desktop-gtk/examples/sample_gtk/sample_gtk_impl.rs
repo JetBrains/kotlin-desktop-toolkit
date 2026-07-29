@@ -1,9 +1,6 @@
 //noinspection DuplicatedCode
 
-#[cfg(not(feature = "skia"))]
-use crate::sample_gtk_draw::{OpenglState, draw};
-#[cfg(feature = "skia")]
-use crate::sample_gtk_draw_skia::{OpenglState, draw};
+use crate::sample_gtk_draw::OpenglState;
 
 use crate::sample_gtk_actions::Action;
 use core::str;
@@ -64,20 +61,24 @@ const ALL_MIMES: &str = "text/html,text/plain;charset=utf-8";
 const DRAG_WIDTH_NEXT_TO_INSETS: LogicalPixelsInt = LogicalPixelsInt::new(50);
 const DRAG_AND_DROP_LEFT_OF: LogicalPixelsInt = LogicalPixelsInt::new(100);
 
+pub trait Drawable {
+    fn draw(&mut self, physical_size: PhysicalSize, window_state: &WindowState);
+}
+
 #[derive(Default)]
-struct WindowState {
+pub struct WindowState {
     active: bool,
     text_input_available: bool,
     composed_text: String,
     text: String,
-    animation_progress: f64,
+    pub animation_progress: f64,
     drag_and_drop_target: bool,
     drag_and_drop_source: bool,
-    opengl: Option<OpenglState>,
+    drawable: Option<Box<dyn Drawable>>,
     last_received_path: Option<String>,
     fullscreen: bool,
     maximized: bool,
-    scale: Scale,
+    pub scale: Scale,
     size: LogicalSize,
     inset_start: LogicalSize,
     inset_end: LogicalSize,
@@ -140,10 +141,18 @@ impl State {
     }
 }
 
-fn draw_with_init(draw_data: &OpenGlDrawData, physical_size: PhysicalSize, scale: Scale, window_state: &mut WindowState) {
-    let opengl_state = window_state.opengl.get_or_insert_with(|| OpenglState::new(draw_data));
-    #[allow(clippy::cast_possible_truncation)]
-    draw(opengl_state, physical_size, scale, window_state.animation_progress);
+fn new_opengl(prefer_skia: bool, draw_data: &OpenGlDrawData) -> Box<dyn Drawable> {
+    if prefer_skia {
+        #[cfg(feature = "skia")]
+        return Box::new(super::sample_gtk_draw_skia::SkiaOpenglState::new(draw_data));
+    }
+    Box::new(OpenglState::new(draw_data))
+}
+
+fn draw_with_init(draw_data: &OpenGlDrawData, physical_size: PhysicalSize, window_state: &mut WindowState) {
+    let mut drawable = window_state.drawable.take().unwrap_or_else(|| new_opengl(true, draw_data));
+    drawable.draw(physical_size, window_state);
+    window_state.drawable = Some(drawable);
 }
 
 fn create_text_input_context(text: &str) -> TextInputContext {
@@ -470,15 +479,16 @@ fn event_handler_impl(event: &Event) -> Vec<Action> {
             if let Some(window_state) = state.windows.get_mut(&data.window_id) {
                 window_state.animation_tick();
 
-                draw_with_init(&data.opengl_draw_data, data.physical_size, window_state.scale, window_state);
+                draw_with_init(&data.opengl_draw_data, data.physical_size, window_state);
             }
         }
         Event::DragIconDraw(data) => {
             debug!("Event::DragIconDraw");
             let window_state = state.drag_icon.get_or_insert_default();
+            window_state.scale = data.scale;
             window_state.animation_tick();
 
-            draw_with_init(&data.opengl_draw_data, data.physical_size, data.scale, window_state);
+            draw_with_init(&data.opengl_draw_data, data.physical_size, window_state);
         }
         Event::MouseDown(data) => {
             if let Some(window_state) = state.windows.get_mut(&data.window_id) {
