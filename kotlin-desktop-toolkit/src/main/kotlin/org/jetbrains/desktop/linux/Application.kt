@@ -271,10 +271,12 @@ public class Application : AutoCloseable {
 
     public fun getEglProcFunc(): EglProcFunc? {
         return Arena.ofConfined().use { arena ->
-            val s = desktop_linux_h.application_get_egl_proc_func(arena)
-            val f = NativeGetEglProcFuncData.f(s)
-            val ctx = NativeGetEglProcFuncData.ctx(s)
-            if (ctx == MemorySegment.NULL) null else EglProcFunc(fPtr = f.address(), ctxPtr = ctx.address())
+            ffiDownCall {
+                val s = desktop_linux_h.application_get_egl_proc_func(arena, appPtr)
+                val f = NativeGetEglProcFuncData.f(s)
+                val ctx = NativeGetEglProcFuncData.ctx(s)
+                if (ctx == MemorySegment.NULL) null else EglProcFunc(fPtr = f.address(), ctxPtr = ctx.address())
+            }
         }
     }
 

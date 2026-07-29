@@ -1,6 +1,6 @@
 use crate::linux::{
     application_api::{ApplicationCallbacks, DragAndDropActions, RenderingMode},
-    application_state::{ApplicationState, get_egl},
+    application_state::ApplicationState,
     async_event_result::AsyncEventResult,
     data_transfer::MimeTypes,
     desktop_settings::init_desktop_settings_notifier_task,
@@ -475,18 +475,11 @@ impl Application {
 
         let mut drag_icon = if drag_icon_size.width > 0 && drag_icon_size.height > 0 {
             let egl = match drag_icon_rendering_mode {
-                RenderingMode::Auto | RenderingMode::EGL => get_egl(),
+                RenderingMode::Auto | RenderingMode::EGL => self.state.get_egl(),
                 RenderingMode::Software => None,
             };
 
-            Some(DragIcon::new(
-                &self.state,
-                &self.qh,
-                &self.state.shm_state,
-                &self.state.wl_display,
-                drag_icon_size,
-                egl,
-            )?)
+            Some(DragIcon::new(&self.state, &self.qh, &self.state.shm_state, drag_icon_size, egl)?)
         } else {
             None
         };

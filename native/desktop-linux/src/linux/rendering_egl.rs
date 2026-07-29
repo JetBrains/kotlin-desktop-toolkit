@@ -1,41 +1,47 @@
 use anyhow::Context;
 use khronos_egl as egl;
 use log::{debug, info};
-use smithay_client_toolkit::reexports::client::{
-    Proxy as _,
-    protocol::{wl_display::WlDisplay, wl_surface::WlSurface},
-};
+use smithay_client_toolkit::reexports::client::{Proxy as _, protocol::wl_surface::WlSurface};
+use std::rc::Rc;
 use wayland_egl::WlEglSurface;
 
-use crate::linux::{application_state::EglInstance, events::SoftwareDrawData, geometry::PhysicalSize};
+use crate::linux::application_state::EGLData;
+use crate::linux::{events::SoftwareDrawData, geometry::PhysicalSize};
 
-#[derive(Debug)]
-pub struct EglRendering<'a> {
-    egl: &'a EglInstance,
+pub struct EglRendering {
+    egl_data: Rc<EGLData>,
     wl_egl_surface: WlEglSurface,
-    egl_display: egl::Display,
     egl_window_surface: khronos_egl::Surface,
     egl_context: egl::Context,
 }
 
-impl Drop for EglRendering<'_> {
+impl Drop for EglRendering {
     fn drop(&mut self) {
         debug!("EglRendering::drop");
-        self.egl.destroy_context(self.egl_display, self.egl_context).unwrap();
-        self.egl.destroy_surface(self.egl_display, self.egl_window_surface).unwrap();
+        let egl = &self.egl_data.instance;
+        let egl_display = self.egl_data.display;
+
+        egl.make_current(egl_display, None, None, None).expect("eglMakeCurrent");
+
+        if self.egl_context.as_ptr() != egl::NO_CONTEXT {
+            egl.destroy_context(egl_display, self.egl_context).expect("eglDestroyContext");
+        }
+
+        if self.egl_window_surface.as_ptr() != egl::NO_SURFACE {
+            egl.destroy_surface(egl_display, self.egl_window_surface)
+                .expect("eglDestroySurface");
+        }
     }
 }
 
-impl<'a> EglRendering<'a> {
-    pub fn new(egl: &'a EglInstance, display: &WlDisplay, surface: &WlSurface, size: PhysicalSize) -> anyhow::Result<Self> {
+impl EglRendering {
+    pub fn new(egl_data: Rc<EGLData>, surface: &WlSurface, size: PhysicalSize) -> anyhow::Result<Self> {
         info!("Trying to use EGL rendering for {}", surface.id());
+        let egl = &egl_data.instance;
+        let egl_display = egl_data.display;
 
         let wl_egl_surface = WlEglSurface::new(surface.id(), size.width.0, size.height.0)
             .with_context(|| format!("WlEglSurface::new (surface.id() = {})", surface.id()))?;
-
-        let wayland_display_ptr = display.id().as_ptr();
-        let egl_display = unsafe { egl.get_display(wayland_display_ptr.cast()) }.context("egl.get_display")?;
-        egl.initialize(egl_display).context("egl.initialize")?;
 
         let egl_attributes = [
             egl::SURFACE_TYPE,
@@ -70,9 +76,8 @@ impl<'a> EglRendering<'a> {
             .context("egl.make_current")?;
 
         Ok(Self {
-            egl,
+            egl_data,
             wl_egl_surface,
-            egl_display,
             egl_window_surface,
             egl_context,
         })
@@ -86,19 +91,20 @@ impl<'a> EglRendering<'a> {
     where
         F: FnOnce(SoftwareDrawData) -> bool,
     {
-        self.egl
-            .make_current(
-                self.egl_display,
-                Some(self.egl_window_surface),
-                Some(self.egl_window_surface),
-                Some(self.egl_context),
-            )
-            .context("egl.make_current")
-            .unwrap();
+        let egl = &self.egl_data.instance;
+        let egl_display = self.egl_data.display;
+
+        egl.make_current(
+            egl_display,
+            Some(self.egl_window_surface),
+            Some(self.egl_window_surface),
+            Some(self.egl_context),
+        )
+        .context("egl.make_current")
+        .unwrap();
 
         if do_draw(SoftwareDrawData::default()) {
-            self.egl
-                .swap_buffers(self.egl_display, self.egl_window_surface)
+            egl.swap_buffers(egl_display, self.egl_window_surface)
                 .context(surface.id())
                 .unwrap();
         }

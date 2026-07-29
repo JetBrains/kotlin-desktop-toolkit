@@ -1,6 +1,5 @@
 use crate::linux::{
     application::Application,
-    application_state::get_egl,
     data_transfer::MimeTypes,
     events::{EventHandler, RequestId, WindowId},
     geometry::LogicalPoint,
@@ -155,10 +154,11 @@ const unsafe fn cast_f<T, S>(t: T) -> S {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_get_egl_proc_func() -> GetEglProcFuncData {
+pub extern "C" fn application_get_egl_proc_func(mut app_ptr: AppPtr) -> GetEglProcFuncData {
     debug!("application_get_egl_proc_func");
-    let egl = get_egl().unwrap();
-    let raw_f = egl.get_proc_address("eglGetProcAddress").unwrap();
+    let app = unsafe { app_ptr.borrow_mut::<Application>() };
+    let egl = app.state.get_egl().unwrap();
+    let raw_f = egl.instance.get_proc_address("eglGetProcAddress").unwrap();
     GetEglProcFuncData {
         f: egl_get_proc_address,
         ctx: unsafe { cast_f(raw_f) },
