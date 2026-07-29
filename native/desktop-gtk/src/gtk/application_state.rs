@@ -87,6 +87,7 @@ pub struct ApplicationState {
     drag_content_provider: Rc<RefCell<Option<ClipboardContentProvider>>>,
     desktop_settings: DesktopSettings,
     notifications: Notifications,
+    disconnect_modifier_state_notify_handler: Option<Box<dyn FnOnce()>>,
 }
 
 impl Drop for ApplicationState {
@@ -94,6 +95,9 @@ impl Drop for ApplicationState {
         for window in self.gtk_app.windows() {
             self.gtk_app.remove_window(&window);
             window.destroy();
+        }
+        if let Some(f) = self.disconnect_modifier_state_notify_handler.take() {
+            f();
         }
         self.gtk_app.quit();
     }
@@ -151,11 +155,25 @@ impl ApplicationState {
 
             if let Some(keyboard) = default_seat.as_ref().and_then(SeatExt::keyboard) {
                 // Cannot use `EventControllerKey::modifiers` signal, see https://gitlab.gnome.org/GNOME/gtk/-/issues/5139
-                keyboard.connect_modifier_state_notify(move |keyboard| {
+                let modifier_state_notify_handler_id = keyboard.connect_modifier_state_notify(move |keyboard| {
                     let modifiers = key_modifiers_from_gdk(keyboard.modifier_state());
                     let event = ModifiersChangedEvent { modifiers };
                     send_event(event_handler, event);
                 });
+
+                let modifiers = key_modifiers_from_gdk(keyboard.modifier_state());
+                if !modifiers.is_empty() {
+                    let event = ModifiersChangedEvent { modifiers };
+                    send_event(event_handler, event);
+                }
+
+                with_app_state_mut(|s| {
+                    s.disconnect_modifier_state_notify_handler = Some(Box::new(move || {
+                        keyboard.disconnect(modifier_state_notify_handler_id);
+                    }));
+                    Ok(())
+                })
+                .unwrap();
             }
         });
 
@@ -236,6 +254,7 @@ impl ApplicationState {
             drag_content_provider: Rc::default(),
             desktop_settings,
             notifications,
+            disconnect_modifier_state_notify_handler: None,
         })
     }
 
