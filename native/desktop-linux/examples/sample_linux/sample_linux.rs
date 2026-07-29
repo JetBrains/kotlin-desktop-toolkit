@@ -1,5 +1,6 @@
 use crate::sample_linux_actions::Action;
-use crate::sample_linux_draw::{OpenglState, draw_opengl_triangle_with_init, draw_software, draw_software_drag_icon};
+use crate::sample_linux_draw::OpenglState;
+use crate::sample_linux_draw_software::draw_software;
 use core::str;
 use desktop_common::ffi_utils::BorrowedStrPtr;
 use desktop_common::{
@@ -32,9 +33,9 @@ use desktop_linux::linux::{
         //
     },
     desktop_settings_api::FfiDesktopSetting,
-    events::{DataTransferContent, Event, KeyDownEvent, KeyModifiers, RequestId, TextInputEvent, WindowId},
+    events::{DataTransferContent, Event, KeyDownEvent, KeyModifiers, RequestId, SoftwareDrawData, TextInputEvent, WindowId},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
-    geometry::{LogicalRect, LogicalSize},
+    geometry::{LogicalRect, LogicalSize, PhysicalSize},
     text_input_api::{TextInputContentHints, TextInputContentPurpose, TextInputContext},
     window_api::{
         window_request_internal_activation_token,
@@ -53,7 +54,6 @@ const TEXT_MIME_TYPE: &str = "text/plain;charset=utf-8";
 const URI_LIST_MIME_TYPE: &str = "text/uri-list";
 
 const ALL_MIMES: &str = "text/uri-list,text/plain;charset=utf-8";
-const DRAG_ICON_WINDOW_ID: WindowId = WindowId(-1);
 
 #[derive(Debug, Default)]
 struct OptionalAppPtr(Option<AppPtr<'static>>);
@@ -70,7 +70,11 @@ struct Settings {
     cursor_theme_size: Option<u32>,
 }
 
-#[derive(Debug, Default)]
+pub trait Drawable {
+    fn draw(&mut self, physical_size: PhysicalSize, window_state: &WindowState);
+}
+
+#[derive(Default)]
 pub struct WindowState {
     pub active: bool,
     maximized: bool,
@@ -82,7 +86,7 @@ pub struct WindowState {
     pub animation_progress: f32,
     pub drag_and_drop_target: bool,
     pub drag_and_drop_source: bool,
-    pub opengl: Option<OpenglState>,
+    drawable: Option<Box<dyn Drawable>>,
     last_received_path: Option<String>,
     redraw: bool,
 }
@@ -104,12 +108,13 @@ enum ActivationTokenAction {
     OpenFileManager(String),
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 struct State {
     app_ptr: OptionalAppPtr,
     key_window_id: Option<WindowId>,
     key_modifiers: KeyModifiers,
     windows: HashMap<WindowId, WindowState>,
+    drag_icon: Option<WindowState>,
     settings: Settings,
     request_sources: HashMap<RequestId, WindowId>,
     notification_sources: HashMap<u32, WindowId>,
@@ -122,7 +127,7 @@ thread_local! {
     static OBJ_ID_TO_DEALLOC: RefCell<HashMap<i64, Box<dyn FnOnce()>>> = RefCell::default();
 }
 
-const DRAG_AND_DROP_LEFT_OF: f64 = 100.;
+pub const DRAG_AND_DROP_LEFT_OF: f64 = 100.;
 
 impl State {
     fn add_data_request_source(&mut self, window_id: WindowId) -> i32 {
@@ -352,7 +357,7 @@ fn on_text_input(event: &TextInputEvent, app_ptr: AppPtr<'_>, window_id: WindowI
         }
     }
 
-    debug!("{window_id:?} : {} : {:?}", window_state.text.len(), window_state);
+    debug!("{window_id:?} : {}", window_state.text);
 }
 
 fn on_data_transfer_received(content: &DataTransferContent, window_state: &mut WindowState) {
@@ -430,6 +435,24 @@ fn on_application_started(state: &mut State) -> Vec<Action> {
     actions
 }
 
+fn new_opengl(app_ptr: AppPtr, prefer_skia: bool) -> Box<dyn Drawable> {
+    if prefer_skia {
+        #[cfg(feature = "skia")]
+        return Box::new(super::sample_linux_draw_skia::SkiaOpenglState::new(app_ptr));
+    }
+    Box::new(OpenglState::new(app_ptr))
+}
+
+fn draw_with_init(app_ptr: AppPtr, software_draw_data: &SoftwareDrawData, physical_size: PhysicalSize, window_state: &mut WindowState) {
+    if software_draw_data.canvas.is_null() {
+        let mut drawable = window_state.drawable.take().unwrap_or_else(|| new_opengl(app_ptr, true));
+        drawable.draw(physical_size, window_state);
+        window_state.drawable = Some(drawable);
+    } else {
+        draw_software(software_draw_data, physical_size, window_state);
+    }
+}
+
 #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
 fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
     const MOUSE_BUTTON_LEFT: u32 = 0x110;
@@ -478,25 +501,17 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
                 if let Some(window_state) = state.windows.get_mut(&data.window_id) {
                     window_state.animation_tick();
 
-                    if data.software_draw_data.canvas.is_null() {
-                        draw_opengl_triangle_with_init(app_ptr, data.physical_size, data.window_id, window_state);
-                    } else {
-                        draw_software(&data.software_draw_data, data.physical_size, window_state);
-                    }
+                    draw_with_init(app_ptr, &data.software_draw_data, data.physical_size, window_state);
                     actions.push(Action::Dummy);
                     window_state.redraw = false;
                 }
             }
             Event::DragIconDraw(data) => {
-                let window_id = DRAG_ICON_WINDOW_ID;
-                let window_state = state.windows.entry(window_id).or_insert_with(WindowState::default);
+                let window_state = state.drag_icon.get_or_insert_default();
+                window_state.scale = data.scale;
                 window_state.animation_tick();
 
-                if data.software_draw_data.canvas.is_null() {
-                    draw_opengl_triangle_with_init(app_ptr, data.physical_size, window_id, window_state);
-                } else {
-                    draw_software_drag_icon(&data.software_draw_data, data.physical_size, data.scale);
-                }
+                draw_with_init(app_ptr, &data.software_draw_data, data.physical_size, window_state);
                 actions.push(Action::Dummy);
                 window_state.redraw = false;
             }
@@ -590,7 +605,7 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
                 }
             }
             Event::DragAndDropFinished(data) => {
-                state.windows.remove(&DRAG_ICON_WINDOW_ID);
+                state.drag_icon = None;
                 if let Some(window_state) = state.windows.get_mut(&data.window_id) {
                     window_state.drag_and_drop_source = false;
                     window_state.redraw = true;
@@ -603,7 +618,7 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
                         window_state.drag_and_drop_source = false;
                         window_state.redraw = true;
                     }
-                    state.windows.remove(&DRAG_ICON_WINDOW_ID);
+                    state.drag_icon = None;
                 }
             }
             Event::TextInputAvailability(data) => {
