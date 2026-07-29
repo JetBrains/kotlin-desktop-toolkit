@@ -75,7 +75,7 @@ abstract class SkikoWindowLinux(
     fun performDrawing(event: Event.WindowDraw): Boolean {
         val draw = { surface: Surface ->
             val time = creationTime.elapsedNow().inWholeMilliseconds
-            surface.canvas.draw(event.size, event.scale, time)
+            draw(surface.canvas, event.size, time)
             surface.flushAndSubmit()
             true
         }
@@ -84,9 +84,10 @@ abstract class SkikoWindowLinux(
         } ?: performOpenGlDrawing(event.size, directContext, draw)
     }
 
-    abstract fun Canvas.draw(size: PhysicalSize, scale: Double, time: Long)
+    abstract fun draw(canvas: Canvas, size: PhysicalSize, time: Long)
 
     override fun close() {
         window.close()
+        directContext.close()
     }
 }

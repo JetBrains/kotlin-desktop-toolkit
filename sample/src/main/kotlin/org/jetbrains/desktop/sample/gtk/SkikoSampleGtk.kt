@@ -92,12 +92,12 @@ import kotlin.toUInt
 import kotlin.toUShort
 import kotlin.use
 
-const val TEXT_MIME_TYPE = "text/plain;charset=utf-8"
-const val URI_LIST_MIME_TYPE = "text/uri-list"
-const val PNG_MIME_TYPE = "image/png"
+private const val TEXT_MIME_TYPE = "text/plain;charset=utf-8"
+private const val URI_LIST_MIME_TYPE = "text/uri-list"
+private const val PNG_MIME_TYPE = "image/png"
 
 // TODO
-val EXAMPLE_FILES: List<String> = listOf(
+private val EXAMPLE_FILES: List<String> = listOf(
     "/home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 12-08-34.png",
     "/home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 13-55-25.png",
 //    "/home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 14-02-45.png",
@@ -105,7 +105,7 @@ val EXAMPLE_FILES: List<String> = listOf(
 //    "/boot/efi/",
 )
 
-sealed class DataTransferContentType {
+private sealed class DataTransferContentType {
     data class Text(val text: String) : DataTransferContentType()
     data class UriList(val files: List<String>) : DataTransferContentType()
 
@@ -117,7 +117,7 @@ sealed class DataTransferContentType {
     }
 }
 
-fun KeyCode.isModifierKey(): Boolean {
+private fun KeyCode.isModifierKey(): Boolean {
     return when (this.value) {
         KeyCode.Alt_L, KeyCode.Alt_R,
         KeyCode.Control_L, KeyCode.Control_R,
@@ -129,7 +129,7 @@ fun KeyCode.isModifierKey(): Boolean {
     }
 }
 
-fun Set<KeyModifiers>.shortcutModifiers(): Set<KeyModifiers> = toMutableSet().also {
+private fun Set<KeyModifiers>.shortcutModifiers(): Set<KeyModifiers> = toMutableSet().also {
     it.remove(KeyModifiers.CapsLock)
     it.remove(KeyModifiers.NumLock)
 }
@@ -175,11 +175,12 @@ private interface ClipboardHandler {
 }
 
 private data class PreeditData(
-    val cursorOffset: Int,
+    val cursorOffset: Int?,
     val text: List<Pair<String, TextStyle?>>,
 )
 
 private class EditorState {
+    private var textInputAvailable: Boolean = false
     private var textInputEnabled: Boolean = false
     private var preedit: PreeditData? = null
     private var text: StringBuilder = StringBuilder()
@@ -277,7 +278,6 @@ private class EditorState {
                 Pair(text.substring(selectionRange.second, text.length), null),
             )
         } else if (preedit != null) {
-            println(preedit)
             buildList {
                 if (cursorOffset != 0) {
                     add(Pair(text.substring(0, cursorOffset), null))
@@ -293,13 +293,15 @@ private class EditorState {
         }
         textLine = textLineCreator.makeTextLine(stringLine, fontSize, Color.WHITE)
         val offset = cursorOffset + (preedit?.cursorOffset ?: 0)
-        val x = if (stringLine.isEmpty() || offset == 0) {
+        val nestedPhysicalX = if (stringLine.isEmpty() || offset == 0) {
             0f
         } else {
             if (preedit?.text.isNullOrEmpty() || preedit.cursorOffset == 0) {
                 val start = getPreviousGlyphOffset(text.toString(), cursorOffset)
                 val end = getNextGlyphOffset(text.toString(), start)
                 textLine.getRectsForRange(start, end, RectHeightMode.MAX, RectWidthMode.MAX).single().rect.right
+            } else if (preedit.cursorOffset == null) {
+                null
             } else {
                 val preeditText = preedit.text.reduce { acc, e -> Pair(acc.first + e.first, null) }.first
                 val preeditStart = getPreviousGlyphOffset(preeditText, preedit.cursorOffset)
@@ -313,12 +315,14 @@ private class EditorState {
             }
         }
 
-        cursorRectangle = LogicalDoubleRect(
-            x = container.x + scale.rawPhysicalToLogical(x.toDouble()),
-            y = yOffset,
-            width = LogicalPixels(2.0),
-            height = scale.rawPhysicalToLogical(textLine.ideographicBaseline.toDouble()),
-        )
+        if (nestedPhysicalX != null) {
+            cursorRectangle = LogicalDoubleRect(
+                x = container.x + scale.rawPhysicalToLogical(nestedPhysicalX.toDouble()),
+                y = yOffset,
+                width = LogicalPixels(2.0),
+                height = scale.rawPhysicalToLogical(textLine.ideographicBaseline.toDouble()),
+            )
+        }
     }
 
     fun draw(canvas: Canvas, container: LogicalDoubleRect, scale: Scale) {
@@ -414,7 +418,7 @@ private class EditorState {
         clipboardHandler: ClipboardHandler,
         container: LogicalDoubleRect,
     ): EventHandlerResult {
-        if (preedit != null && event.keyCode.value == KeyCode.Shift_L) {
+        if (preedit != null && event.keyCode.value == KeyCode.Shift_R) {
             val disableTextInput = modifiers.contains(KeyModifiers.Alt)
             resetTextInput(window, reenable = !disableTextInput, clear = modifiers.contains(KeyModifiers.Control))
             textInputEnabled = !disableTextInput
@@ -576,13 +580,13 @@ private class EditorState {
         }
 
         onTextChanged(container, windowState.scale)
-        if (textInputEnabled) {
+        if (textInputAvailable && textInputEnabled) {
             window.textInputUpdate(createTextInputContext())
         }
         return EventHandlerResult.Stop
     }
 
-    fun onDataTransfer(content: DataTransferContent, window: Window, container: LogicalDoubleRect, scale: Scale): EventHandlerResult {
+    fun onDataTransfer(content: DataTransferContent, window: Window, container: LogicalDoubleRect, scale: Scale) {
         when (content.mimeType) {
             URI_LIST_MIME_TYPE -> {
                 val files = content.data.decodeToString().trimEnd().split("\r\n")
@@ -599,7 +603,7 @@ private class EditorState {
                 text.insert(cursorOffset, pastedText)
                 cursorOffset += pastedText.length
                 onTextChanged(container, scale)
-                if (textInputEnabled) {
+                if (textInputAvailable && textInputEnabled) {
                     window.textInputUpdate(createTextInputContext())
                 }
             }
@@ -608,27 +612,29 @@ private class EditorState {
                 pastedImage = Image.makeFromEncoded(content.data)
             }
         }
-        return EventHandlerResult.Stop
     }
 
-    fun onDragAndDropFinished(action: DragAndDropAction?): EventHandlerResult {
+    fun onDragAndDropFinished(action: DragAndDropAction?) {
         if (action == DragAndDropAction.Move) {
             deleteSelection()
         }
-        return EventHandlerResult.Stop
     }
 
-    fun onKeyboardFocusChanged(focused: Boolean, window: Window, container: LogicalDoubleRect, scale: Scale): EventHandlerResult {
+    fun onKeyboardFocusChanged(focused: Boolean, window: Window, container: LogicalDoubleRect, scale: Scale) {
         if (focused && textInputEnabled) {
             window.textInputEnable(createTextInputContext())
         } else {
-            window.textInputDisable()
+            resetTextInput(window, reenable = false, clear = false)
         }
+        textInputAvailable = focused
         onTextChanged(container, scale)
-        return EventHandlerResult.Stop
     }
 
     fun resetTextInput(window: Window, reenable: Boolean = true, clear: Boolean = false) {
+        if (!textInputAvailable) {
+            return
+        }
+
         window.textInputDisable()
 
         if (clear) {
@@ -705,20 +711,27 @@ private class EditorState {
             preedit = PreeditData(
                 text = textWithStyles,
                 cursorOffset = preeditStringData.text?.let { preeditString ->
-                    check(preeditStringData.cursorBytePos >= 0)
-                    utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorBytePos.toUInt())
+                    if (preeditStringData.cursorBytePos == -1) {
+                        null
+                    } else {
+                        check(preeditStringData.cursorBytePos >= 0)
+                        utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorBytePos.toUInt())
+                    }
                 } ?: 0,
             )
         }
         onTextChanged(container, scale)
-        if (textInputEnabled && (preedit != null || event.deleteSurroundingTextData != null || event.commitStringData != null)) {
+        if (textInputAvailable &&
+            textInputEnabled &&
+            (preedit != null || event.deleteSurroundingTextData != null || event.commitStringData != null)
+        ) {
             window.textInputUpdate(createTextInputContext())
         }
         return EventHandlerResult.Stop
     }
 }
 
-internal class WindowState {
+private class WindowState {
     var active: Boolean = false
     var maximized: Boolean = false
     var fullscreen: Boolean = false
@@ -783,6 +796,7 @@ private class ContentArea {
                             dragIconParams,
                         )
                         clipboardHandler.startDrag(content, startDragAndDropParams) { canvas, scale ->
+                            canvas.clear(0x77777777)
                             val skikoTextLine = dragIconTextLineCreator.makeTextLine(
                                 EXAMPLE_FILES.joinToString("\n"),
                                 LogicalPixelsInt(10).toSkiko(scale),
@@ -1197,13 +1211,15 @@ private class RotatingBallWindow(
     }
 
     fun onDataTransfer(content: DataTransferContent?): EventHandlerResult {
-        return content?.let {
+        content?.let {
             editorState.onDataTransfer(it, window, windowContainer.contentArea.contentRect, windowState.scale)
-        } ?: EventHandlerResult.Stop
+        }
+        return EventHandlerResult.Stop
     }
 
     fun onDragAndDropFinished(action: DragAndDropAction?): EventHandlerResult {
-        return editorState.onDragAndDropFinished(action)
+        editorState.onDragAndDropFinished(action)
+        return EventHandlerResult.Stop
     }
 
     fun onMouseMoved(locationInWindow: LogicalPoint): EventHandlerResult {
@@ -1234,7 +1250,8 @@ private class RotatingBallWindow(
     }
 
     fun onKeyboardFocusChanged(focused: Boolean): EventHandlerResult {
-        return editorState.onKeyboardFocusChanged(focused, window, windowContainer.contentArea.contentRect, windowState.scale)
+        editorState.onKeyboardFocusChanged(focused, window, windowContainer.contentArea.contentRect, windowState.scale)
+        return EventHandlerResult.Stop
     }
 
     fun onTextInput(event: Event.TextInput): EventHandlerResult {

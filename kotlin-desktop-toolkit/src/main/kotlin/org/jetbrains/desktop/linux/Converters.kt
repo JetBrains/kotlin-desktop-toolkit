@@ -68,11 +68,11 @@ import kotlin.time.toDuration
 /**
  * Converts UTF-8 offset to UTF-16 offset.
  */
-public fun utf8OffsetToUtf16Offset(string: CharSequence, offset: Long): Int {
-    if (offset == 0L) {
+public fun utf8OffsetToUtf16Offset(string: CharSequence, offset: UInt): Int {
+    if (offset == 0U) {
         return 0
     }
-    var utf8Offset = offset
+    var utf8Offset = offset.toLong()
     var utf16Offset = 0
     for (codePoint in string.codePoints()) {
         utf8Offset -= when {
