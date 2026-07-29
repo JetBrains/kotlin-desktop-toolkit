@@ -32,12 +32,40 @@ public class TextInputContext(internal val window: Window) {
         }
     }
 
+    /**
+     * Makes this window's input context the application's active one, so that events fed through
+     * [handleCurrentEvent] are offered to the current input source (IME).
+     *
+     * Call this when the view backing the window's [TextInputClient] takes focus. AppKit activates the
+     * first responder's input context on its own in many situations — for example when the window
+     * becomes key — so an explicit call is mainly needed when focus moves within a window without a
+     * change of first responder, or to restore a context that was explicitly deactivated.
+     *
+     * See [NSTextInputContext.activate()](https://developer.apple.com/documentation/appkit/nstextinputcontext/activate()).
+     */
     public fun activate() {
         ffiDownCall {
             desktop_macos_h.text_input_context_activate(window.pointer)
         }
     }
 
+    /**
+     * Relinquishes the active input context, ending the current IME session along with any UI it puts
+     * on screen, such as the candidate window.
+     *
+     * Call this when the view backing the window's [TextInputClient] loses focus. This does *not* end an
+     * in-flight composition, so pair it with [discardMarkedText] if you want to make sure no stale
+     * marked range survives the deactivation.
+     *
+     * AppKit re-activates the first responder's input context on its own in some situations — when the
+     * window becomes key again, or when an event is fed to the context — so a deactivated context is not
+     * guaranteed to stay deactivated.
+     *
+     * [Window.close] already deactivates the context before tearing the native window down, so there is
+     * no need to do that yourself.
+     *
+     * See [NSTextInputContext.deactivate()](https://developer.apple.com/documentation/appkit/nstextinputcontext/deactivate()).
+     */
     public fun deactivate() {
         ffiDownCall {
             desktop_macos_h.text_input_context_deactivate(window.pointer)
