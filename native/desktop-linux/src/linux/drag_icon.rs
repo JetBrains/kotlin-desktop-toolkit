@@ -1,5 +1,5 @@
 use crate::linux::{
-    application_state::{ApplicationState, EglInstance},
+    application_state::{ApplicationState, EGLData},
     events::{DragIconDrawEvent, SoftwareDrawData},
     geometry::{LogicalSize, PhysicalSize},
     rendering_egl::EglRendering,
@@ -10,11 +10,12 @@ use log::{debug, info, trace, warn};
 use smithay_client_toolkit::{
     compositor::{FrameCallbackData, Surface},
     reexports::{
-        client::{Proxy as _, QueueHandle, protocol::wl_display::WlDisplay},
+        client::{Proxy as _, QueueHandle},
         protocols::wp::viewporter::client::wp_viewport::WpViewport,
     },
     shm::Shm,
 };
+use std::rc::Rc;
 
 pub struct DragIcon {
     pub size: LogicalSize,
@@ -35,9 +36,8 @@ impl DragIcon {
         state: &ApplicationState,
         qh: &QueueHandle<ApplicationState>,
         shm: &Shm,
-        wl_display: &WlDisplay,
         size: LogicalSize,
-        egl: Option<&'static EglInstance>,
+        egl: Option<Rc<EGLData>>,
     ) -> anyhow::Result<Self> {
         debug!("DragIcon::new start: size={size:?}");
         let surface = Surface::new(&state.compositor_state, qh)?;
@@ -56,7 +56,7 @@ impl DragIcon {
         let physical_size = size.to_physical(current_scale);
 
         let rendering_data = if let Some(egl) = egl {
-            match EglRendering::new(egl, wl_display, wl_surface, physical_size) {
+            match EglRendering::new(egl, wl_surface, physical_size) {
                 Ok(egl_rendering_data) => RenderingData::Egl(egl_rendering_data),
                 Err(e) => {
                     warn!("Failed to create EGL rendering, falling back to software rendering. Error: {e:?}");

@@ -24,7 +24,7 @@ use crate::linux::{
     window::SimpleWindow,
 };
 use anyhow::Context;
-use khronos_egl;
+use khronos_egl as egl;
 use log::{debug, info, warn};
 use smithay_client_toolkit::{
     activation::{ActivationHandler, ActivationState, RequestData},
@@ -81,24 +81,46 @@ use smithay_client_toolkit::{
     shm::{Shm, ShmHandler},
     //
 };
-use std::{collections::HashMap, sync::LazyLock};
+use std::collections::HashMap;
+use std::rc::Rc;
 
 /// cbindgen:ignore
 pub type EglInstance = khronos_egl::DynamicInstance<khronos_egl::EGL1_0>;
 
-/// cbindgen:ignore
-static EGL: LazyLock<Option<EglInstance>> = LazyLock::new(|| match unsafe { EglInstance::load_required() } {
-    Ok(egl_lib) => Some(egl_lib),
-    Err(e) => {
-        warn!("Failed to load EGL: {e}");
-        None
-    }
-});
+pub struct EGLData {
+    pub instance: EglInstance,
+    pub display: egl::Display,
+}
 
-pub fn get_egl() -> Option<&'static EglInstance> {
-    match &*EGL {
-        Some(v) => Some(v),
-        None => None,
+fn init_egl(display: &WlDisplay) -> anyhow::Result<Rc<EGLData>> {
+    let egl_instance = unsafe { EglInstance::load_required() }?;
+    let wayland_display_ptr = display.id().as_ptr();
+    let egl_display = unsafe { egl_instance.get_display(wayland_display_ptr.cast()) }.context("egl.get_display")?;
+    egl_instance.initialize(egl_display).context("egl.initialize")?;
+
+    Ok(Rc::new(EGLData {
+        instance: egl_instance,
+        display: egl_display,
+    }))
+}
+
+fn get_egl(egl: &mut Option<anyhow::Result<Rc<EGLData>>>, display: &WlDisplay) -> Option<Rc<EGLData>> {
+    egl.get_or_insert_with(|| {
+        init_egl(display).map_err(|e| {
+            warn!("Failed to load EGL: {e}");
+            e
+        })
+    })
+    .as_ref()
+    .ok()
+    .cloned()
+}
+
+impl Drop for EGLData {
+    fn drop(&mut self) {
+        if self.display.as_ptr() != egl::NO_DISPLAY {
+            self.instance.terminate(self.display).expect("eglTerminate");
+        }
     }
 }
 
@@ -115,7 +137,7 @@ pub struct ApplicationState {
     pub shm_state: Shm,
     pub xdg_shell_state: XdgShell,
     pub xdg_activation: Option<ActivationState>,
-    pub wl_display: WlDisplay,
+    wl_display: WlDisplay,
     pub keyboard: Option<WlKeyboard>,
     cursor_theme: Option<(String, u32)>,
     pub themed_pointer: Option<ThemedPointer>,
@@ -134,6 +156,7 @@ pub struct ApplicationState {
     pub primary_selection_device: Option<PrimarySelectionDevice>,
     pub primary_selection_source: Option<PrimarySelectionSource>,
 
+    egl: Option<anyhow::Result<Rc<EGLData>>>,
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
     pub last_pointer_down_event_serial: Option<u32>,
@@ -204,6 +227,7 @@ impl ApplicationState {
             primary_selection_manager: PrimarySelectionManagerState::bind(globals, qh).ok(),
             primary_selection_device: None,
             primary_selection_source: None,
+            egl: None,
             window_id_to_surface_id: HashMap::new(),
             windows: HashMap::new(),
             last_pointer_down_event_serial: None,
@@ -213,6 +237,10 @@ impl ApplicationState {
             notification_action_sender: None,
             calloop_scheduler,
         })
+    }
+
+    pub fn get_egl(&mut self) -> Option<Rc<EGLData>> {
+        get_egl(&mut self.egl, &self.wl_display)
     }
 
     pub fn get_window_id(&self, surface: &WlSurface) -> Option<WindowId> {
@@ -470,10 +498,10 @@ impl WindowHandler for ApplicationState {
     fn configure(&mut self, conn: &Connection, qh: &QueueHandle<Self>, window: &Window, configure: WindowConfigure, _serial: u32) {
         if let Some(w) = self.windows.get_mut(&window.wl_surface().id()) {
             let egl = match w.rendering_mode {
-                RenderingMode::Auto | RenderingMode::EGL => get_egl(),
+                RenderingMode::Auto | RenderingMode::EGL => get_egl(&mut self.egl, &self.wl_display),
                 RenderingMode::Software => None,
             };
-            let is_first_configure = w.configure(&self.wl_display, &self.shm_state, window, &configure, egl);
+            let is_first_configure = w.configure(&self.shm_state, window, &configure, egl);
 
             _ = send_event(
                 self.callbacks.event_handler,

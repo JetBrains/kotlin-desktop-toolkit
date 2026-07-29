@@ -506,7 +506,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
                     window_state.animation_tick();
 
                     if data.software_draw_data.canvas.is_null() {
-                        draw_opengl_triangle_with_init(data.physical_size, data.window_id, window_state);
+                        draw_opengl_triangle_with_init(app_ptr, data.physical_size, data.window_id, window_state);
                     } else {
                         draw_software(&data.software_draw_data, data.physical_size, data.scale, window_state);
                     }
@@ -521,7 +521,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 window_state.animation_tick();
 
                 if data.software_draw_data.canvas.is_null() {
-                    draw_opengl_triangle_with_init(data.physical_size, window_id, window_state);
+                    draw_opengl_triangle_with_init(app_ptr, data.physical_size, window_id, window_state);
                 } else {
                     draw_software_drag_icon(&data.software_draw_data, data.physical_size, data.scale);
                 }

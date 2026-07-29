@@ -1,6 +1,6 @@
 use crate::linux::{
     application_api::RenderingMode,
-    application_state::{ApplicationState, EglInstance},
+    application_state::{ApplicationState, EGLData},
     events::{SoftwareDrawData, WindowDecorationMode, WindowDrawEvent, WindowId},
     geometry::{LogicalPoint, LogicalSize, PhysicalSize},
     pointer_shapes_api::PointerShape,
@@ -15,7 +15,7 @@ use smithay_client_toolkit::{
     reexports::{
         client::{
             Connection, Proxy as _, QueueHandle,
-            protocol::{wl_display::WlDisplay, wl_seat::WlSeat, wl_surface::WlSurface},
+            protocol::{wl_seat::WlSeat, wl_surface::WlSurface},
         },
         protocols::wp::viewporter::client::wp_viewport::WpViewport,
     },
@@ -26,10 +26,10 @@ use smithay_client_toolkit::{
     },
     shm::Shm,
 };
+use std::rc::Rc;
 
-#[derive(Debug)]
 pub enum RenderingData {
-    Egl(EglRendering<'static>),
+    Egl(EglRendering),
     Software(SoftwareRendering),
 }
 
@@ -143,14 +143,7 @@ impl SimpleWindow {
         self.close = true;
     }
 
-    pub fn configure(
-        &mut self,
-        wl_display: &WlDisplay,
-        shm: &Shm,
-        window: &Window,
-        configure: &WindowConfigure,
-        egl: Option<&'static EglInstance>,
-    ) -> bool {
+    pub fn configure(&mut self, shm: &Shm, window: &Window, configure: &WindowConfigure, egl: Option<Rc<EGLData>>) -> bool {
         const DEFAULT_WIDTH: u32 = 640;
         const DEFAULT_HEIGHT: u32 = 480;
         debug!("SimpleWindow::configure start for {:?}: {configure:?}", self.window_id);
@@ -188,7 +181,7 @@ impl SimpleWindow {
         let is_first_configure = self.rendering_data.is_none();
         if is_first_configure {
             self.rendering_data = if let Some(egl) = egl {
-                match EglRendering::new(egl, wl_display, window.wl_surface(), physical_size) {
+                match EglRendering::new(egl, window.wl_surface(), physical_size) {
                     Ok(egl_rendering_data) => Some(RenderingData::Egl(egl_rendering_data)),
                     Err(e) => {
                         warn!("Failed to create EGL rendering, falling back to software rendering. Error: {e:?}");
