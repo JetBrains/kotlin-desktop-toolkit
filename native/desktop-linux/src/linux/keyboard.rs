@@ -4,7 +4,6 @@ use crate::linux::{
 };
 use log::debug;
 use smithay_client_toolkit::{
-    delegate_keyboard,
     reexports::client::{
         Connection, QueueHandle,
         protocol::{wl_keyboard::WlKeyboard, wl_surface::WlSurface},
@@ -97,5 +96,3 @@ impl KeyboardHandler for ApplicationState {
         self.send_event(event);
     }
 }
-
-delegate_keyboard!(ApplicationState);

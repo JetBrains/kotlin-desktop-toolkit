@@ -17,9 +17,9 @@ log4rs.workspace = true
 desktop-common = { path = "../desktop-common" }
 
 [target.'cfg(target_os="linux")'.dependencies]
-smithay-client-toolkit = "0.20.0"
+smithay-client-toolkit = "0.21.1"
 ashpd = { version = "0.13.4", default-features = false, features = ["file_chooser", "open_uri", "settings", "tokio", "wayland"] }
-bitflag-attr = "0.13.0"
+bitflag-attr = "0.14.0"
 futures-lite = "2.6.1"
 wayland-egl = "0.32.9"
 khronos-egl = { version = "6.0.0", features = ["dynamic"] }

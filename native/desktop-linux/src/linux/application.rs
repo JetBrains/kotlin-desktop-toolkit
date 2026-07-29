@@ -1,6 +1,6 @@
 use crate::linux::{
     application_api::{ApplicationCallbacks, DragAndDropActions, RenderingMode},
-    application_state::{ApplicationState, KdtRequestData, get_egl},
+    application_state::{ApplicationState, get_egl},
     async_event_result::AsyncEventResult,
     data_transfer::MimeTypes,
     desktop_settings::init_desktop_settings_notifier_task,
@@ -20,6 +20,7 @@ use crate::linux::{
 use anyhow::{Context, anyhow, bail};
 use desktop_common::logger::catch_panic;
 use log::{debug, warn};
+use smithay_client_toolkit::activation::RequestData;
 use smithay_client_toolkit::{
     reexports::{
         calloop::{
@@ -543,15 +544,13 @@ impl Application {
             .map(|(seat, serial)| (seat.clone(), serial));
         self.async_request_counter = self.async_request_counter.wrapping_add(1);
         let request_id = RequestId(self.async_request_counter);
-        xdg_activation.request_token_with_data(
+        xdg_activation.request_token(
             &self.qh,
-            KdtRequestData {
-                request_data: smithay_client_toolkit::activation::RequestData {
-                    app_id: Some(source_w.app_id.clone()),
-                    seat_and_serial,
-                    surface: Some(source_w.window.wl_surface().clone()),
-                },
-                request_id,
+            RequestData::<RequestId> {
+                app_id: Some(source_w.app_id.clone()),
+                seat_and_serial,
+                surface: Some(source_w.window.wl_surface().clone()),
+                udata: request_id,
             },
         );
         Ok(request_id)

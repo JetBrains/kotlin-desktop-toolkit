@@ -206,14 +206,14 @@ tasks.register<Exec>("runPackagedMac") {
     commandLine("$appPath/Contents/MacOS/SkikoSample")
 }
 
-val prepareJPackageInput by tasks.registering(Copy::class) {
+val prepareJPackageInput = tasks.register<Copy>("prepareJPackageInput") {
     dependsOn(tasks.jar)
     from(configurations.runtimeClasspath)
     from(tasks.jar)
     into(layout.buildDirectory.dir("jpackage-input"))
 }
 
-val prepareJPackageNativeLibs by tasks.registering(Copy::class) {
+val prepareJPackageNativeLibs = tasks.register<Copy>("prepareJPackageNativeLibs") {
     from(nativeLib)
     into(layout.buildDirectory.dir("jpackage-input/native"))
 }

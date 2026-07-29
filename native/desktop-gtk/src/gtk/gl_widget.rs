@@ -295,7 +295,7 @@ impl gtk4::subclass::widget::WidgetImpl for GlWidgetImpl {
 glib::wrapper! {
     pub struct GlWidget(ObjectSubclass<GlWidgetImpl>)
     @extends gtk4::Widget,
-    @implements gtk4::Accessible, gtk4::Buildable, gtk4::ConstraintTarget;
+    @implements gtk4::Buildable, gtk4::ConstraintTarget;
 }
 
 impl GlWidget {

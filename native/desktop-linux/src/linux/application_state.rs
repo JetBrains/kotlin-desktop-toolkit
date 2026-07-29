@@ -27,22 +27,15 @@ use anyhow::Context;
 use khronos_egl;
 use log::{debug, info, warn};
 use smithay_client_toolkit::{
-    activation::{ActivationHandler, ActivationState, RequestData, RequestDataExt},
+    activation::{ActivationHandler, ActivationState, RequestData},
     compositor::{CompositorHandler, CompositorState},
     data_device_manager::{
         DataDeviceManagerState,
         data_device::DataDevice,
         data_source::{CopyPasteSource, DragSource},
     },
-    delegate_activation,
-    delegate_compositor,
-    delegate_output,
+    delegate_dispatch2,
     delegate_registry,
-    delegate_seat,
-    delegate_shm,
-    delegate_subcompositor,
-    delegate_xdg_shell,
-    delegate_xdg_window,
     output::{OutputHandler, OutputState},
     primary_selection::{PrimarySelectionManagerState, device::PrimarySelectionDevice, selection::PrimarySelectionSource},
     reexports::{
@@ -255,14 +248,14 @@ impl ApplicationState {
 
         let new_themed_pointer = self
             .seat_state
-            .get_pointer_with_theme(qh, seat, self.shm_state.wl_shm(), surface, theme)?;
+            .get_pointer_with_theme::<_, ()>(qh, seat, self.shm_state.wl_shm(), surface, theme)?;
         self.themed_pointer = Some(new_themed_pointer);
         Ok(())
     }
 
     fn update_themed_cursor(&mut self, qh: &QueueHandle<Self>) -> anyhow::Result<()> {
         if let Some(themed_pointer) = self.themed_pointer.take() {
-            let seat = themed_pointer.pointer().data::<PointerData>().unwrap().seat();
+            let seat = themed_pointer.pointer().data::<PointerData<()>>().unwrap().seat();
             self.update_themed_cursor_with_seat(qh, seat)?;
         }
         Ok(())
@@ -279,7 +272,7 @@ impl ApplicationState {
 
     pub fn get_latest_pointer_button_seat_and_serial(&self) -> Option<(&WlSeat, u32)> {
         if let Some(p) = &self.themed_pointer
-            && let Some(pointer_data) = p.pointer().data::<PointerData>()
+            && let Some(pointer_data) = p.pointer().data::<PointerData<()>>()
             && let Some(pointer_event_serial) = self.last_pointer_down_event_serial
         {
             Some((pointer_data.seat(), pointer_event_serial))
@@ -293,7 +286,7 @@ impl ApplicationState {
         if let Some(keyboard_event_serial) = self.last_keyboard_event_serial
             && Some(keyboard_event_serial) > pointer_event_seat_and_serial.map(|e| e.1)
             && let Some(keyboard) = &self.keyboard
-            && let Some(keyboard_data) = keyboard.data::<KeyboardData<Self>>()
+            && let Some(keyboard_data) = keyboard.data::<KeyboardData<Self, ()>>()
         {
             debug!("Using keyboard event serial");
             Some((keyboard_data.seat(), keyboard_event_serial))
@@ -372,7 +365,7 @@ impl SeatHandler for ApplicationState {
     fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlSeat) {}
 }
 
-delegate_seat!(ApplicationState);
+delegate_dispatch2!(ApplicationState);
 
 impl ProvidesRegistryState for ApplicationState {
     fn registry(&mut self) -> &mut RegistryState {
@@ -401,15 +394,11 @@ impl OutputHandler for ApplicationState {
     }
 }
 
-delegate_output!(ApplicationState);
-
 impl ShmHandler for ApplicationState {
     fn shm_state(&mut self) -> &mut Shm {
         &mut self.shm_state
     }
 }
-
-delegate_shm!(ApplicationState);
 
 impl CompositorHandler for ApplicationState {
     fn scale_factor_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, new_factor: i32) {
@@ -466,8 +455,6 @@ impl CompositorHandler for ApplicationState {
     }
 }
 
-delegate_compositor!(ApplicationState);
-
 impl WindowHandler for ApplicationState {
     fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, window: &Window) {
         if let Some(window_id) = self.get_window_id(window.wl_surface()) {
@@ -515,12 +502,6 @@ impl WindowHandler for ApplicationState {
     }
 }
 
-delegate_xdg_window!(ApplicationState);
-
-delegate_xdg_shell!(ApplicationState);
-
-delegate_subcompositor!(ApplicationState);
-
 delegate_noop!(ApplicationState: ignore WpFractionalScaleManagerV1);
 delegate_noop!(ApplicationState: ignore WpFractionalScaleV1);
 delegate_noop!(ApplicationState: ignore WpViewporter);
@@ -557,34 +538,12 @@ impl Dispatch<WpFractionalScaleV1, ObjectId> for ApplicationState {
     }
 }
 
-#[derive(Debug)]
-pub struct KdtRequestData {
-    pub request_data: RequestData,
-    pub request_id: RequestId,
-}
-
-impl RequestDataExt for KdtRequestData {
-    fn app_id(&self) -> Option<&str> {
-        self.request_data.app_id()
-    }
-
-    fn seat_and_serial(&self) -> Option<(&WlSeat, u32)> {
-        self.request_data.seat_and_serial()
-    }
-
-    fn surface(&self) -> Option<&WlSurface> {
-        self.request_data.surface()
-    }
-}
-
 impl ActivationHandler for ApplicationState {
-    type RequestData = KdtRequestData;
+    type RequestUdata = RequestId;
 
-    fn new_token(&mut self, token: String, data: &Self::RequestData) {
-        let request_id = data.request_id;
+    fn new_token(&mut self, token: String, data: &RequestData<Self::RequestUdata>) {
+        let request_id = data.udata;
         info!("ActivationHandler::new_token for {data:?}: {token}");
         self.send_event(ActivationTokenResponse::new(request_id, &token));
     }
 }
-
-delegate_activation!(ApplicationState, KdtRequestData);

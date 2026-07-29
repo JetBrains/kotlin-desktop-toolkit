@@ -1,4 +1,16 @@
+use crate::linux::{
+    application_api::RenderingMode,
+    application_state::{ApplicationState, EglInstance},
+    events::{SoftwareDrawData, WindowDecorationMode, WindowDrawEvent, WindowId},
+    geometry::{LogicalPoint, LogicalSize, PhysicalSize},
+    pointer_shapes_api::PointerShape,
+    rendering_egl::EglRendering,
+    rendering_software::SoftwareRendering,
+    window_api::WindowParams,
+    window_resize_edge_api::WindowResizeEdge,
+};
 use log::{debug, error, warn};
+use smithay_client_toolkit::compositor::FrameCallbackData;
 use smithay_client_toolkit::{
     reexports::{
         client::{
@@ -13,18 +25,6 @@ use smithay_client_toolkit::{
         xdg::window::{DecorationMode, Window, WindowConfigure, WindowDecorations},
     },
     shm::Shm,
-};
-
-use crate::linux::{
-    application_api::RenderingMode,
-    application_state::{ApplicationState, EglInstance},
-    events::{SoftwareDrawData, WindowDecorationMode, WindowDrawEvent, WindowId},
-    geometry::{LogicalPoint, LogicalSize, PhysicalSize},
-    pointer_shapes_api::PointerShape,
-    rendering_egl::EglRendering,
-    rendering_software::SoftwareRendering,
-    window_api::WindowParams,
-    window_resize_edge_api::WindowResizeEdge,
 };
 
 #[derive(Debug)]
@@ -262,7 +262,7 @@ impl SimpleWindow {
             }
 
             // Request our next frame
-            surface.frame(qh, surface.clone());
+            surface.frame(qh, FrameCallbackData(surface.clone()));
             did_draw
         };
 
