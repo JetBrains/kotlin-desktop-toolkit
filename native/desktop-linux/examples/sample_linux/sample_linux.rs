@@ -75,6 +75,7 @@ pub struct WindowState {
     pub active: bool,
     maximized: bool,
     fullscreen: bool,
+    pub scale: f64,
     text_input_available: bool,
     composed_text: String,
     text: String,
@@ -460,6 +461,11 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
             Event::DesktopSettingChange(data) => {
                 on_desktop_settings_change(data, state);
             }
+            Event::WindowScaleChanged(data) => {
+                if let Some(window_state) = state.windows.get_mut(&data.window_id) {
+                    window_state.scale = data.new_scale;
+                }
+            }
             Event::WindowConfigure(data) => {
                 if let Some(window_state) = state.windows.get_mut(&data.window_id) {
                     window_state.active = data.active;
@@ -475,7 +481,7 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
                     if data.software_draw_data.canvas.is_null() {
                         draw_opengl_triangle_with_init(app_ptr, data.physical_size, data.window_id, window_state);
                     } else {
-                        draw_software(&data.software_draw_data, data.physical_size, data.scale, window_state);
+                        draw_software(&data.software_draw_data, data.physical_size, window_state);
                     }
                     actions.push(Action::Dummy);
                     window_state.redraw = false;
