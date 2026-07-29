@@ -2,6 +2,7 @@ package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.macos.generated.NativeAttributedStringForRangeCallback
 import org.jetbrains.desktop.macos.generated.NativeAttributedStringForRangeResult
+import org.jetbrains.desktop.macos.generated.NativeCharacterIndexForPointCallback
 import org.jetbrains.desktop.macos.generated.NativeDoCommandCallback
 import org.jetbrains.desktop.macos.generated.NativeFirstRectForCharacterRangeArgs
 import org.jetbrains.desktop.macos.generated.NativeFirstRectForCharacterRangeCallback
@@ -19,6 +20,7 @@ import org.jetbrains.desktop.macos.generated.NativeUnmarkTextCallback
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
+import java.util.concurrent.ConcurrentHashMap
 
 public class TextInputContext(internal val window: Window) {
     public fun handleCurrentEvent(): EventHandlerResult {
@@ -240,69 +242,122 @@ public data class TextRange(
     }
 }
 
-internal data class TextInputClientHolder(var textInputClient: TextInputClient = TextInputClient.Noop) : AutoCloseable {
-    private val arena = Arena.ofShared()
+/**
+ * Application-wide registry of [TextInputClient]s.
+ *
+ * The native callbacks struct is allocated once per application and registered with the native
+ * side on [Application.init]; every callback receives the id of the window the IME event belongs
+ * to and is dispatched to the client registered for that window. A window without a registered
+ * client gets [TextInputClient.Noop] behavior.
+ *
+ * [close] drops the native callbacks before releasing the arena, so callbacks that AppKit
+ * delivers afterwards are ignored on the native side and never reach a freed upcall stub.
+ */
+internal object TextInputClientRegistry : AutoCloseable {
+    private val clients = ConcurrentHashMap<WindowId, TextInputClient>()
+    private var arena: Arena? = null
+
+    internal fun init() {
+        if (arena != null) return
+        arena = Arena.ofConfined()
+        ffiDownCall {
+            desktop_macos_h.set_text_input_client(textInputClientCallbacks())
+        }
+    }
+
+    override fun close() {
+        arena?.let { callbacksArena ->
+            ffiDownCall {
+                desktop_macos_h.drop_text_input_client()
+            }
+            callbacksArena.close()
+            arena = null
+        }
+        clients.clear()
+        arenaToRelease?.let { leakedArena ->
+            Logger.warn { "TextInputClientRegistry.close: attributedStringForRange arena wasn't released, releasing it now" }
+            leakedArena.close()
+            arenaToRelease = null
+        }
+    }
+
+    internal fun register(windowId: WindowId, textInputClient: TextInputClient) {
+        clients[windowId] = textInputClient
+    }
+
+    internal fun unregister(windowId: WindowId) {
+        clients.remove(windowId)
+    }
+
+    private fun clientFor(windowId: WindowId): TextInputClient {
+        return clients[windowId] ?: run {
+            Logger.warn { "No TextInputClient registered for window $windowId, falling back to Noop" }
+            TextInputClient.Noop
+        }
+    }
 
     // called from native code
-    private fun hasMarkedTextCallback(): Boolean {
+    private fun hasMarkedTextCallback(windowId: WindowId): Boolean {
         return ffiUpCall(defaultResult = false) {
-            textInputClient.hasMarkedText()
+            clientFor(windowId).hasMarkedText()
         }
     }
 
     // called from native code
-    private fun markedRangeCallback(rangeOut: MemorySegment) {
+    private fun markedRangeCallback(windowId: WindowId, rangeOut: MemorySegment) {
         ffiUpCall {
-            val range = textInputClient.markedRange() ?: TextRange.notFound
+            val range = clientFor(windowId).markedRange() ?: TextRange.notFound
             range.toNative(rangeOut)
         }
     }
 
     // called from native code
-    private fun selectedRangeCallback(rangeOut: MemorySegment) {
+    private fun selectedRangeCallback(windowId: WindowId, rangeOut: MemorySegment) {
         ffiUpCall {
-            val range = textInputClient.selectedRange() ?: TextRange.notFound
+            val range = clientFor(windowId).selectedRange() ?: TextRange.notFound
             range.toNative(rangeOut)
         }
     }
 
     // called from native code
-    private fun insertTextCallback(s: MemorySegment) {
+    private fun insertTextCallback(windowId: WindowId, s: MemorySegment) {
         ffiUpCall {
             val text = NativeInsertTextArgs.text(s).getString(0)
             val replacementRange = TextRange.fromNative(NativeInsertTextArgs.replacement_range(s)).nullIfNotFound()
-            textInputClient.insertText(text = text, replacementRange = replacementRange)
+            clientFor(windowId).insertText(text = text, replacementRange = replacementRange)
         }
     }
 
     // called from native code
-    private fun setMarkedTextCallback(args: MemorySegment) {
+    private fun setMarkedTextCallback(windowId: WindowId, args: MemorySegment) {
         ffiUpCall {
             val text = NativeSetMarkedTextArgs.text(args).getString(0)
             val selectedRange = TextRange.fromNative(NativeSetMarkedTextArgs.selected_range(args)).nullIfNotFound()
             val replacementRange = TextRange.fromNative(NativeSetMarkedTextArgs.replacement_range(args)).nullIfNotFound()
-            textInputClient.setMarkedText(text, selectedRange = selectedRange, replacementRange = replacementRange)
+            clientFor(windowId).setMarkedText(text, selectedRange = selectedRange, replacementRange = replacementRange)
         }
     }
 
     // called from native code
-    private fun unmarkTextCallback() {
+    private fun unmarkTextCallback(windowId: WindowId) {
         ffiUpCall {
-            textInputClient.unmarkText()
+            clientFor(windowId).unmarkText()
         }
     }
 
-    var arenaToRelease: Arena? = null
+    // Native code calls attributedStringForRange and freeAttributedStringForRange strictly
+    // back-to-back on the main thread, so a single application-wide slot is enough
+    private var arenaToRelease: Arena? = null
 
     // called from native code
-    private fun attributedStringForRangeCallback(rangeIn: MemorySegment): MemorySegment {
+    private fun attributedStringForRangeCallback(windowId: WindowId, rangeIn: MemorySegment): MemorySegment {
         return ffiUpCall(defaultResult = MemorySegment.NULL) {
             val localArena = Arena.ofShared()
             val result = NativeAttributedStringForRangeResult.allocate(localArena)
             try {
                 val rangeIn = TextRange.fromNative(rangeIn)
                 assert(rangeIn.nullIfNotFound() != null)
-                val stringAndRange = textInputClient.attributedStringForRange(rangeIn)
+                val stringAndRange = clientFor(windowId).attributedStringForRange(rangeIn)
 
                 (stringAndRange.actualRange ?: TextRange.notFound).toNative(NativeAttributedStringForRangeResult.actual_range(result))
                 if (stringAndRange.text != null) {
@@ -311,7 +366,10 @@ internal data class TextInputClientHolder(var textInputClient: TextInputClient =
                     NativeAttributedStringForRangeResult.string(result, MemorySegment.NULL)
                 }
             } finally {
-                assert(arenaToRelease == null)
+                arenaToRelease?.let { leakedArena ->
+                    Logger.warn { "attributedStringForRange: previous arena wasn't released, releasing it now" }
+                    leakedArena.close()
+                }
                 arenaToRelease = localArena
             }
             result
@@ -319,19 +377,24 @@ internal data class TextInputClientHolder(var textInputClient: TextInputClient =
     }
 
     // called from native code
-    private fun freeAttributedStringForRangeCallback() {
+    private fun freeAttributedStringForRangeCallback(windowId: WindowId) {
         ffiUpCall {
-            arenaToRelease!!.close()
-            arenaToRelease = null
+            val arena = arenaToRelease
+            if (arena != null) {
+                arena.close()
+                arenaToRelease = null
+            } else {
+                Logger.warn { "freeAttributedStringForRange: there is no arena to release" }
+            }
         }
     }
 
     // called from native code
-    private fun firstRectForCharacterRangeCallback(args: MemorySegment) {
+    private fun firstRectForCharacterRangeCallback(windowId: WindowId, args: MemorySegment) {
         ffiUpCall {
             val range = TextRange.fromNative(NativeFirstRectForCharacterRangeArgs.range_in(args))
             range.nullIfNotFound()?.let { range ->
-                val rectAndRange = textInputClient.firstRectForCharacterRange(range)
+                val rectAndRange = clientFor(windowId).firstRectForCharacterRange(range)
                 (rectAndRange.actualRange ?: TextRange.notFound).toNative(NativeFirstRectForCharacterRangeArgs.actual_range_out(args))
                 rectAndRange.rect.toNative(NativeFirstRectForCharacterRangeArgs.first_rect_out(args))
             }
@@ -339,20 +402,21 @@ internal data class TextInputClientHolder(var textInputClient: TextInputClient =
     }
 
     // called from native code
-    private fun characterIndexForPointCallback(point: MemorySegment): Long {
+    private fun characterIndexForPointCallback(windowId: WindowId, point: MemorySegment): Long {
         return ffiUpCall(defaultResult = 0L) {
-            textInputClient.characterIndexForPoint(LogicalPoint.fromNative(point)) ?: TextInputContext.notFoundOffset
+            clientFor(windowId).characterIndexForPoint(LogicalPoint.fromNative(point)) ?: TextInputContext.notFoundOffset
         }
     }
 
     // called from native code
-    private fun doCommandCallback(command: MemorySegment): Boolean {
+    private fun doCommandCallback(windowId: WindowId, command: MemorySegment): Boolean {
         return ffiUpCall(defaultResult = false) {
-            textInputClient.doCommand(command.getString(0))
+            clientFor(windowId).doCommand(command.getString(0))
         }
     }
 
-    internal fun toNative(): MemorySegment {
+    private fun textInputClientCallbacks(): MemorySegment {
+        val arena = arena!!
         val native = NativeTextInputClient.allocate(arena)
         NativeTextInputClient.has_marked_text(native, NativeHasMarkedTextCallback.allocate(this::hasMarkedTextCallback, arena))
         NativeTextInputClient.marked_range(native, NativeMarkedRangeCallback.allocate(this::markedRangeCallback, arena))
@@ -377,14 +441,10 @@ internal data class TextInputClientHolder(var textInputClient: TextInputClient =
         )
         NativeTextInputClient.character_index_for_point(
             native,
-            NativeFirstRectForCharacterRangeCallback.allocate(this::characterIndexForPointCallback, arena),
+            NativeCharacterIndexForPointCallback.allocate(this::characterIndexForPointCallback, arena),
         )
         NativeTextInputClient.do_command(native, NativeDoCommandCallback.allocate(this::doCommandCallback, arena))
 
         return native
-    }
-
-    override fun close() {
-        arena.close()
     }
 }

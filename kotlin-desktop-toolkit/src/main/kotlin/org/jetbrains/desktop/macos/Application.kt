@@ -36,6 +36,7 @@ public object Application {
                 desktop_macos_h.application_init(applicationConfig.toNative(arena), applicationCallbacks())
             }
         }
+        TextInputClientRegistry.init()
     }
 
     public fun runEventLoop(eventHandler: EventHandler) {

@@ -1,4 +1,7 @@
-use std::{cell::Cell, ptr::NonNull};
+use std::{
+    cell::{Cell, RefCell},
+    ptr::NonNull,
+};
 
 use anyhow::{Context, bail};
 use log::{debug, warn};
@@ -12,7 +15,11 @@ use objc2_foundation::{
     NSArray, NSAttributedString, NSAttributedStringKey, NSNotFound, NSPoint, NSRange, NSRangePointer, NSRect, NSString, NSUInteger,
 };
 
-use super::{application_api::MyNSApplication, string::borrow_ns_string, window_api::WindowPtr};
+use super::{
+    application_api::{AppState, MyNSApplication},
+    string::borrow_ns_string,
+    window_api::{WindowId, WindowPtr},
+};
 use crate::{
     geometry::{LogicalPoint, LogicalRect},
     macos::{screen::NSScreenExts, string::copy_nonnull_to_ns_string, window::Window},
@@ -58,15 +65,15 @@ pub struct FirstRectForCharacterRangeArgs {
     first_rect_out: LogicalRect,
 }
 
-pub type HasMarkedTextCallback = extern "C" fn() -> bool;
-pub type MarkedRangeCallback = extern "C" fn(range_out: &mut TextRange);
-pub type SelectedRangeCallback = extern "C" fn(range_out: &mut TextRange);
-pub type InsertTextCallback = extern "C" fn(args: InsertTextArgs);
-pub type DoCommandCallback = extern "C" fn(command: BorrowedStrPtr) -> bool;
-pub type UnmarkTextCallback = extern "C" fn();
-pub type SetMarkedTextCallback = extern "C" fn(args: SetMarkedTextArgs);
-pub type FirstRectForCharacterRangeCallback = extern "C" fn(args: &mut FirstRectForCharacterRangeArgs);
-pub type CharacterIndexForPoint = extern "C" fn(LogicalPoint) -> usize;
+pub type HasMarkedTextCallback = extern "C" fn(window_id: WindowId) -> bool;
+pub type MarkedRangeCallback = extern "C" fn(window_id: WindowId, range_out: &mut TextRange);
+pub type SelectedRangeCallback = extern "C" fn(window_id: WindowId, range_out: &mut TextRange);
+pub type InsertTextCallback = extern "C" fn(window_id: WindowId, args: InsertTextArgs);
+pub type DoCommandCallback = extern "C" fn(window_id: WindowId, command: BorrowedStrPtr) -> bool;
+pub type UnmarkTextCallback = extern "C" fn(window_id: WindowId);
+pub type SetMarkedTextCallback = extern "C" fn(window_id: WindowId, args: SetMarkedTextArgs);
+pub type FirstRectForCharacterRangeCallback = extern "C" fn(window_id: WindowId, args: &mut FirstRectForCharacterRangeArgs);
+pub type CharacterIndexForPointCallback = extern "C" fn(window_id: WindowId, point: LogicalPoint) -> usize;
 
 #[repr(C)]
 pub struct AttributedStringForRangeResult<'a> {
@@ -74,10 +81,11 @@ pub struct AttributedStringForRangeResult<'a> {
     actual_range: TextRange,
 }
 
-pub type AttributedStringForRangeCallback = extern "C" fn(range: TextRange) -> AttributedStringForRangeResult<'static>;
-pub type FreeAttributedStringCallback = extern "C" fn();
+pub type AttributedStringForRangeCallback = extern "C" fn(window_id: WindowId, range: TextRange) -> AttributedStringForRangeResult<'static>;
+pub type FreeAttributedStringCallback = extern "C" fn(window_id: WindowId);
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct TextInputClient {
     pub has_marked_text: HasMarkedTextCallback,
     pub marked_range: MarkedRangeCallback,
@@ -93,39 +101,70 @@ pub struct TextInputClient {
     pub free_attributed_string_for_range: FreeAttributedStringCallback,
     //
     pub first_rect_for_character_range: FirstRectForCharacterRangeCallback,
-    pub character_index_for_point: CharacterIndexForPoint,
+    pub character_index_for_point: CharacterIndexForPointCallback,
+}
+
+#[derive(Default, Debug)]
+pub(crate) struct TextInputHandlerState {
+    callbacks: RefCell<Option<TextInputClient>>,
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn set_text_input_client(callbacks: TextInputClient) {
+    AppState::with(|state| {
+        let mut old_callbacks = state.text_input_handler_state.callbacks.borrow_mut();
+        if old_callbacks.is_some() {
+            warn!("Overwrite old TextInputClient callbacks {old_callbacks:?} -> {callbacks:?}");
+        }
+        *old_callbacks = Some(callbacks);
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn drop_text_input_client() {
+    AppState::with(|state| {
+        let mut callbacks = state.text_input_handler_state.callbacks.borrow_mut();
+        *callbacks = None;
+    });
+}
+
+fn with_text_input_callbacks<T>(f: impl FnOnce(&TextInputClient) -> T) -> Option<T> {
+    AppState::with(|state| {
+        let callbacks = state.text_input_handler_state.callbacks.borrow();
+        callbacks.as_ref().map(f)
+    })
 }
 
 pub(crate) struct TextInputClientHandler {
-    pub client: TextInputClient,
+    window_id: WindowId,
     pub last_command_handler_result: Cell<Option<bool>>,
 }
 
 // https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/TextEditing/Tasks/TextViewTask.html
 impl TextInputClientHandler {
-    pub const fn new(text_input_client: TextInputClient) -> Self {
+    pub const fn new(window_id: WindowId) -> Self {
         Self {
-            client: text_input_client,
+            window_id,
             last_command_handler_result: Cell::new(None),
         }
     }
 
     pub fn has_marked_text(&self) -> bool {
-        let ret = (self.client.has_marked_text)();
+        let ret = with_text_input_callbacks(|callbacks| (callbacks.has_marked_text)(self.window_id)).unwrap_or(false);
         debug!("hasMarkedText() -> {ret:?}");
         ret
     }
 
     pub fn marked_range(&self) -> NSRange {
         let mut result = TextRange::default();
-        (self.client.marked_range)(&mut result);
+        with_text_input_callbacks(|callbacks| (callbacks.marked_range)(self.window_id, &mut result));
         debug!("markedRange() -> {result:?}");
         result.into()
     }
 
     pub fn selected_range(&self) -> NSRange {
         let mut result = TextRange::default();
-        (self.client.selected_range)(&mut result);
+        with_text_input_callbacks(|callbacks| (callbacks.selected_range)(self.window_id, &mut result));
         debug!("selectedRange() -> {result:?}");
         result.into()
     }
@@ -137,23 +176,28 @@ impl TextInputClientHandler {
             PrintableNSRange(selected_range),
             PrintableNSRange(replacement_range)
         );
-        (self.client.set_marked_text)(SetMarkedTextArgs {
-            text: borrow_ns_string(&text),
-            selected_range: TextRange {
-                location: selected_range.location,
-                length: selected_range.length,
-            },
-            replacement_range: TextRange {
-                location: replacement_range.location,
-                length: replacement_range.length,
-            },
+        with_text_input_callbacks(|callbacks| {
+            (callbacks.set_marked_text)(
+                self.window_id,
+                SetMarkedTextArgs {
+                    text: borrow_ns_string(&text),
+                    selected_range: TextRange {
+                        location: selected_range.location,
+                        length: selected_range.length,
+                    },
+                    replacement_range: TextRange {
+                        location: replacement_range.location,
+                        length: replacement_range.length,
+                    },
+                },
+            );
         });
         Ok(())
     }
 
     pub fn unmark_text(&self) {
         debug!("unmarkText()");
-        (self.client.unmark_text)();
+        with_text_input_callbacks(|callbacks| (callbacks.unmark_text)(self.window_id));
     }
 
     #[allow(clippy::unused_self)]
@@ -181,10 +225,17 @@ impl TextInputClientHandler {
         range: NSRange,
         actual_range: NSRangePointer,
     ) -> anyhow::Result<Option<Retained<NSAttributedString>>> {
-        let result = (self.client.attributed_string_for_range)(range.into());
-        let ns_string = result.string.as_non_null().map(copy_nonnull_to_ns_string).transpose()?;
-        write_to_range_ptr(actual_range, result.actual_range.into());
-        (self.client.free_attributed_string_for_range)();
+        // the string call and the free call must stay back-to-back inside one closure:
+        // the borrowed string is only valid until free_attributed_string_for_range returns
+        let ns_string = with_text_input_callbacks(|callbacks| {
+            let result = (callbacks.attributed_string_for_range)(self.window_id, range.into());
+            let ns_string = result.string.as_non_null().map(copy_nonnull_to_ns_string).transpose();
+            write_to_range_ptr(actual_range, result.actual_range.into());
+            (callbacks.free_attributed_string_for_range)(self.window_id);
+            ns_string
+        })
+        .transpose()?
+        .flatten();
         debug!(
             "attributedSubstringForProposedRange(range={:?}) -> {ns_string:?}",
             PrintableNSRange(range)
@@ -194,9 +245,14 @@ impl TextInputClientHandler {
 
     pub fn insert_text(&self, string: &AnyObject, replacement_range: NSRange) -> anyhow::Result<()> {
         let (_ns_attributed_string, text) = get_maybe_attributed_string(string)?;
-        (self.client.insert_text)(InsertTextArgs {
-            text: borrow_ns_string(&text),
-            replacement_range: replacement_range.into(),
+        with_text_input_callbacks(|callbacks| {
+            (callbacks.insert_text)(
+                self.window_id,
+                InsertTextArgs {
+                    text: borrow_ns_string(&text),
+                    replacement_range: replacement_range.into(),
+                },
+            );
         });
         debug!(
             "insertText(string={text:?}, replacement_range={:?})",
@@ -213,7 +269,9 @@ impl TextInputClientHandler {
             actual_range_out: TextRange::default(),
             first_rect_out: LogicalRect::default(),
         };
-        (self.client.first_rect_for_character_range)(&mut args);
+        if with_text_input_callbacks(|callbacks| (callbacks.first_rect_for_character_range)(self.window_id, &mut args)).is_none() {
+            return Ok(NSRect::ZERO);
+        }
 
         write_to_range_ptr(actual_range, args.actual_range_out.into());
         let screen_height = NSScreen::primary(mtm)?.height();
@@ -229,17 +287,21 @@ impl TextInputClientHandler {
         let screen_height = NSScreen::primary(mtm)?.height();
         let logical_point = LogicalPoint::from_macos_coords(point, screen_height);
 
-        let index = (self.client.character_index_for_point)(logical_point);
+        let index =
+            with_text_input_callbacks(|callbacks| (callbacks.character_index_for_point)(self.window_id, logical_point)).unwrap_or(0);
         debug!("characterIndexForPoint(point = {point:?}) -> {index:?}");
         Ok(index)
     }
 
     pub fn do_command(&self, selector: Sel) {
         debug!("doCommand: {selector:?}");
-        let was_handled = (self.client.do_command)(BorrowedStrPtr::new(selector.name()));
-        let prev_value = self.last_command_handler_result.replace(Some(was_handled));
-        if prev_value.is_some() {
-            warn!("Overwrite some doCommand result: {prev_value:?}");
+        let was_handled =
+            with_text_input_callbacks(|callbacks| (callbacks.do_command)(self.window_id, BorrowedStrPtr::new(selector.name())));
+        if let Some(was_handled) = was_handled {
+            let prev_value = self.last_command_handler_result.replace(Some(was_handled));
+            if prev_value.is_some() {
+                warn!("Overwrite some doCommand result: {prev_value:?}");
+            }
         }
     }
 }

@@ -3,7 +3,7 @@ use super::{
     events::handle_key_down_event,
     metal_api::MetalView,
     screen::NSScreenExts,
-    text_input_client::{TextInputClient, TextInputClientHandler},
+    text_input_client::TextInputClientHandler,
     window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
 };
 use crate::geometry::LogicalPixels;
@@ -158,7 +158,7 @@ impl NSWindowExts for NSWindow {
 }
 
 impl Window {
-    pub(crate) fn new(mtm: MainThreadMarker, params: &WindowParams, text_input_client: TextInputClient) -> anyhow::Result<Self> {
+    pub(crate) fn new(mtm: MainThreadMarker, params: &WindowParams) -> anyhow::Result<Self> {
         /*
         see doc: https://developer.apple.com/documentation/appkit/nswindow/stylemask-swift.struct/resizable?language=objc
 
@@ -224,7 +224,7 @@ impl Window {
         let delegate = WindowDelegate::new(mtm, ns_window.clone(), titlebar.clone());
         ns_window.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
 
-        let root_view = RootView::new(mtm, text_input_client);
+        let root_view = RootView::new(mtm, ns_window.window_id());
         ns_window.setAcceptsMouseMovedEvents(true);
 
         let container = NSView::new(mtm);
@@ -997,10 +997,10 @@ define_class!(
 );
 
 impl RootView {
-    pub(crate) fn new(mtm: MainThreadMarker, text_input_client: TextInputClient) -> Retained<Self> {
+    pub(crate) fn new(mtm: MainThreadMarker, window_id: WindowId) -> Retained<Self> {
         let this = mtm.alloc();
         let this = this.set_ivars(RootViewIvars {
-            text_input_client_handler: TextInputClientHandler::new(text_input_client),
+            text_input_client_handler: TextInputClientHandler::new(window_id),
             tracking_area: Cell::new(None),
             last_key_equiv_ns_event: Cell::new(None),
         });

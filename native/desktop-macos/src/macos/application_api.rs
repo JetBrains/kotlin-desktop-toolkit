@@ -4,6 +4,7 @@ use super::{
     events::EventHandler,
     string::{copy_to_c_string, copy_to_ns_string},
     text_direction::TextDirection,
+    text_input_client::TextInputHandlerState,
 };
 use crate::macos::application_menu::{handle_app_menu_callback, set_initial_app_menu};
 use crate::macos::application_menu_api::ItemId;
@@ -45,6 +46,7 @@ pub(crate) struct AppState {
     app_delegate: Retained<AppDelegate>,
     pub(crate) event_handler: EventHandler,
     pub(crate) drag_and_drop_handler_state: DragAndDropHandlerState,
+    pub(crate) text_input_handler_state: TextInputHandlerState,
     pub(crate) mtm: MainThreadMarker,
 }
 
@@ -107,6 +109,7 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
                     app_delegate,
                     event_handler,
                     drag_and_drop_handler_state: DragAndDropHandlerState::default(),
+                    text_input_handler_state: TextInputHandlerState::default(),
                     mtm,
                 })
                 .map_err(|_| anyhow!("Can't initialize second time!"))?;

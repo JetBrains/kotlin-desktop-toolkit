@@ -12,10 +12,10 @@ import java.lang.foreign.MemorySegment
 
 public typealias WindowId = Long
 
-public class Window internal constructor(
-    ptr: MemorySegment,
-    internal val textInputClientHolder: TextInputClientHolder,
-) : Managed(ptr, desktop_macos_h::window_drop) {
+public class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desktop_macos_h::window_drop) {
+    // cached so that it stays available after the native window is dropped, e.g. in close()
+    private val windowId: WindowId = ffiDownCall { desktop_macos_h.window_get_window_id(ptr) }
+
     public data class WindowParams(
         val origin: LogicalPoint = LogicalPoint(0.0, 0.0),
         val size: LogicalSize = LogicalSize(640.0, 480.0),
@@ -44,12 +44,10 @@ public class Window internal constructor(
     public companion object {
         public fun create(params: WindowParams): Window {
             return Arena.ofConfined().use { arena ->
-                val textInputClientHolder = TextInputClientHolder()
                 Window(
                     ffiDownCall {
-                        desktop_macos_h.window_create(params.toNative(arena), textInputClientHolder.toNative())
+                        desktop_macos_h.window_create(params.toNative(arena))
                     },
-                    textInputClientHolder,
                 )
             }
         }
@@ -80,7 +78,7 @@ public class Window internal constructor(
     }
 
     public fun windowId(): WindowId {
-        return ffiDownCall { desktop_macos_h.window_get_window_id(pointer) }
+        return windowId
     }
 
     public fun screenId(): ScreenId {
@@ -357,7 +355,7 @@ public class Window internal constructor(
         }
 
     public fun setTextInputClient(textInputClient: TextInputClient) {
-        textInputClientHolder.textInputClient = textInputClient
+        TextInputClientRegistry.register(windowId, textInputClient)
     }
 
     public val textInputContext: TextInputContext = TextInputContext(this)
@@ -397,9 +395,12 @@ public class Window internal constructor(
     }
 
     override fun close() {
+        textInputContext.discardMarkedText()
         textInputContext.deactivate()
         super.close()
-        textInputClientHolder.close()
+        // unregister after the native window is dropped, so the client stays reachable
+        // while AppKit tears the window down; callbacks arriving later get Noop behavior
+        TextInputClientRegistry.unregister(windowId)
     }
 }
 
