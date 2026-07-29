@@ -102,6 +102,7 @@ public class ShowNotificationParams(
 public class Application(public val appId: String) {
     public companion object {
         public const val MAX_STRING_SIZE_BYTES: Int = 4083 // Align with Wayland implementation
+        public const val MAX_PIXEL_VALUE: UShort = UShort.MAX_VALUE // X11 can handle only 16-bit integers
     }
 
     private var applicationConfig: ApplicationConfig? = null
