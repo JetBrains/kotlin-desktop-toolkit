@@ -11,12 +11,11 @@ import org.jetbrains.desktop.macos.TextInputClient
 import org.jetbrains.desktop.macos.TextRange
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.RepeatedTest
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import java.util.concurrent.TimeUnit
-import kotlin.test.Ignore
-import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
@@ -50,8 +49,7 @@ class ImeWindowCloseTest : KDTApplicationTestBase() {
         }
     }
 
-    @Ignore("Test crash the JVM")
-    @Test
+    @RepeatedTest(10)
     @Timeout(value = 30, unit = TimeUnit.SECONDS)
     fun `closing window with active IME marked text should not crash`() {
         val window = createWindowAndEnsureItsFocused(name = "IME Close Test Window")

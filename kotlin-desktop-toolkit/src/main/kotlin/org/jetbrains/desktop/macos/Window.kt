@@ -397,6 +397,7 @@ public class Window internal constructor(
     }
 
     override fun close() {
+        textInputContext.deactivate()
         super.close()
         textInputClientHolder.close()
     }
