@@ -167,16 +167,19 @@ impl KdtClipboard {
         }
     }
 
-    pub fn paste(&self, serial: i32, mime_types: &MimeTypes) {
+    pub fn paste(&self, serial: i32, mime_types: &MimeTypes, cancellable: gio::Cancellable) {
         debug!("KdtClipboard::paste start");
         let mime_types = &mime_types.val;
         let event_handler = self.event_handler;
 
-        self.gdk_clipboard
-            .read_async(mime_types, glib::Priority::DEFAULT, gio::Cancellable::NONE, move |res| match res {
+        self.gdk_clipboard.read_async(
+            mime_types,
+            glib::Priority::DEFAULT,
+            Some(&cancellable.clone()),
+            move |res| match res {
                 Ok((input_stream, mime_type)) => {
                     debug!("KdtClipboard::paste: reading {mime_type}");
-                    read_all(input_stream, mime_type, move |content| {
+                    read_all(input_stream, mime_type, cancellable, move |content| {
                         let content = content.unwrap_or(DataTransferContent::null());
                         let event = DataTransferEvent { serial, content };
                         send_event(event_handler, event);
@@ -190,7 +193,8 @@ impl KdtClipboard {
                     };
                     send_event(event_handler, event);
                 }
-            });
+            },
+        );
 
         debug!("KdtClipboard::paste end");
     }

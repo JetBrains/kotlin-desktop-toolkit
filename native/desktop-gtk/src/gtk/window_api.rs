@@ -201,7 +201,7 @@ pub extern "C" fn window_text_input_enable(window_id: WindowId, context: TextInp
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_text_input_update(window_id: WindowId, context: TextInputContext) {
-    with_window(window_id, "application_text_input_update", |w| w.text_input_update(&context));
+    with_window(window_id, "window_text_input_update", |w| w.text_input_update(&context));
 }
 
 #[unsafe(no_mangle)]

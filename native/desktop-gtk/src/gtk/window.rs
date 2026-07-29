@@ -17,6 +17,7 @@ use crate::gtk::text_input::create_im_context;
 use crate::gtk::text_input_api::TextInputContext;
 use anyhow::Context;
 use gtk4::gdk as gdk4;
+use gtk4::gio;
 use gtk4::glib;
 use gtk4::prelude::{
     Cast, DisplayExt, IMContextExt, NativeExt, ObjectExt, ObjectType, RootExt, SeatExt, SurfaceExt, ToplevelExt, WidgetExtManual,
@@ -303,6 +304,7 @@ impl SimpleWindow {
     #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     pub fn new(
         gtk_application: &gtk4::Application,
+        cancellable: gio::Cancellable,
         window_id: WindowId,
         size: LogicalSize,
         rendering_mode: RenderingMode,
@@ -358,7 +360,7 @@ impl SimpleWindow {
             }
         }
 
-        set_drag_and_drop_event_handlers(&gl_widget, window_id, event_handler, query_drag_and_drop_target);
+        set_drag_and_drop_event_handlers(&gl_widget, window_id, event_handler, query_drag_and_drop_target, cancellable);
         let event_controller_key = set_keyboard_event_handlers(window_id, event_handler);
         let event_controller_key_weak = event_controller_key.downgrade();
         window.add_controller(event_controller_key);

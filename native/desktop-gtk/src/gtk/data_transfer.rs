@@ -54,6 +54,7 @@ fn read_all_recursive(
     res: Result<(Vec<u8>, usize), (Vec<u8>, glib::Error)>,
     input_stream: gio::InputStream,
     mime_type: glib::GString,
+    cancellable: gio::Cancellable,
     mut buf_all: Vec<u8>,
     callback: impl FnOnce(Option<DataTransferContent>) + 'static,
 ) {
@@ -67,8 +68,8 @@ fn read_all_recursive(
             buf_all.extend_from_slice(&chunk_buf[0..size]);
             input_stream
                 .clone()
-                .read_async(vec![0; 4096], glib::Priority::DEFAULT, gio::Cancellable::NONE, move |res| {
-                    read_all_recursive(res, input_stream, mime_type, buf_all, callback);
+                .read_async(vec![0; 4096], glib::Priority::DEFAULT, Some(&cancellable.clone()), move |res| {
+                    read_all_recursive(res, input_stream, mime_type, cancellable, buf_all, callback);
                 });
         }
         Err((_chunk_buf, e)) => {
@@ -78,13 +79,18 @@ fn read_all_recursive(
     }
 }
 
-pub fn read_all(input_stream: gio::InputStream, mime_type: glib::GString, callback: impl FnOnce(Option<DataTransferContent>) + 'static) {
+pub fn read_all(
+    input_stream: gio::InputStream,
+    mime_type: glib::GString,
+    cancellable: gio::Cancellable,
+    callback: impl FnOnce(Option<DataTransferContent>) + 'static,
+) {
     debug!("read_all start");
     let buf_all: Vec<u8> = Vec::new();
     input_stream
         .clone()
-        .read_async(vec![0; 4096], glib::Priority::DEFAULT, gio::Cancellable::NONE, move |res| {
-            read_all_recursive(res, input_stream, mime_type, buf_all, callback);
+        .read_async(vec![0; 4096], glib::Priority::DEFAULT, Some(&cancellable.clone()), move |res| {
+            read_all_recursive(res, input_stream, mime_type, cancellable, buf_all, callback);
         });
 }
 
@@ -144,6 +150,7 @@ pub fn handle_drop_target_drop(
     window_id: WindowId,
     query_drag_and_drop_target: QueryDragAndDropTarget,
     drop: &gdk4::Drop,
+    cancellable: gio::Cancellable,
     x: f64,
     y: f64,
 ) -> bool {
@@ -178,10 +185,10 @@ pub fn handle_drop_target_drop(
     drop.read_async(
         &[mime_type],
         glib::Priority::DEFAULT,
-        gio::Cancellable::NONE,
+        Some(&cancellable.clone()),
         move |res| match res {
             Ok((input_stream, mime_type)) => {
-                read_all(input_stream, mime_type, move |data| {
+                read_all(input_stream, mime_type, cancellable, move |data| {
                     let gtk_action = if data.is_some() { gtk_action } else { gdk4::DragAction::empty() };
 
                     let event = DropPerformedEvent {
@@ -218,6 +225,7 @@ pub fn set_drag_and_drop_event_handlers(
     window_id: WindowId,
     event_handler: EventHandler,
     query_drag_and_drop_target: QueryDragAndDropTarget,
+    cancellable: gio::Cancellable,
 ) {
     let drop_target = gtk4::DropTargetAsync::new(None, gdk4::DragAction::COPY | gdk4::DragAction::MOVE);
 
@@ -244,7 +252,15 @@ pub fn set_drag_and_drop_event_handlers(
 
     drop_target.connect_drop(move |_drop_target, drop, x, y| {
         debug!("DropTarget::drop: x={x}, y={y}");
-        handle_drop_target_drop(event_handler, window_id, query_drag_and_drop_target, drop, x, y)
+        handle_drop_target_drop(
+            event_handler,
+            window_id,
+            query_drag_and_drop_target,
+            drop,
+            cancellable.clone(),
+            x,
+            y,
+        )
     });
 
     widget.add_controller(drop_target);

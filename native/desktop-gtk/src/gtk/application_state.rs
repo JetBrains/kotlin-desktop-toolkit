@@ -23,8 +23,8 @@ use crate::gtk::window_api::WindowParams;
 use anyhow::{Context, bail};
 use gtk4::glib::translate::ToGlibPtr;
 use gtk4::prelude::{
-    ActionMapExtManual, ApplicationExt, ApplicationExtManual, DeviceExt, DisplayExt, DragExt, FileExt, GtkApplicationExt, GtkWindowExt,
-    ObjectExt, ObjectType, SeatExt, WidgetExt, WidgetExtManual,
+    ActionMapExtManual, ApplicationExt, ApplicationExtManual, CancellableExt, DeviceExt, DisplayExt, DragExt, FileExt, GtkApplicationExt,
+    GtkWindowExt, ObjectExt, ObjectType, SeatExt, WidgetExt, WidgetExtManual,
 };
 use gtk4::{gdk as gdk4, gio, glib};
 use log::{debug, warn};
@@ -88,10 +88,12 @@ pub struct ApplicationState {
     desktop_settings: DesktopSettings,
     notifications: Notifications,
     disconnect_modifier_state_notify_handler: Option<Box<dyn FnOnce()>>,
+    cancellable: gio::Cancellable,
 }
 
 impl Drop for ApplicationState {
     fn drop(&mut self) {
+        self.cancellable.cancel();
         for window in self.gtk_app.windows() {
             self.gtk_app.remove_window(&window);
             window.destroy();
@@ -186,8 +188,8 @@ impl ApplicationState {
             let gtk_app = gtk_app.downgrade();
             // Handle SIGTERM
             glib_unix::unix_signal_add_local(15, move || {
-                if application_wants_to_terminate()
-                    && let Some(gtk_app) = gtk_app.upgrade()
+                if let Some(gtk_app) = gtk_app.upgrade()
+                    && application_wants_to_terminate()
                 {
                     gtk_app.quit();
                 }
@@ -214,6 +216,8 @@ impl ApplicationState {
             ffi_get: callbacks.get_data_transfer_data,
             ffi_dealloc,
         };
+
+        let cancellable = gio::Cancellable::new();
         let clipboard = KdtClipboard::new(display.clipboard(), DataSource::Clipboard, event_handler, transfer_data_getter);
         let primary_clipboard = KdtClipboard::new(
             display.primary_clipboard(),
@@ -222,7 +226,7 @@ impl ApplicationState {
             transfer_data_getter,
         );
         let desktop_settings = DesktopSettings::new(display);
-        let notifications = Notifications::new(move |notification_data| {
+        let notifications = Notifications::new(cancellable.clone(), move |notification_data| {
             let e = NotificationClosedEvent::new(
                 notification_data.id,
                 notification_data.action.as_ref(),
@@ -255,6 +259,7 @@ impl ApplicationState {
             desktop_settings,
             notifications,
             disconnect_modifier_state_notify_handler: None,
+            cancellable,
         })
     }
 
@@ -310,6 +315,7 @@ impl ApplicationState {
         };
         let simple_window = SimpleWindow::new(
             &self.gtk_app,
+            self.cancellable.clone(),
             window_id,
             params.size,
             params.rendering_mode,
@@ -360,11 +366,11 @@ impl ApplicationState {
     }
 
     pub fn primary_selection_paste(&self, serial: i32, supported_mime_types: &MimeTypes) {
-        self.primary_clipboard.paste(serial, supported_mime_types);
+        self.primary_clipboard.paste(serial, supported_mime_types, self.cancellable.clone());
     }
 
     pub fn clipboard_paste(&self, serial: i32, supported_mime_types: &MimeTypes) {
-        self.clipboard.paste(serial, supported_mime_types);
+        self.clipboard.paste(serial, supported_mime_types, self.cancellable.clone());
     }
 
     pub fn start_drag(
@@ -454,7 +460,7 @@ impl ApplicationState {
             gtk4::Window::NONE,
             url_string,
             gdk4::CURRENT_TIME,
-            gio::Cancellable::NONE,
+            Some(&self.cancellable),
             move |res| {
                 if let Err(e) = res {
                     warn!("Error trying to open URL for {request_id:?}: {e}");
@@ -465,9 +471,9 @@ impl ApplicationState {
         request_id
     }
 
-    fn open_file_manager_impl(path: &str, request_id: RequestId) {
+    fn open_file_manager_impl(path: &str, request_id: RequestId, cancellable: gio::Cancellable) {
         let uri = gio::File::for_path(path).uri();
-        gio::bus_get(gio::BusType::Session, gio::Cancellable::NONE, move |result| match result {
+        gio::bus_get(gio::BusType::Session, Some(&cancellable.clone()), move |result| match result {
             Ok(connection) => {
                 connection.call(
                     Some("org.freedesktop.FileManager1"),
@@ -478,7 +484,7 @@ impl ApplicationState {
                     None,
                     gio::DBusCallFlags::NONE,
                     -1,
-                    gio::Cancellable::NONE,
+                    Some(&cancellable),
                     move |result| {
                         if let Err(e) = result {
                             warn!("Error trying to open URL for {request_id:?}: {e}");
@@ -497,7 +503,7 @@ impl ApplicationState {
         let raw_request_id = self.async_request_counter.fetch_add(1, atomic::Ordering::Relaxed);
         let request_id = RequestId(raw_request_id);
 
-        Self::open_file_manager_impl(path, request_id);
+        Self::open_file_manager_impl(path, request_id, self.cancellable.clone());
         request_id
     }
 
