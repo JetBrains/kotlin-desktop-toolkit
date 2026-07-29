@@ -1,4 +1,4 @@
-use crate::gtk::application::{Application, send_event, with_app_state_mut};
+use crate::gtk::application::{send_event, with_app_state_mut};
 use crate::gtk::application_api::{ApplicationCallbacks, FfiWindowCloseRequest, RenderingMode};
 use crate::gtk::async_event_result::AsyncEventResult;
 use crate::gtk::clipboard::{ClipboardContentProvider, KdtClipboard};
@@ -8,7 +8,7 @@ use crate::gtk::desktop_settings_api::FfiDesktopSetting;
 use crate::gtk::events::Event::DragIconFrameTick;
 use crate::gtk::events::{
     DataTransferCancelledEvent, DragAndDropFeedbackFinishedEvent, DragAndDropFinishedEvent, DragIconDrawEvent, Event, EventHandler,
-    ModifiersChangedEvent, NotificationClosedEvent, OpenGlDrawData, RequestId, WindowClosedEvent, WindowId,
+    ModifiersChangedEvent, NotificationClosedEvent, NotificationShownEvent, OpenGlDrawData, RequestId, WindowClosedEvent, WindowId,
 };
 use crate::gtk::ffi_return_conversions::{QueryDragAndDropTarget, RetrieveSurroundingText, TransferDataGetter};
 use crate::gtk::file_dialog::show_file_dialog_impl;
@@ -17,10 +17,10 @@ use crate::gtk::geometry::{LogicalSize, PhysicalSize};
 use crate::gtk::gl_widget::GlWidget;
 use crate::gtk::keyboard::key_modifiers_from_gdk;
 use crate::gtk::mime_types::MimeTypes;
-use crate::gtk::notifications::{NewNotificationData, NotificationAction, init_notifications_task};
+use crate::gtk::notifications::Notifications;
 use crate::gtk::window::SimpleWindow;
 use crate::gtk::window_api::WindowParams;
-use anyhow::{Context, anyhow, bail};
+use anyhow::{Context, bail};
 use gtk4::glib::translate::ToGlibPtr;
 use gtk4::prelude::{
     ActionMapExtManual, ApplicationExt, ApplicationExtManual, DeviceExt, DisplayExt, DragExt, FileExt, GtkApplicationExt, GtkWindowExt,
@@ -86,24 +86,14 @@ pub struct ApplicationState {
     drag_icon: Rc<RefCell<Option<GlWidget>>>,
     drag_content_provider: Rc<RefCell<Option<ClipboardContentProvider>>>,
     desktop_settings: DesktopSettings,
-    notification_action_sender: Option<async_channel::Sender<NotificationAction>>,
-    notification_task_join_handle: Option<glib::JoinHandle<()>>,
+    notifications: Notifications,
 }
 
 impl Drop for ApplicationState {
     fn drop(&mut self) {
-        let main_context = glib::MainContext::default();
-        let wait_for_notification_task = if let Some(sender) = self.notification_action_sender.take() {
-            main_context.block_on(sender.send(NotificationAction::Exit)).is_ok()
-        } else {
-            false
-        };
         for window in self.gtk_app.windows() {
             self.gtk_app.remove_window(&window);
             window.destroy();
-        }
-        if wait_for_notification_task && let Some(join_handle) = self.notification_task_join_handle.take() {
-            _ = main_context.block_on(join_handle);
         }
         self.gtk_app.quit();
     }
@@ -150,14 +140,7 @@ impl ApplicationState {
                 .build();
             gtk_app.add_action_entries([quit]);
 
-            let initial_settings = with_app_state_mut(|state| {
-                let (notification_action_sender, notification_action_receiver) = async_channel::unbounded();
-                state.notification_task_join_handle = Some(Self::init_notifications(event_handler, notification_action_receiver));
-                state.notification_action_sender = Some(notification_action_sender);
-
-                state.read_and_subscribe_to_desktop_settings()
-            })
-            .unwrap();
+            let initial_settings = with_app_state_mut(Self::read_and_subscribe_to_desktop_settings).unwrap();
 
             send_event(event_handler, Event::ApplicationStarted);
             debug!("After ApplicationStarted");
@@ -221,6 +204,14 @@ impl ApplicationState {
             transfer_data_getter,
         );
         let desktop_settings = DesktopSettings::new(display);
+        let notifications = Notifications::new(move |notification_data| {
+            let e = NotificationClosedEvent::new(
+                notification_data.id,
+                notification_data.action.as_ref(),
+                notification_data.activation_token.as_ref(),
+            );
+            send_event(event_handler, e);
+        });
 
         Ok(Self {
             event_handler,
@@ -244,8 +235,7 @@ impl ApplicationState {
             drag_icon: Rc::default(),
             drag_content_provider: Rc::default(),
             desktop_settings,
-            notification_action_sender: None,
-            notification_task_join_handle: None,
+            notifications,
         })
     }
 
@@ -271,25 +261,6 @@ impl ApplicationState {
         self.desktop_settings.read_and_subscribe(move |setting| {
             send_event(event_handler, Event::DesktopSettingChange(setting));
         })
-    }
-
-    fn init_notifications(
-        event_handler: EventHandler,
-        notification_action_receiver: async_channel::Receiver<NotificationAction>,
-    ) -> glib::JoinHandle<()> {
-        glib::spawn_future_local(init_notifications_task(
-            move |notification_data| {
-                Application::run_on_event_loop_async(move || {
-                    let e = NotificationClosedEvent::new(
-                        notification_data.id,
-                        notification_data.action.as_ref(),
-                        notification_data.activation_token.as_ref(),
-                    );
-                    send_event(event_handler, e);
-                });
-            },
-            notification_action_receiver,
-        ))
     }
 
     pub fn new_window(&self, params: &WindowParams) -> anyhow::Result<()> {
@@ -547,41 +518,26 @@ impl ApplicationState {
         }))
     }
 
-    pub fn request_show_notification(&self, summary: String, body: String, sound_file_path: Option<String>) -> anyhow::Result<RequestId> {
-        let Some(action_sender) = self.notification_action_sender.clone() else {
-            bail!("Didn't try initializing notifications");
-        };
-
-        Ok(self.run_async(|event_handler, request_id| async move {
-            let result_reporter = Box::new(move |result| {
-                Application::run_on_event_loop_async(move || {
-                    AsyncEventResult::NotificationShown(result).send_as_event(event_handler, request_id);
-                });
+    pub fn request_show_notification(&self, summary: &str, body: &str, sound_file_path: Option<&str>) -> RequestId {
+        let raw_request_id = self.async_request_counter.fetch_add(1, atomic::Ordering::Relaxed);
+        let request_id = RequestId(raw_request_id);
+        let event_handler = self.event_handler;
+        self.notifications.show_notification(summary, body, sound_file_path, move |result| {
+            let notification_id = result.unwrap_or_else(|e| {
+                warn!("{e}: {}", e.backtrace());
+                0
             });
-            let new_notification_data = NewNotificationData {
-                summary,
-                body,
-                sound_file_path,
-                result_reporter,
+            let event = NotificationShownEvent {
+                request_id,
+                notification_id,
             };
-            if let Err(e) = action_sender.send(NotificationAction::Show(new_notification_data)).await
-                && let NotificationAction::Show(d) = e.0
-            {
-                (d.result_reporter)(Err(anyhow!("channel closed")));
-            }
-        }))
+            send_event(event_handler, event);
+        });
+        request_id
     }
 
-    pub fn request_close_notification(&self, notification_id: u32) -> anyhow::Result<()> {
-        let Some(action_sender) = self.notification_action_sender.clone() else {
-            bail!("Didn't try initializing notifications");
-        };
-        self.run_async(|_event_handler, _request_id| async move {
-            if let Err(e) = action_sender.send(NotificationAction::Close(notification_id)).await {
-                warn!("Error closing notification: {e}");
-            }
-        });
-        Ok(())
+    pub fn request_close_notification(&self, notification_id: u32) {
+        self.notifications.close_notification(notification_id);
     }
 
     pub fn set_prefer_dark_theme(&self, value: bool) {

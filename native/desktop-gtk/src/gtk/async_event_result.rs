@@ -1,12 +1,11 @@
 use desktop_common::ffi_utils::BorrowedUtf8;
 use log::warn;
 
-use crate::gtk::events::{Event, EventHandler, FileChooserResponse, NotificationShownEvent, RequestId};
+use crate::gtk::events::{Event, EventHandler, FileChooserResponse, RequestId};
 
 #[allow(clippy::enum_variant_names)]
 pub enum AsyncEventResult {
     FileChooserResponse(anyhow::Result<Option<String>>),
-    NotificationShown(anyhow::Result<u32>),
 }
 
 impl AsyncEventResult {
@@ -32,17 +31,6 @@ impl AsyncEventResult {
                         send(BorrowedUtf8::null());
                     }
                 }
-            }
-            Self::NotificationShown(result) => {
-                let notification_id = result.unwrap_or_else(|e| {
-                    warn!("{e}: {}", e.backtrace());
-                    0
-                });
-                let event = NotificationShownEvent {
-                    request_id,
-                    notification_id,
-                };
-                event_handler(&event.into());
             }
         }
     }
