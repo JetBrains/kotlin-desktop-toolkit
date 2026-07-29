@@ -322,6 +322,10 @@ class RotatingBallWindow(
     companion object {
         private const val TEXT_INPUT_HEIGHT = 36.0
         private const val TEXT_INPUT_MARGIN = 16.0
+        private const val IME_BUTTON_HEIGHT = 28.0
+        private const val IME_BUTTON_GAP = 8.0
+        private const val DEACTIVATE_IME_BUTTON_WIDTH = 140.0
+        private const val DISCARD_MARKED_TEXT_BUTTON_WIDTH = 170.0
 
         fun createWindow(
             device: MetalDevice,
@@ -354,6 +358,24 @@ class RotatingBallWindow(
 
     val textInput = ToyTextInput(window, LogicalPoint.Zero, LogicalSize.Zero)
 
+    // Deactivates the IME session; clicking back into [textInput] activates it again.
+    private val deactivateImeButton = ToyButton(
+        "Deactivate IME",
+        LogicalPoint.Zero,
+        LogicalSize(DEACTIVATE_IME_BUTTON_WIDTH, IME_BUTTON_HEIGHT),
+        onClick = { textInput.blur() },
+    )
+
+    // Drops whatever composition the IME currently has in flight.
+    private val discardMarkedTextButton = ToyButton(
+        "Discard Marked Text",
+        LogicalPoint.Zero,
+        LogicalSize(DISCARD_MARKED_TEXT_BUTTON_WIDTH, IME_BUTTON_HEIGHT),
+        onClick = { textInput.discardMarkedText() },
+    )
+
+    private val buttons = listOf(deactivateImeButton, discardMarkedTextButton)
+
     // Whether this window's custom titlebar requests the macOS 26 large corner radius.
     // Toggled at runtime from the Window ▸ Titlebar menu.
     var largeCornerRadius: Boolean = true
@@ -366,8 +388,15 @@ class RotatingBallWindow(
 
     private fun updateLayout(viewSize: LogicalSize) {
         windowContainer.resize(viewSize)
-        textInput.origin = LogicalPoint(TEXT_INPUT_MARGIN, viewSize.height - TEXT_INPUT_HEIGHT - TEXT_INPUT_MARGIN)
+        val textInputY = viewSize.height - TEXT_INPUT_HEIGHT - TEXT_INPUT_MARGIN
+        textInput.origin = LogicalPoint(TEXT_INPUT_MARGIN, textInputY)
         textInput.size = LogicalSize(viewSize.width - 2 * TEXT_INPUT_MARGIN, TEXT_INPUT_HEIGHT)
+        val buttonY = textInputY - IME_BUTTON_GAP - IME_BUTTON_HEIGHT
+        var buttonX = TEXT_INPUT_MARGIN
+        buttons.forEach { button ->
+            button.origin = LogicalPoint(buttonX, buttonY)
+            buttonX += button.size.width + IME_BUTTON_GAP
+        }
     }
 
     override fun handleEvent(event: Event): EventHandlerResult {
@@ -379,7 +408,11 @@ class RotatingBallWindow(
                     EventHandlerResult.Stop
                 }
             }
-            // Route keyboard and mouse events to the text input first
+            // Route mouse events to the IME buttons, then keyboard and mouse events to the text input
+            if (buttons.any { it.handleEvent(event) == EventHandlerResult.Stop }) {
+                view.setNeedsDisplay()
+                return EventHandlerResult.Stop
+            }
             if (textInput.handleEvent(event) == EventHandlerResult.Stop) {
                 view.setNeedsDisplay()
                 return EventHandlerResult.Stop
@@ -401,6 +434,7 @@ class RotatingBallWindow(
         // canvas.clear(Color.RED) // use RED to debug
         windowContainer.draw(canvas, time, window.scaleFactor())
         textInput.draw(canvas, window.scaleFactor())
+        buttons.forEach { it.draw(canvas, window.scaleFactor()) }
     }
 }
 

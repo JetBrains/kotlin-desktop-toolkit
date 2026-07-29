@@ -32,6 +32,18 @@ public class TextInputContext(internal val window: Window) {
         }
     }
 
+    public fun activate() {
+        ffiDownCall {
+            desktop_macos_h.text_input_context_activate(window.pointer)
+        }
+    }
+
+    public fun deactivate() {
+        ffiDownCall {
+            desktop_macos_h.text_input_context_deactivate(window.pointer)
+        }
+    }
+
     public fun discardMarkedText() {
         ffiDownCall {
             desktop_macos_h.text_input_context_discard_marked_text(window.pointer)

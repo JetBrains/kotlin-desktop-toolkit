@@ -32,6 +32,9 @@ import kotlin.math.min
  * - IME composing text (marked text) with visual underline
  * - Proper coordinate reporting for IME candidate window positioning
  * - Click-to-position cursor
+ * - Driving the IME session: [focus] activates the window's input context, [blur] deactivates it,
+ *   and [discardMarkedText] drops an in-flight composition (the latter two are wired to
+ *   [ToyButton]s in the sample window)
  *
  * The text model keeps a single [StringBuilder] buffer where marked (composing) text
  * is stored inline. [markedRange] tracks which portion is composing text from the IME.
@@ -49,6 +52,12 @@ class ToyTextInput(
     private var marked: TextRange? = null
     private var cursor: Int = 0
     private var anchor: Int = 0 // selection anchor; equals cursor when no selection
+
+    // ---- Focus ----
+    // Starts focused: AppKit activates the input context of the first responder on its own,
+    // so the initial state already accepts IME input without an explicit activate() call.
+    var isFocused: Boolean = true
+        private set
 
     // ---- Rendering (logical pixels) ----
     private val fontSize = 18.0
@@ -167,11 +176,55 @@ class ToyTextInput(
         return findCharIndexAtX(localX).toLong()
     }
 
+    // ==================== Focus ====================
+
+    /** Takes focus and re-activates the window's IME session. */
+    fun focus() {
+        if (isFocused) return
+        isFocused = true
+        window.textInputContext.activate()
+    }
+
+    /**
+     * Gives up focus and deactivates the window's IME session, dropping any in-flight composition
+     * so no stale marked range survives the deactivation.
+     *
+     * Note that AppKit re-activates the first responder's input context on its own in some
+     * situations (for example when the window becomes key again), so a deactivated context is not
+     * guaranteed to stay deactivated.
+     */
+    fun blur() {
+        if (!isFocused) return
+        isFocused = false
+        discardMarkedText()
+        window.textInputContext.deactivate()
+    }
+
+    /**
+     * Tells the input context to forget the composition it has in flight.
+     *
+     * The IME abandons its composing state without calling back into [unmarkText], so the text it
+     * already handed us stays in the buffer — it just stops being marked, and the next keystroke
+     * starts a fresh composition instead of continuing the old one.
+     */
+    fun discardMarkedText() {
+        window.textInputContext.discardMarkedText()
+        if (marked != null) {
+            marked = null
+            anchor = cursor // the composition's clause selection no longer applies
+        }
+    }
+
     // ==================== Event handling ====================
 
     fun handleEvent(event: Event): EventHandlerResult {
         return when (event) {
             is Event.KeyDown -> {
+                // Blurred: don't feed the event to the input context, otherwise typing would
+                // implicitly re-activate the IME session we just deactivated.
+                if (!isFocused) {
+                    return EventHandlerResult.Continue
+                }
                 // Let menu shortcuts (Cmd+key) pass through to the menu system
                 if (event.mightHaveKeyEquivalent && event.modifiers.command) {
                     return EventHandlerResult.Continue
@@ -185,6 +238,7 @@ class ToyTextInput(
             }
             is Event.MouseDown -> {
                 if (hitTest(event.locationInWindow)) {
+                    focus()
                     placeCursorNear(event.locationInWindow)
                     EventHandlerResult.Stop
                 } else {
@@ -258,11 +312,11 @@ class ToyTextInput(
             canvas.drawRect(Rect.makeXYWH(px, py, pw, ph), p)
         }
 
-        // Border
+        // Border, highlighted while focused (i.e. while the IME session is active)
         Paint().use { p ->
-            p.color = 0xFF555555.toInt()
+            p.color = if (isFocused) 0xFF4A90D9.toInt() else 0xFF555555.toInt()
             p.mode = PaintMode.STROKE
-            p.strokeWidth = sf
+            p.strokeWidth = if (isFocused) 2f * sf else sf
             canvas.drawRect(Rect.makeXYWH(px, py, pw, ph), p)
         }
 
@@ -297,11 +351,13 @@ class ToyTextInput(
         }
 
         // Cursor
-        val cx = textX + measureWidth(text.substring(0, cursor), physFontSize)
-        Paint().use { p ->
-            p.color = 0xFFFFFFFF.toInt()
-            p.strokeWidth = 1.5f * sf
-            canvas.drawLine(cx, textY, cx, textY + lineH, p)
+        if (isFocused) {
+            val cx = textX + measureWidth(text.substring(0, cursor), physFontSize)
+            Paint().use { p ->
+                p.color = 0xFFFFFFFF.toInt()
+                p.strokeWidth = 1.5f * sf
+                canvas.drawLine(cx, textY, cx, textY + lineH, p)
+            }
         }
 
         // Placeholder

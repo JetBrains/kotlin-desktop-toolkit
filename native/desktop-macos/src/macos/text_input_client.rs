@@ -285,6 +285,26 @@ pub extern "C" fn text_input_context_discard_marked_text(window_ptr: WindowPtr) 
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn text_input_context_activate(window_ptr: WindowPtr) {
+    ffi_boundary("text_input_context_activate", || {
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        let input_context = window.root_view.inputContext().context("No Input Context")?;
+        input_context.activate();
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn text_input_context_deactivate(window_ptr: WindowPtr) {
+    ffi_boundary("text_input_context_deactivate", || {
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        let input_context = window.root_view.inputContext().context("No Input Context")?;
+        input_context.deactivate();
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn text_input_context_invalidate_character_coordinates(window_ptr: WindowPtr) {
     ffi_boundary("text_input_context_invalidate_character_coordinates", || {
         let window = unsafe { window_ptr.borrow::<Window>() };
