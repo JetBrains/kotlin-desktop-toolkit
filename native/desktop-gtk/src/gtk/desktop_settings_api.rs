@@ -1,7 +1,10 @@
+use desktop_common::ffi_utils::BorrowedUtf8;
+
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub enum XdgDesktopColorScheme {
     /// No preference
+    #[default]
     NoPreference,
     /// Prefers dark appearance
     PreferDark,
@@ -10,8 +13,9 @@ pub enum XdgDesktopColorScheme {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub enum AccentColor {
+    #[default]
     Unknown,
     Blue,
     Teal,
@@ -44,10 +48,22 @@ pub enum FontRgbaOrder {
 }
 
 #[repr(C)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DesktopTitlebarAction {
+    Minimize,
+    ToggleMaximize,
+    Menu,
+    None,
+}
+
+#[repr(C)]
 #[derive(Debug)]
-pub enum FfiDesktopSetting {
+pub enum FfiDesktopSetting<'a> {
     AccentColor(AccentColor),
     AudibleBell(bool),
+    ActionDoubleClickTitlebar(DesktopTitlebarAction),
+    ActionRightClickTitlebar(DesktopTitlebarAction),
+    ActionMiddleClickTitlebar(DesktopTitlebarAction),
     ColorScheme(XdgDesktopColorScheme),
     CursorBlink(bool),
     /// Length of the cursor blink cycle, in milliseconds.
@@ -66,4 +82,5 @@ pub enum FfiDesktopSetting {
     PrimaryButtonWarpsSlider(bool),
     RecentFilesEnabled(bool),
     RecentFilesMaxAgeDays(i32),
+    TitlebarLayout(BorrowedUtf8<'a>),
 }

@@ -9,6 +9,7 @@ import org.jetbrains.desktop.gtk.ApplicationConfig
 import org.jetbrains.desktop.gtk.ColorSchemeValue
 import org.jetbrains.desktop.gtk.DataSource
 import org.jetbrains.desktop.gtk.DesktopSetting
+import org.jetbrains.desktop.gtk.DesktopTitlebarAction
 import org.jetbrains.desktop.gtk.DragAndDropAction
 import org.jetbrains.desktop.gtk.DragAndDropQueryData
 import org.jetbrains.desktop.gtk.DragAndDropQueryResponse
@@ -340,6 +341,13 @@ private class XSettingsD {
             FontRgbaOrderValue.Vbgr -> quoted("vbgr")
         }
 
+        private fun titlebarActionToString(value: DesktopTitlebarAction): String = when (value) {
+            DesktopTitlebarAction.Minimize -> "minimize"
+            DesktopTitlebarAction.ToggleMaximize -> "toggle-maximize"
+            DesktopTitlebarAction.Menu -> "menu"
+            DesktopTitlebarAction.None -> "none"
+        }
+
         private fun quoted(value: String): String = "\"$value\""
 
         private fun reloadSettingsOnce(): Int {
@@ -361,6 +369,9 @@ private class XSettingsD {
         fun withChangedSetting(setting: DesktopSetting, block: () -> Unit) {
             val toChange = buildMap {
                 when (setting) {
+                    is DesktopSetting.ActionDoubleClickTitlebar -> put("Gtk/TitlebarDoubleClick", titlebarActionToString(setting.value))
+                    is DesktopSetting.ActionMiddleClickTitlebar -> put("Gtk/TitlebarMiddleClick", titlebarActionToString(setting.value))
+                    is DesktopSetting.ActionRightClickTitlebar -> put("Gtk/TitlebarRightClick", titlebarActionToString(setting.value))
                     is DesktopSetting.AudibleBell -> put("Net/EnableEventSounds", boolToString(setting.value))
                     is DesktopSetting.CursorBlink -> put("Net/CursorBlink", boolToString(setting.value))
                     is DesktopSetting.CursorBlinkTime -> put("Net/CursorBlinkTime", setting.value.inWholeMilliseconds.toString())
@@ -398,6 +409,7 @@ private class XSettingsD {
                     is DesktopSetting.PrimaryButtonWarpsSlider -> put("Gtk/PrimaryButtonWarpsSlider", boolToString(setting.value))
                     is DesktopSetting.RecentFilesEnabled -> put("Gtk/RecentFilesEnabled", boolToString(setting.value))
                     is DesktopSetting.RecentFilesMaxAgeDays -> put("Gtk/RecentFilesMaxAge", setting.value.toString())
+                    is DesktopSetting.TitlebarLayout -> put("Gtk/DecorationLayout", setting.value)
                 }
             }
             withChangedSettings(toChange, block)
@@ -690,6 +702,9 @@ private fun defaultWindowParams(): WindowParams {
 
 internal data class InitialSettings(
     var accentColor: DesktopSetting.AccentColor? = null,
+    var actionDoubleClickTitlebar: DesktopSetting.ActionDoubleClickTitlebar? = null,
+    var actionMiddleClickTitlebar: DesktopSetting.ActionMiddleClickTitlebar? = null,
+    var actionRightClickTitlebar: DesktopSetting.ActionRightClickTitlebar? = null,
     var audibleBell: DesktopSetting.AudibleBell? = null,
     var colorScheme: DesktopSetting.ColorScheme? = null,
     var cursorBlink: DesktopSetting.CursorBlink? = null,
@@ -707,6 +722,7 @@ internal data class InitialSettings(
     var primaryButtonWarpsSlider: DesktopSetting.PrimaryButtonWarpsSlider? = null,
     var recentFilesEnabled: DesktopSetting.RecentFilesEnabled? = null,
     var recentFilesMaxAgeDays: DesktopSetting.RecentFilesMaxAgeDays? = null,
+    var titlebarLayout: DesktopSetting.TitlebarLayout? = null,
 )
 
 internal data class ExpectedWindowConfigure(
@@ -834,6 +850,9 @@ abstract class X11TestsBase {
             assertIs<Event.DesktopSettingChange>(event, "initialSettings=$initialSettings")
             when (val setting = event.setting) {
                 is DesktopSetting.AccentColor -> initialSettings.accentColor = setting
+                is DesktopSetting.ActionDoubleClickTitlebar -> initialSettings.actionDoubleClickTitlebar = setting
+                is DesktopSetting.ActionMiddleClickTitlebar -> initialSettings.actionMiddleClickTitlebar = setting
+                is DesktopSetting.ActionRightClickTitlebar -> initialSettings.actionRightClickTitlebar = setting
                 is DesktopSetting.AudibleBell -> initialSettings.audibleBell = setting
                 is DesktopSetting.ColorScheme -> initialSettings.colorScheme = setting
                 is DesktopSetting.CursorBlink -> initialSettings.cursorBlink = setting
@@ -851,6 +870,7 @@ abstract class X11TestsBase {
                 is DesktopSetting.PrimaryButtonWarpsSlider -> initialSettings.primaryButtonWarpsSlider = setting
                 is DesktopSetting.RecentFilesEnabled -> initialSettings.recentFilesEnabled = setting
                 is DesktopSetting.RecentFilesMaxAgeDays -> initialSettings.recentFilesMaxAgeDays = setting
+                is DesktopSetting.TitlebarLayout -> initialSettings.titlebarLayout = setting
             }
         }
 

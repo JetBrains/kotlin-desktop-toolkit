@@ -615,7 +615,7 @@ pub enum Event<'a> {
 
     DisplayConfigurationChange,
 
-    DesktopSettingChange(FfiDesktopSetting),
+    DesktopSettingChange(FfiDesktopSetting<'a>),
 
     /// Data received from clipboard or primary selection. For drag&drop, see `DropPerformed`.
     DataTransfer(DataTransferEvent<'a>),

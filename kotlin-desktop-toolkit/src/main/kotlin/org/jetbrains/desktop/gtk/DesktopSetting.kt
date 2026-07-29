@@ -41,8 +41,24 @@ public enum class FontRgbaOrderValue {
     Vbgr,
 }
 
+public enum class DesktopTitlebarAction {
+    Minimize,
+    ToggleMaximize,
+    Menu,
+    None,
+    ;
+
+    internal companion object
+}
+
 public sealed class DesktopSetting {
     public data class AccentColor(val value: AccentColorValue) : DesktopSetting()
+
+    public data class ActionDoubleClickTitlebar(val value: DesktopTitlebarAction) : DesktopSetting()
+
+    public data class ActionRightClickTitlebar(val value: DesktopTitlebarAction) : DesktopSetting()
+
+    public data class ActionMiddleClickTitlebar(val value: DesktopTitlebarAction) : DesktopSetting()
 
     public data class AudibleBell(val value: Boolean) : DesktopSetting()
 
@@ -78,6 +94,8 @@ public sealed class DesktopSetting {
 
     public data class RecentFilesEnabled(val value: Boolean) : DesktopSetting()
     public data class RecentFilesMaxAgeDays(val value: Int) : DesktopSetting()
+
+    public data class TitlebarLayout(val value: String) : DesktopSetting()
 
     internal companion object;
 }
