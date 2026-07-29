@@ -1,6 +1,7 @@
 use crate::linux::{
     application_state::ApplicationState,
     events::{
+        EventSerial,
         MouseButton,
         MouseDownEvent,
         MouseEnteredEvent,
@@ -53,10 +54,11 @@ impl PointerHandler for ApplicationState {
             let window_id = window.window_id;
 
             let res = match event.kind {
-                PointerEventKind::Enter { .. } => {
+                PointerEventKind::Enter { serial } => {
                     window.num_pointer_buttons_down = 0;
                     window.set_cursor = true;
                     let res = self.send_event(MouseEnteredEvent {
+                        serial: EventSerial(serial),
                         window_id,
                         location_in_window: LogicalPoint::new(event.position),
                     });
@@ -80,9 +82,10 @@ impl PointerHandler for ApplicationState {
                     }
                     res
                 }
-                PointerEventKind::Leave { .. } => {
+                PointerEventKind::Leave { serial } => {
                     window.num_pointer_buttons_down = 0;
                     self.send_event(MouseExitedEvent {
+                        serial: EventSerial(serial),
                         window_id,
                         location_in_window: LogicalPoint::new(event.position),
                     })
@@ -98,18 +101,20 @@ impl PointerHandler for ApplicationState {
                     }
                     window.num_pointer_buttons_down += 1;
                     self.send_event(MouseDownEvent {
+                        serial: EventSerial(serial),
                         window_id,
                         button: MouseButton(button),
                         location_in_window: LogicalPoint::new(event.position),
                         timestamp: Timestamp(time),
                     })
                 }
-                PointerEventKind::Release { button, serial: _, time } => {
+                PointerEventKind::Release { button, serial, time } => {
                     // Sometimes the Release event can occur without the Press event beforehand. E.g., when dismissing the window menu.
                     if window.num_pointer_buttons_down > 0 {
                         window.num_pointer_buttons_down -= 1;
                     }
                     self.send_event(MouseUpEvent {
+                        serial: EventSerial(serial),
                         window_id,
                         button: MouseButton(button),
                         location_in_window: LogicalPoint::new(event.position),

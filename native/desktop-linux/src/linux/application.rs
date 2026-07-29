@@ -7,7 +7,8 @@ use crate::linux::{
     desktop_settings_api::FfiDesktopSetting,
     drag_icon::DragIcon,
     events::{
-        DataTransferContent, DataTransferEvent, Event, EventHandler, NotificationClosedEvent, RequestId, WindowClosedEvent, WindowId,
+        DataTransferContent, DataTransferEvent, Event, EventHandler, EventSerial, NotificationClosedEvent, RequestId, WindowClosedEvent,
+        WindowId,
     },
     file_dialog::{show_open_file_dialog_impl, show_save_file_dialog_impl},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
@@ -517,8 +518,8 @@ impl Application {
         Ok(())
     }
 
-    pub fn request_internal_activation_token(&mut self, source_window_id: WindowId) -> anyhow::Result<RequestId> {
-        debug!("request_internal_activation_token: source_window_id={source_window_id:?}");
+    pub fn request_activation_token(&mut self, source_window_id: WindowId) -> anyhow::Result<RequestId> {
+        debug!("request_activation_token: source_window_id={source_window_id:?}");
         let source_w: &SimpleWindow = self
             .state
             .get_window(source_window_id)
@@ -562,39 +563,38 @@ impl Application {
         Ok(())
     }
 
-    pub fn window_start_move(&self, window_id: WindowId) -> anyhow::Result<()> {
+    // `event_serial` should be a touch, pointer or tablet pressed serial, e.g.:
+    // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L335
+    pub fn window_start_move(&self, window_id: WindowId, event_serial: EventSerial) -> anyhow::Result<()> {
         let w = self
             .get_window(window_id)
             .with_context(|| format!("No window found {window_id:?}"))?;
-        // Required to have a mouse button pressed serial, e.g.:
-        // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L335
-        if let Some((seat, serial)) = self.state.get_latest_pointer_button_seat_and_serial() {
-            w.start_move(seat, serial);
+        if let Some(seat) = self.state.get_default_seat() {
+            w.start_move(&seat, event_serial);
         }
         Ok(())
     }
 
-    pub fn window_start_resize(&self, window_id: WindowId, edge: WindowResizeEdge) -> anyhow::Result<()> {
+    // `event_serial` should be a touch, pointer or tablet pressed serial, e.g.:
+    // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L387
+    pub fn window_start_resize(&self, window_id: WindowId, event_serial: EventSerial, edge: WindowResizeEdge) -> anyhow::Result<()> {
         let w = self
             .get_window(window_id)
             .with_context(|| format!("No window found {window_id:?}"))?;
-        // Required to have a mouse button pressed serial, e.g.:
-        // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L387
-        if let Some((seat, serial)) = self.state.get_latest_pointer_button_seat_and_serial() {
-            w.start_resize(edge, seat, serial);
+        if let Some(seat) = self.state.get_default_seat() {
+            w.start_resize(edge, &seat, event_serial);
         }
         Ok(())
     }
 
-    pub fn window_show_menu(&self, window_id: WindowId, position: LogicalPoint) -> anyhow::Result<()> {
+    // `event_serial` should be a touch, pointer or tablet pressed serial, e.g.:
+    // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L309
+    pub fn window_show_menu(&self, window_id: WindowId, event_serial: EventSerial, position: LogicalPoint) -> anyhow::Result<()> {
         let w = self
             .get_window(window_id)
             .with_context(|| format!("No window found {window_id:?}"))?;
-        // Required to have a mouse button pressed serial, e.g.:
-        // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L309
-        if let Some((seat, serial)) = self.state.get_latest_pointer_button_seat_and_serial() {
-            debug!("window_show_menu: seat: {seat}, serial: {serial:?}", seat = seat.id());
-            w.show_menu(position, seat, serial);
+        if let Some(seat) = self.state.get_default_seat() {
+            w.show_menu(position, &seat, event_serial);
         }
         Ok(())
     }

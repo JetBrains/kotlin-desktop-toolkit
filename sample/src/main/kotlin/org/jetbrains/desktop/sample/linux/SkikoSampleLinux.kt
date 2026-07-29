@@ -15,6 +15,7 @@ import org.jetbrains.desktop.linux.DragAndDropQueryResponse
 import org.jetbrains.desktop.linux.DragIconParams
 import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.EventHandlerResult
+import org.jetbrains.desktop.linux.EventSerial
 import org.jetbrains.desktop.linux.FileDialog
 import org.jetbrains.desktop.linux.KeyCode
 import org.jetbrains.desktop.linux.KeyModifiers
@@ -162,11 +163,11 @@ internal data class XdgDesktopSettings(
 }
 
 private interface ClipboardHandler {
-    fun copy(content: DataTransferContentType)
-    fun copyToPrimarySelection(content: DataTransferContentType)
+    fun copy(eventSerial: EventSerial, content: DataTransferContentType)
+    fun copyToPrimarySelection(eventSerial: EventSerial, content: DataTransferContentType)
     fun paste(supportedMimeTypes: List<String>)
     fun pasteFromPrimarySelection(supportedMimeTypes: List<String>)
-    fun startDrag(content: DataTransferContentType, params: StartDragAndDropParams, draw: (Canvas, Scale) -> Unit)
+    fun startDrag(eventSerial: EventSerial, content: DataTransferContentType, params: StartDragAndDropParams, draw: (Canvas, Scale) -> Unit)
 }
 
 private data class PreeditData(
@@ -473,7 +474,7 @@ private class EditorState(val app: Application) {
                 }
 
                 KeyCode.C -> {
-                    clipboardHandler.copy(DataTransferContentType.UriList(EXAMPLE_FILES))
+                    clipboardHandler.copy(event.serial, DataTransferContentType.UriList(EXAMPLE_FILES))
                     false
                 }
 
@@ -504,7 +505,7 @@ private class EditorState(val app: Application) {
 
                 KeyCode.C -> {
                     getCurrentSelection()?.let { selection ->
-                        clipboardHandler.copy(DataTransferContentType.Text(selection))
+                        clipboardHandler.copy(event.serial, DataTransferContentType.Text(selection))
                     }
                     false
                 }
@@ -525,13 +526,8 @@ private class EditorState(val app: Application) {
                     false
                 }
 
-                KeyCode.M -> {
-                    window.startMove()
-                    false
-                }
-
                 KeyCode.Tab -> {
-                    window.requestInternalActivationToken()
+                    window.requestActivationToken()
                     false
                 }
 
@@ -867,7 +863,7 @@ private class ContentArea {
                         actions = setOf(DragAndDropAction.Copy),
                         dragIconParams,
                     )
-                    clipboardHandler.startDrag(content, startDragAndDropParams) { canvas, scale ->
+                    clipboardHandler.startDrag(event.serial, content, startDragAndDropParams) { canvas, scale ->
                         canvas.clear(0x77777777)
                         val skikoTextLine = dragIconTextLineCreator.makeTextLine(
                             EXAMPLE_FILES.joinToString("\n"),
@@ -900,7 +896,7 @@ private class ContentArea {
                             actions = setOf(DragAndDropAction.Copy, DragAndDropAction.Move),
                             dragIconParams,
                         )
-                        clipboardHandler.startDrag(content, startDragAndDropParams) { canvas, scale ->
+                        clipboardHandler.startDrag(event.serial, content, startDragAndDropParams) { canvas, scale ->
                             canvas.clear(Color.BLUE)
                             val skikoTextLine = dragIconTextLineCreator.makeTextLine(
                                 text,
@@ -1115,7 +1111,7 @@ private class WindowContainer(
         if (customBorders?.onMouseDown(event, window) == EventHandlerResult.Stop) {
             return EventHandlerResult.Stop
         }
-        if (customTitlebar?.onMouseDown(event) == EventHandlerResult.Stop) {
+        if (customTitlebar?.onMouseDown(event, xdgDesktopSettings, window) == EventHandlerResult.Stop) {
             return EventHandlerResult.Stop
         }
         if (contentArea.onMouseDown(event, clipboardHandler, modifiers, editorState) == EventHandlerResult.Stop) {
@@ -1126,7 +1122,7 @@ private class WindowContainer(
             when (modifiers.shortcutModifiers()) {
                 setOf(KeyModifiers.Control) -> {
                     editorState.getCurrentSelection()?.let { selection ->
-                        clipboardHandler.copyToPrimarySelection(DataTransferContentType.Text(selection))
+                        clipboardHandler.copyToPrimarySelection(event.serial, DataTransferContentType.Text(selection))
                         EventHandlerResult.Stop
                     } ?: EventHandlerResult.Continue
                 }
@@ -1141,7 +1137,7 @@ private class WindowContainer(
                 }
 
                 emptySet<KeyModifiers>() -> {
-                    window.startResize(WindowResizeEdge.Top)
+                    window.startResize(event.serial, WindowResizeEdge.Top)
                     EventHandlerResult.Stop
                 }
 
@@ -1152,8 +1148,8 @@ private class WindowContainer(
         }
     }
 
-    fun onMouseUp(event: Event.MouseUp, xdgDesktopSettings: XdgDesktopSettings, window: Window): EventHandlerResult {
-        if (customTitlebar?.onMouseUp(event, xdgDesktopSettings, window) == EventHandlerResult.Stop) {
+    fun onMouseUp(event: Event.MouseUp, window: Window): EventHandlerResult {
+        if (customTitlebar?.onMouseUp(event, window) == EventHandlerResult.Stop) {
             return EventHandlerResult.Stop
         }
         return EventHandlerResult.Continue
@@ -1459,8 +1455,8 @@ private class RotatingBallWindow(
         return windowContainer.onMouseDown(event, window, editorState, modifiers, clipboardHandler, xdgDesktopSettings)
     }
 
-    fun onMouseUp(event: Event.MouseUp, xdgDesktopSettings: XdgDesktopSettings): EventHandlerResult {
-        return windowContainer.onMouseUp(event, xdgDesktopSettings, window)
+    fun onMouseUp(event: Event.MouseUp): EventHandlerResult {
+        return windowContainer.onMouseUp(event, window)
     }
 }
 
@@ -1508,12 +1504,12 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
         )
         windows[windowId] = window
         windowClipboardHandlers[windowId] = object : ClipboardHandler {
-            override fun copy(content: DataTransferContentType) {
+            override fun copy(eventSerial: EventSerial, content: DataTransferContentType) {
                 currentClipboard = content
                 app.clipboardPut(content.mimeTypes())
             }
 
-            override fun copyToPrimarySelection(content: DataTransferContentType) {
+            override fun copyToPrimarySelection(eventSerial: EventSerial, content: DataTransferContentType) {
                 currentPrimarySelectionContent = content
                 app.primarySelectionPut(content.mimeTypes())
             }
@@ -1530,7 +1526,12 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 app.primarySelectionPaste(currentClipboardPasteSerial, supportedMimeTypes)
             }
 
-            override fun startDrag(content: DataTransferContentType, params: StartDragAndDropParams, draw: (Canvas, Scale) -> Unit) {
+            override fun startDrag(
+                eventSerial: EventSerial,
+                content: DataTransferContentType,
+                params: StartDragAndDropParams,
+                draw: (Canvas, Scale) -> Unit,
+            ) {
                 currentDragContent = content
                 currentDragIconDraw = draw
                 window.window.startDragAndDrop(params)
@@ -1701,7 +1702,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 if (event.button == MouseButton.LEFT) {
                     currentDragContent = null
                 }
-                windows[event.windowId]?.onMouseUp(event, xdgDesktopSettings) ?: EventHandlerResult.Continue
+                windows[event.windowId]?.onMouseUp(event) ?: EventHandlerResult.Continue
             }
 
             is Event.ScrollWheel -> EventHandlerResult.Continue

@@ -16,6 +16,7 @@ import org.jetbrains.desktop.linux.DragAndDropQueryResponse
 import org.jetbrains.desktop.linux.DragIconParams
 import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.EventHandlerResult
+import org.jetbrains.desktop.linux.EventSerial
 import org.jetbrains.desktop.linux.FontAntialiasingValue
 import org.jetbrains.desktop.linux.FontHintingValue
 import org.jetbrains.desktop.linux.FontRgbaOrderValue
@@ -1457,7 +1458,7 @@ abstract class WaylandTestsBase {
         doVirtualDeviceEvent("mousescroll?axis_source=0&vertical_scroll_120=120&horizontal_scroll_120=0")
     }
 
-    internal fun withSetClipboardContent(mimeTypes: List<String>, block: () -> Unit) {
+    internal fun withSetClipboardContent(@Suppress("unused") eventSerial: EventSerial, mimeTypes: List<String>, block: () -> Unit) {
         ui { app.clipboardPut(mimeTypes) }
         awaitEventOfType<Event.DataTransferAvailable>(msg = "withSetClipboardContent set") {
             it.dataSource == DataSource.Clipboard &&
@@ -1472,7 +1473,7 @@ abstract class WaylandTestsBase {
         }
     }
 
-    internal fun withSetPrimarySelectionContent(mimeTypes: List<String>, block: () -> Unit) {
+    internal fun withSetPrimarySelectionContent(@Suppress("unused") eventSerial: EventSerial, mimeTypes: List<String>, block: () -> Unit) {
         ui { app.primarySelectionPut(mimeTypes) }
         awaitEventOfType<Event.DataTransferAvailable>(msg = "withSetPrimarySelectionContent set") {
             it.dataSource ==
@@ -1585,8 +1586,9 @@ abstract class WaylandTestsBase {
         )
     }
 
-    internal fun waitForWindowFocusAfterMouseDown(windowId: WindowId) {
+    internal fun waitForWindowFocusAfterMouseDown(windowId: WindowId): Event.MouseDown {
         val checklist = Checklist(listOf("configure", "keyboardEnter", "mouseDown"))
+        var mouseDown: Event.MouseDown? = null
         waitUntilEq(emptySet()) {
             when (val event: Event? = eventQueue.poll()) {
                 is Event.WindowConfigure -> {
@@ -1604,12 +1606,14 @@ abstract class WaylandTestsBase {
                 is Event.MouseDown -> {
                     assertEquals(windowId, event.windowId)
                     checklist.checkEntry("mouseDown")
+                    mouseDown = event
                 }
 
                 else -> {}
             }
             checklist.uncheckedEntries()
         }
+        return mouseDown!!
     }
 
     internal fun waitForTestAppFocus(windowId: WindowId) {
@@ -2744,7 +2748,7 @@ class WaylandTests : WaylandTestsBase() {
                 assertEquals("\t", event.characters)
                 true
             }
-            val request = ui { window2.requestInternalActivationToken() }
+            val request = ui { window2.requestActivationToken() }
             assertNotNull(request)
             awaitEventOfType<Event.ActivationTokenResponse> { event ->
                 assertEquals(request, event.requestId)
@@ -2773,7 +2777,14 @@ class WaylandTests : WaylandTestsBase() {
         }
 
         withKeyPress(KeyCode.Tab) {
-            val request = ui { window1.requestInternalActivationToken() }
+            awaitEvent({ it as? Event.KeyDown }) { event ->
+                assertEquals(KeyCode.Tab, event.keyCode.value)
+                assertEquals(KeySym.Tab, event.key.value)
+                assertFalse(event.isRepeat)
+                assertEquals("\t", event.characters)
+                true
+            }
+            val request = ui { window1.requestActivationToken() }
             assertNotNull(request)
             awaitEventOfType<Event.ActivationTokenResponse> { event ->
                 assertEquals(request, event.requestId)
@@ -2881,9 +2892,9 @@ class WaylandTests : WaylandTestsBase() {
                 },
             ),
         )
-        createWindowAndWaitForFocus(defaultWindowParams())
+        val keyboardEnter = createWindowAndWaitForFocus(defaultWindowParams()).keyboardEnter
 
-        withSetClipboardContent(listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE)) {
+        withSetClipboardContent(keyboardEnter.serial, listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE)) {
             listClipboardFormats().also {
                 val expected = """text/html
 text/plain;charset=utf-8
@@ -2927,9 +2938,9 @@ text/plain;charset=utf-8
                 },
             ),
         )
-        createWindowAndWaitForFocus(defaultWindowParams())
+        val keyboardEnter = createWindowAndWaitForFocus(defaultWindowParams()).keyboardEnter
 
-        withSetClipboardContent(listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE)) {
+        withSetClipboardContent(keyboardEnter.serial, listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE)) {
             listClipboardFormats().also {
                 val expected = """text/html
 text/plain;charset=utf-8
@@ -2959,9 +2970,9 @@ text/plain;charset=utf-8
                 },
             ),
         )
-        createWindowAndWaitForFocus(defaultWindowParams())
+        val keyboardEnter = createWindowAndWaitForFocus(defaultWindowParams()).keyboardEnter
 
-        withSetClipboardContent(listOf(TEXT_UTF8_MIME_TYPE)) {
+        withSetClipboardContent(keyboardEnter.serial, listOf(TEXT_UTF8_MIME_TYPE)) {
             listClipboardFormats().also {
                 val expected = "text/plain;charset=utf-8\n"
                 assertEquals(expected, it?.decodeToString())
@@ -2990,9 +3001,9 @@ text/plain;charset=utf-8
         )
 
         val windowParams = defaultWindowParams()
-        createWindowAndWaitForFocus(windowParams)
+        val keyboardEnter = createWindowAndWaitForFocus(windowParams).keyboardEnter
 
-        withSetClipboardContent(mimeTypes) {
+        withSetClipboardContent(keyboardEnter.serial, mimeTypes) {
             withClipboardSourceTestApp(listOf(HTML_TEXT_MIME_TYPE to sequenceOf("<p>other app text</p>".encodeToByteArray()))) {
                 // Trigger the test app clipboard copy
                 withKeyPress(KeyCode.C) {}
@@ -3023,9 +3034,9 @@ text/plain;charset=utf-8
         )
 
         val windowParams = defaultWindowParams()
-        createWindowAndWaitForFocus(windowParams)
+        val keyboardEnter = createWindowAndWaitForFocus(windowParams).keyboardEnter
 
-        withSetPrimarySelectionContent(mimeTypes) {
+        withSetPrimarySelectionContent(keyboardEnter.serial, mimeTypes) {
             withPrimarySelectionSourceTestApp(listOf(HTML_TEXT_MIME_TYPE to sequenceOf("<p>other app text</p>".encodeToByteArray()))) {
                 // Trigger the test app clipboard copy
                 withKeyPress(KeyCode.C) {}
@@ -3059,10 +3070,10 @@ text/plain;charset=utf-8
                 },
             ),
         )
-        createWindowAndWaitForFocus(defaultWindowParams())
+        val keyboardEnter = createWindowAndWaitForFocus(defaultWindowParams()).keyboardEnter
 
         val mimeTypes = listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE)
-        withSetPrimarySelectionContent(mimeTypes) {
+        withSetPrimarySelectionContent(keyboardEnter.serial, mimeTypes) {
             listPrimarySelectionFormats().also {
                 val expected = """text/html
 text/plain;charset=utf-8
@@ -3099,9 +3110,9 @@ text/plain;charset=utf-8
                 },
             ),
         )
-        createWindowAndWaitForFocus(defaultWindowParams())
+        val keyboardEnter = createWindowAndWaitForFocus(defaultWindowParams()).keyboardEnter
 
-        withSetClipboardContent(listOf(TEXT_UTF8_MIME_TYPE)) {
+        withSetClipboardContent(keyboardEnter.serial, listOf(TEXT_UTF8_MIME_TYPE)) {
             assertNull(getClipboardContent(HTML_TEXT_MIME_TYPE))
         }
         testSuccessful = true
@@ -3123,9 +3134,9 @@ text/plain;charset=utf-8
                 },
             ),
         )
-        createWindowAndWaitForFocus(defaultWindowParams())
+        val keyboardEnter = createWindowAndWaitForFocus(defaultWindowParams()).keyboardEnter
 
-        withSetPrimarySelectionContent(listOf(TEXT_UTF8_MIME_TYPE)) {
+        withSetPrimarySelectionContent(keyboardEnter.serial, listOf(TEXT_UTF8_MIME_TYPE)) {
             assertNull(getPrimarySelectionContent(HTML_TEXT_MIME_TYPE))
         }
         testSuccessful = true
@@ -3147,9 +3158,9 @@ text/plain;charset=utf-8
                 },
             ),
         )
-        createWindowAndWaitForFocus(defaultWindowParams())
+        val keyboardEnter = createWindowAndWaitForFocus(defaultWindowParams()).keyboardEnter
 
-        withSetClipboardContent(listOf(TEXT_UTF8_MIME_TYPE)) {
+        withSetClipboardContent(keyboardEnter.serial, listOf(TEXT_UTF8_MIME_TYPE)) {
             val transferSerial1 = 5
             ui { app.clipboardPaste(transferSerial1, listOf(TEXT_UTF8_MIME_TYPE, PNG_MIME_TYPE)) }
             withNextEvent { event ->
@@ -3174,9 +3185,9 @@ text/plain;charset=utf-8
     @Test
     fun testClipboardPasteToSelfForNonExistingType() {
         run(defaultApplicationConfig())
-        createWindowAndWaitForFocus(defaultWindowParams())
+        val keyboardEnter = createWindowAndWaitForFocus(defaultWindowParams()).keyboardEnter
 
-        withSetClipboardContent(listOf(TEXT_UTF8_MIME_TYPE)) {
+        withSetClipboardContent(keyboardEnter.serial, listOf(TEXT_UTF8_MIME_TYPE)) {
             val transferSerial = 6
             ui { app.clipboardPaste(transferSerial, listOf(PNG_MIME_TYPE, TEXT_UTF8_MIME_TYPE)) }
             withNextEvent { event ->
@@ -4165,8 +4176,8 @@ text/plain;charset=utf-8
         assertEquals(requestedWindowSize, stateBefore.getClientAreaSize())
 
         withMouseButtonDown(button) {
-            awaitEventOfType<Event.MouseDown> { true }
-            ui { window.startMove() }
+            val mouseDown = awaitEventOfType<Event.MouseDown> { true }
+            ui { window.startMove(mouseDown.serial) }
             awaitEventOfType<Event.MouseExited> { true }
             moveMouseTo(DEFAULT_MOUSE_POS.shifted(LogicalPixelsInt(100), LogicalPixelsInt(50)))
         }
@@ -4225,9 +4236,9 @@ text/plain;charset=utf-8
         val mousePos = stateBefore.getClientAreaTopLeftGlobalPosition().shifted(LogicalPixelsInt(5), LogicalPixelsInt(5))
         moveMouseTo(mousePos)
         withMouseButtonDown(button) {
-            awaitEventOfType<Event.MouseDown> { true }
+            val mouseDown = awaitEventOfType<Event.MouseDown> { true }
             // With Sway, it doesn't matter which edge we specify; it's dependent on the mouse position
-            ui { window.startResize(WindowResizeEdge.TopLeft) }
+            ui { window.startResize(mouseDown.serial, WindowResizeEdge.TopLeft) }
             awaitEventOfType<Event.MouseExited> { true }
             moveMouseTo(mousePos.shifted(moveX, moveY))
             awaitEventOfType<Event.WindowConfigure> { event ->

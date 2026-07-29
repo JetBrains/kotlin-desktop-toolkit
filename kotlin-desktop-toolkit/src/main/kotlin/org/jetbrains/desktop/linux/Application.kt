@@ -383,18 +383,6 @@ public class Application : AutoCloseable {
         }
     }
 
-    @Deprecated("Use `Window.requestInternalActivationToken` instead")
-    public fun requestInternalActivationToken(sourceWindowId: WindowId): UInt? {
-        return ffiDownCall {
-            val rawRequestId = desktop_linux_h.window_request_internal_activation_token(appPtr, sourceWindowId)
-            if (rawRequestId == 0) {
-                null
-            } else {
-                rawRequestId.toUInt()
-            }
-        }
-    }
-
     public fun requestShowNotification(params: ShowNotificationParams): RequestId? {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {

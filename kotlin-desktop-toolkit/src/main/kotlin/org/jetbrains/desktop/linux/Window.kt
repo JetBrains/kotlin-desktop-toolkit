@@ -77,22 +77,22 @@ public class Window internal constructor(
         }
     }
 
-    public fun startMove() {
+    public fun startMove(eventSerial: EventSerial) {
         ffiDownCall {
-            desktop_linux_h.window_start_move(appPtr, windowId)
+            desktop_linux_h.window_start_move(appPtr, windowId, eventSerial.toNative())
         }
     }
 
-    public fun startResize(edge: WindowResizeEdge) {
+    public fun startResize(eventSerial: EventSerial, edge: WindowResizeEdge) {
         ffiDownCall {
-            desktop_linux_h.window_start_resize(appPtr, windowId, edge.toNative())
+            desktop_linux_h.window_start_resize(appPtr, windowId, eventSerial.toNative(), edge.toNative())
         }
     }
 
-    public fun showMenu(position: LogicalPoint) {
+    public fun showMenu(eventSerial: EventSerial, position: LogicalPoint) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
-                desktop_linux_h.window_show_menu(appPtr, windowId, position.toNative(arena))
+                desktop_linux_h.window_show_menu(appPtr, windowId, eventSerial.toNative(), position.toNative(arena))
             }
         }
     }
@@ -195,9 +195,9 @@ public class Window internal constructor(
         }
     }
 
-    public fun requestInternalActivationToken(): RequestId? {
+    public fun requestActivationToken(): RequestId? {
         return ffiDownCall {
-            val requestIdVal = desktop_linux_h.window_request_internal_activation_token(appPtr, windowId)
+            val requestIdVal = desktop_linux_h.window_request_activation_token(appPtr, windowId)
             RequestId.fromNativeResponse(requestIdVal)
         }
     }
