@@ -270,10 +270,6 @@ public sealed class Event {
     @ConsistentCopyVisibility
     public data class ScrollWheel internal constructor(
         val windowId: WindowId,
-        @Deprecated("Use `horizontalScroll` instead")
-        val scrollingDeltaX: LogicalPixels,
-        @Deprecated("Use `verticalScroll` instead")
-        val scrollingDeltaY: LogicalPixels,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
         val horizontalScroll: ScrollData,

@@ -884,8 +884,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             val verticalScroll = ScrollData.fromNative(NativeScrollWheelEvent.vertical_scroll(nativeEvent))
             Event.ScrollWheel(
                 windowId = NativeScrollWheelEvent.window_id(nativeEvent),
-                scrollingDeltaX = horizontalScroll.delta,
-                scrollingDeltaY = verticalScroll.delta,
                 locationInWindow = LogicalPoint.fromNative(NativeScrollWheelEvent.location_in_window(nativeEvent)),
                 timestamp = Timestamp.fromNative(NativeScrollWheelEvent.timestamp(nativeEvent)),
                 horizontalScroll = horizontalScroll,
