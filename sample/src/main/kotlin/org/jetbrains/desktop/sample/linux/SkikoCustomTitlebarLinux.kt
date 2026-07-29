@@ -6,11 +6,10 @@ import org.jetbrains.desktop.linux.EventHandlerResult
 import org.jetbrains.desktop.linux.Logger
 import org.jetbrains.desktop.linux.LogicalPixels
 import org.jetbrains.desktop.linux.LogicalPoint
-import org.jetbrains.desktop.linux.LogicalRect
-import org.jetbrains.desktop.linux.LogicalSize
 import org.jetbrains.desktop.linux.MouseButton
 import org.jetbrains.desktop.linux.Timestamp
 import org.jetbrains.desktop.linux.Window
+import org.jetbrains.desktop.linux.WindowCapabilities
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
 import org.jetbrains.skia.Image
@@ -19,94 +18,174 @@ import org.jetbrains.skia.Rect
 import kotlin.math.pow
 import kotlin.time.Duration
 
+private fun jbIconBytes(): ByteArray {
+    return object {}.javaClass.getResource("/jb-logo.png")!!.readBytes()
+}
+
 private fun LogicalPoint.isInsideCircle(center: LogicalPoint, radius: LogicalPixels): Boolean {
     val xDiff = this.x - center.x
     val yDiff = this.y - center.y
     return xDiff.pow(2) + yDiff.pow(2) <= radius.pow(2)
 }
 
-fun LogicalRect.contains(p: LogicalPoint): Boolean {
-    return p.x > x.toDouble() &&
-        p.x < (x + width).toDouble() &&
-        p.y > y.toDouble() &&
-        p.y < (y + height).toDouble()
-}
-
 internal class SkikoCustomTitlebarLinux(
-    var size: LogicalSize,
-    var buttonLayout: TitlebarLayout,
-    val requestClose: () -> Unit,
+    private var headerRect: LogicalDoubleRect,
+    private val requestClose: () -> Unit,
 ) {
-    private var rectangles = ArrayList<Pair<LogicalRect, WindowButtonType>>()
+    private var buttonLayout = DEFAULT_BUTTON_LAYOUT
+    private var rectangles = ArrayList<Pair<LogicalDoubleRect, WindowButtonType>>()
     private var lastHeaderMouseDownTime: Timestamp? = null
     private var lastMouseLocation: LogicalPoint? = null
     private var leftClickStartLocation: LogicalPoint? = null
     private var isDragging: Boolean = false
+    private var isActive: Boolean = false
+    private var isMaximized: Boolean = false
 
-    private var titleTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
+    private var titleTextLineCreator = TextLineCreator()
 
     companion object {
-        const val CUSTOM_TITLEBAR_HEIGHT = 55
-        const val BUTTON_LINE_WIDTH: LogicalPixels = 5.0
-        const val MOVE_RADIUS: LogicalPixels = 3.0
-        val COLOR_DARK_GRAY = Color.makeRGB(128, 128, 128)
-        val COLOR_LIGHT_GRAY = Color.makeRGB(211, 211, 211)
-        val BUTTON_SIZE = LogicalSize(CUSTOM_TITLEBAR_HEIGHT, CUSTOM_TITLEBAR_HEIGHT)
+        private const val BUTTON_LINE_WIDTH: LogicalPixels = 5.0
+        private const val MOVE_RADIUS: LogicalPixels = 3.0
+        private val COLOR_DARK_GRAY = Color.makeRGB(128, 128, 128)
+        private val COLOR_LIGHT_GRAY = Color.makeRGB(211, 211, 211)
 
-        val APP_ICON = Image.makeFromEncoded(jbIconBytes())
+        private val APP_ICON = Image.makeFromEncoded(jbIconBytes())
+        private val DEFAULT_BUTTON_LAYOUT = TitlebarLayout(
+            layoutLeft = listOf(WindowButtonType.Icon),
+            layoutRight = listOf(WindowButtonType.Minimize, WindowButtonType.Maximize, WindowButtonType.Close),
+        )
+
+        private enum class WindowButtonType {
+            AppMenu,
+            Icon,
+            Spacer,
+            Title,
+            Minimize,
+            Maximize,
+            Close,
+            ;
+
+            companion object {
+                fun fromString(buttonName: String): WindowButtonType {
+                    return when (buttonName) {
+                        "appmenu", "menu" -> AppMenu
+                        "icon" -> Icon
+                        "spacer" -> Spacer
+                        "minimize" -> Minimize
+                        "maximize" -> Maximize
+                        "close" -> Close
+                        else -> error("Unknown button name $buttonName")
+                    }
+                }
+            }
+        }
+
+        private data class TitlebarLayout(
+            val layoutLeft: List<WindowButtonType>,
+            val layoutRight: List<WindowButtonType>,
+        ) {
+            companion object {
+                private fun parseOneSide(buttons: String): List<WindowButtonType> {
+                    return if (buttons.isEmpty()) {
+                        emptyList()
+                    } else {
+                        buttons.split(',').map(WindowButtonType::fromString)
+                    }
+                }
+
+                private fun filterUnsupportedButtons(
+                    buttons: List<WindowButtonType>,
+                    capabilities: WindowCapabilities?,
+                ): List<WindowButtonType> {
+                    return buttons
+                        .filter {
+                            when (it) {
+                                WindowButtonType.AppMenu,
+                                WindowButtonType.Icon,
+                                WindowButtonType.Spacer,
+                                WindowButtonType.Title,
+                                WindowButtonType.Close,
+                                -> true
+
+                                WindowButtonType.Minimize -> capabilities?.minimize ?: true
+                                WindowButtonType.Maximize -> capabilities?.maximize ?: true
+                            }
+                        }
+                }
+
+                fun fromString(buttonLayout: String, capabilities: WindowCapabilities?): TitlebarLayout {
+                    val (buttonsLeftStr, buttonsRightStr) = buttonLayout.split(':')
+                    return TitlebarLayout(
+                        filterUnsupportedButtons(parseOneSide(buttonsLeftStr), capabilities),
+                        filterUnsupportedButtons(parseOneSide(buttonsRightStr), capabilities),
+                    )
+                }
+            }
+        }
     }
 
-    fun configure(event: Event.WindowConfigure, layout: TitlebarLayout) {
-        size = LogicalSize(width = event.size.width, height = CUSTOM_TITLEBAR_HEIGHT)
-        setLayout(layout)
+    fun setLayout(capabilities: WindowCapabilities?, layoutString: String?) {
+        buttonLayout = layoutString?.let {
+            TitlebarLayout.fromString(it, capabilities)
+        } ?: DEFAULT_BUTTON_LAYOUT
+
+        update()
     }
 
-    fun toggleMaximize(window: Window, windowState: WindowState) {
-        if (windowState.maximized) {
+    fun configure(event: Event.WindowConfigure, rect: LogicalDoubleRect, layoutString: String?) {
+        headerRect = rect
+        isActive = event.active
+        isMaximized = event.maximized
+        setLayout(event.capabilities, layoutString)
+    }
+
+    fun toggleMaximize(window: Window) {
+        if (isMaximized) {
             window.unmaximize()
         } else {
             window.maximize()
         }
     }
 
-    fun setLayout(layout: TitlebarLayout) {
-        buttonLayout = layout
+    private fun update() {
+        val buttonWidth = headerRect.height
+        val buttonHeight = headerRect.height
         rectangles.clear()
         buttonLayout.let {
-            val buttonsLeftWidth = it.layoutLeft.size * BUTTON_SIZE.width
-            val buttonsRightWidth = it.layoutRight.size * BUTTON_SIZE.width
-            val rect = LogicalRect(
-                x = buttonsLeftWidth,
-                y = 0,
-                width = size.width - buttonsRightWidth - buttonsLeftWidth,
-                height = CUSTOM_TITLEBAR_HEIGHT,
+            val buttonsLeftWidth = buttonWidth * it.layoutLeft.size
+            val buttonsRightWidth = buttonWidth * it.layoutRight.size
+            val titleRect = LogicalDoubleRect(
+                x = headerRect.x + buttonsLeftWidth,
+                y = headerRect.y,
+                width = headerRect.width - buttonsRightWidth - buttonsLeftWidth,
+                height = headerRect.height,
             )
-            rectangles.add(Pair(rect, WindowButtonType.Title))
+            rectangles.add(Pair(titleRect, WindowButtonType.Title))
             for ((i, button) in it.layoutLeft.withIndex()) {
-                val rect = LogicalRect(x = i * BUTTON_SIZE.height, y = 0, width = BUTTON_SIZE.width, height = BUTTON_SIZE.height)
+                val rect = LogicalDoubleRect(
+                    x = headerRect.x + (buttonWidth * i),
+                    y = headerRect.y,
+                    width = buttonWidth,
+                    height = buttonHeight,
+                )
                 rectangles.add(Pair(rect, button))
             }
             for ((i, button) in it.layoutRight.withIndex()) {
-                val rect = LogicalRect(
-                    x = size.width - ((it.layoutRight.size - i) * BUTTON_SIZE.width),
-                    y = 0,
-                    width = BUTTON_SIZE.width,
-                    height = BUTTON_SIZE.height,
+                val rect = LogicalDoubleRect(
+                    x = headerRect.x + headerRect.width - (buttonWidth * (it.layoutRight.size - i)),
+                    y = headerRect.y,
+                    width = buttonWidth,
+                    height = buttonHeight,
                 )
                 rectangles.add(Pair(rect, button))
             }
         }
     }
 
-    private fun executeTitlebarAction(
-        action: DesktopTitlebarAction,
-        window: Window,
-        locationInWindow: LogicalPoint,
-        windowState: WindowState,
-    ) {
+    private fun executeTitlebarAction(action: DesktopTitlebarAction, window: Window, event: Event.MouseUp) {
         when (action) {
             DesktopTitlebarAction.ToggleMaximize -> {
-                toggleMaximize(window, windowState)
+                toggleMaximize(window)
             }
 
             DesktopTitlebarAction.Minimize -> {
@@ -115,36 +194,34 @@ internal class SkikoCustomTitlebarLinux(
 
             DesktopTitlebarAction.None -> {}
             DesktopTitlebarAction.Menu -> {
-                window.showMenu(locationInWindow)
+                window.showMenu(event.locationInWindow)
             }
         }
     }
 
     private fun executeWindowAction(
         windowButton: WindowButtonType,
-        mouseButton: MouseButton,
-        locationInWindow: LogicalPoint,
+        event: Event.MouseUp,
         window: Window,
         xdgDesktopSettings: XdgDesktopSettings,
-        windowState: WindowState,
     ): EventHandlerResult {
-        Logger.info { "executeWindowAction: $mouseButton , $windowButton" }
+        Logger.info { "executeWindowAction: ${event.button} , $windowButton" }
         return when (windowButton) {
             WindowButtonType.AppMenu, WindowButtonType.Icon -> {
-                window.showMenu(locationInWindow)
+                window.showMenu(event.locationInWindow)
                 EventHandlerResult.Stop
             }
 
             WindowButtonType.Spacer,
             WindowButtonType.Title,
-            -> when (mouseButton) {
+            -> when (event.button) {
                 MouseButton.RIGHT -> {
-                    executeTitlebarAction(xdgDesktopSettings.actionRightClickTitlebar, window, locationInWindow, windowState)
+                    executeTitlebarAction(xdgDesktopSettings.actionRightClickTitlebar, window, event)
                     EventHandlerResult.Stop
                 }
 
                 MouseButton.MIDDLE -> {
-                    executeTitlebarAction(xdgDesktopSettings.actionMiddleClickTitlebar, window, locationInWindow, windowState)
+                    executeTitlebarAction(xdgDesktopSettings.actionMiddleClickTitlebar, window, event)
                     EventHandlerResult.Stop
                 }
 
@@ -157,7 +234,7 @@ internal class SkikoCustomTitlebarLinux(
             }
 
             WindowButtonType.Maximize -> {
-                toggleMaximize(window, windowState)
+                toggleMaximize(window)
                 EventHandlerResult.Stop
             }
 
@@ -183,7 +260,6 @@ internal class SkikoCustomTitlebarLinux(
     }
 
     fun onMouseDown(event: Event.MouseDown): EventHandlerResult {
-        val headerRect = LogicalRect(x = 0, y = 0, width = size.width, height = size.height)
         return if (headerRect.contains(event.locationInWindow) && event.button == MouseButton.LEFT) {
             leftClickStartLocation = event.locationInWindow
             isDragging = false
@@ -193,13 +269,7 @@ internal class SkikoCustomTitlebarLinux(
         }
     }
 
-    fun onMouseUp(
-        event: Event.MouseUp,
-        xdgDesktopSettings: XdgDesktopSettings,
-        window: Window,
-        windowState: WindowState,
-    ): EventHandlerResult {
-        val headerRect = LogicalRect(x = 0, y = 0, width = size.width, height = size.height)
+    fun onMouseUp(event: Event.MouseUp, xdgDesktopSettings: XdgDesktopSettings, window: Window): EventHandlerResult {
         val leftClickStartWindowButton = leftClickStartLocation?.let { leftClickStartLocation ->
             rectangles.firstOrNull { it.first.contains(leftClickStartLocation) }?.second
         }
@@ -207,42 +277,34 @@ internal class SkikoCustomTitlebarLinux(
             leftClickStartLocation = null
             isDragging = false
         }
-        return if (headerRect.contains(event.locationInWindow)) {
-            rectangles.firstOrNull { it.first.contains(event.locationInWindow) }?.second?.let { windowButton ->
-                if (event.button == MouseButton.LEFT && leftClickStartWindowButton != windowButton) {
-                    EventHandlerResult.Continue
-                } else if ((windowButton == WindowButtonType.Title || windowButton == WindowButtonType.Spacer) &&
-                    event.button == MouseButton.LEFT &&
-                    handlePotentialDoubleClick(event.timestamp, xdgDesktopSettings.doubleClickInterval)
-                ) {
-                    executeTitlebarAction(
-                        xdgDesktopSettings.actionDoubleClickTitlebar,
-                        window,
-                        event.locationInWindow,
-                        windowState,
-                    )
-                    EventHandlerResult.Stop
-                } else if (windowButton == WindowButtonType.Minimize && event.button == MouseButton.RIGHT) {
-                    window.requestInternalActivationToken()
-                    EventHandlerResult.Stop
-                } else {
-                    executeWindowAction(
-                        windowButton,
-                        event.button,
-                        event.locationInWindow,
-                        window,
-                        xdgDesktopSettings,
-                        windowState,
-                    )
-                }
-            } ?: EventHandlerResult.Continue
-        } else {
-            EventHandlerResult.Continue
-        }
+        return rectangles.firstOrNull { it.first.contains(event.locationInWindow) }?.second?.let { windowButton ->
+            if (event.button == MouseButton.LEFT && leftClickStartWindowButton != windowButton) {
+                EventHandlerResult.Continue
+            } else if ((windowButton == WindowButtonType.Title || windowButton == WindowButtonType.Spacer) &&
+                event.button == MouseButton.LEFT &&
+                handlePotentialDoubleClick(event.timestamp, xdgDesktopSettings.doubleClickInterval)
+            ) {
+                executeTitlebarAction(
+                    xdgDesktopSettings.actionDoubleClickTitlebar,
+                    window,
+                    event,
+                )
+                EventHandlerResult.Stop
+            } else if (windowButton == WindowButtonType.Minimize && event.button == MouseButton.RIGHT) {
+                window.requestInternalActivationToken()
+                EventHandlerResult.Stop
+            } else {
+                executeWindowAction(
+                    windowButton,
+                    event,
+                    window,
+                    xdgDesktopSettings,
+                )
+            }
+        } ?: EventHandlerResult.Continue
     }
 
     fun onMouseMoved(locationInWindow: LogicalPoint, window: Window): EventHandlerResult {
-        val headerRect = LogicalRect(x = 0, y = 0, width = size.width, height = size.height)
         lastMouseLocation = locationInWindow
         return if (headerRect.contains(locationInWindow) &&
             !isDragging &&
@@ -278,18 +340,12 @@ internal class SkikoCustomTitlebarLinux(
     private fun drawButton(
         canvas: Canvas,
         button: WindowButtonType,
-        rect: LogicalRect,
+        rect: Rect,
         highlighted: Boolean,
         hovered: Boolean,
-        scale: Float,
+        scale: Double,
         title: String,
-        windowState: WindowState,
     ) {
-        val w = rect.width.toFloat() * scale
-        val h = rect.height.toFloat() * scale
-        val xOffset = rect.x.toFloat() * scale
-        val yOffset = rect.y.toFloat() * scale
-
         when (button) {
             WindowButtonType.Minimize, WindowButtonType.Maximize, WindowButtonType.Close, WindowButtonType.AppMenu -> {
                 Paint().use { paint ->
@@ -300,7 +356,7 @@ internal class SkikoCustomTitlebarLinux(
                     } else {
                         Color.BLACK
                     }
-                    canvas.drawRect(Rect.makeXYWH(xOffset, yOffset, w, h), paint)
+                    canvas.drawRect(rect, paint)
                 }
             }
 
@@ -309,16 +365,16 @@ internal class SkikoCustomTitlebarLinux(
 
         Paint().use { paint ->
             paint.color = Color.WHITE
-            paint.strokeWidth = (BUTTON_LINE_WIDTH * scale).toFloat()
+            paint.strokeWidth = BUTTON_LINE_WIDTH.toSkiko(scale)
 
-            val yTop = yOffset + (paint.strokeWidth / 2)
-            val yBottom = (yOffset + h) - (paint.strokeWidth / 2)
-            val xLeft = xOffset + (paint.strokeWidth / 2) + 1
-            val xRight = (xOffset + w) - (paint.strokeWidth / 2) - 2
+            val yTop = rect.top + (paint.strokeWidth / 2)
+            val yBottom = (rect.top + rect.height) - (paint.strokeWidth / 2)
+            val xLeft = rect.left + (paint.strokeWidth / 2) + 1
+            val xRight = (rect.left + rect.width) - (paint.strokeWidth / 2) - 2
             when (button) {
                 WindowButtonType.AppMenu -> {
                     canvas.drawLine(xLeft, yTop, xRight, yTop, paint)
-                    canvas.drawLine(xLeft, yOffset + (h / 2), xRight, yOffset + (h / 2), paint)
+                    canvas.drawLine(xLeft, rect.top + (rect.height / 2), xRight, rect.top + (rect.height / 2), paint)
                     canvas.drawLine(xLeft, yBottom, xRight, yBottom, paint)
                 }
 
@@ -337,9 +393,9 @@ internal class SkikoCustomTitlebarLinux(
                 }
 
                 WindowButtonType.Maximize -> {
-                    if (windowState.maximized) {
-                        drawUnfilledRect(Rect(xLeft + (w / 5), yTop, xRight, yBottom - (h / 5)), canvas, paint)
-                        drawUnfilledRect(Rect(xLeft, yTop + (h / 5), xRight - (w / 5), yBottom), canvas, paint)
+                    if (isMaximized) {
+                        drawUnfilledRect(Rect(xLeft + (rect.width / 5), yTop, xRight, yBottom - (rect.height / 5)), canvas, paint)
+                        drawUnfilledRect(Rect(xLeft, yTop + (rect.height / 5), xRight - (rect.width / 5), yBottom), canvas, paint)
                     } else {
                         drawUnfilledRect(Rect(xLeft, yTop, xRight, yBottom), canvas, paint)
                     }
@@ -351,30 +407,27 @@ internal class SkikoCustomTitlebarLinux(
                 }
 
                 WindowButtonType.Title -> {
-                    paint.color = if (windowState.active) Color.WHITE else COLOR_LIGHT_GRAY
-                    canvas.drawTextLine(
-                        titleTextLineCreator.makeTextLine(title, (CUSTOM_TITLEBAR_HEIGHT.toFloat() * scale)),
-                        xOffset,
-                        yBottom,
-                        paint,
-                    )
+                    val color = if (isActive) Color.WHITE else COLOR_LIGHT_GRAY
+                    titleTextLineCreator.makeTextLine(
+                        title,
+                        (headerRect.height * 2 / 3).toSkiko(scale),
+                        color,
+                        rect.width,
+                    ).paint(canvas, xLeft, yTop)
                 }
             }
         }
     }
 
-    fun draw(canvas: Canvas, scale: Double, xdgDesktopSettings: XdgDesktopSettings, title: String, windowState: WindowState) {
-        val physicalSize = size.toPhysical(scale)
-        val w = physicalSize.width.toFloat()
-        val h = physicalSize.height.toFloat()
+    fun draw(canvas: Canvas, xdgDesktopSettings: XdgDesktopSettings, title: String, scale: Double) {
         Paint().use { paint ->
             paint.color = xdgDesktopSettings.accentColor
-            canvas.drawRect(Rect.makeXYWH(0f, 0f, w, h), paint)
+            canvas.drawRect(headerRect.toSkiko(scale), paint)
         }
         for ((rect, button) in rectangles) {
             val hovered = !isDragging && (lastMouseLocation?.let { rect.contains(it) } == true)
             val highlighted = hovered && (leftClickStartLocation?.let { rect.contains(it) } == true)
-            drawButton(canvas, button, rect, highlighted = highlighted, hovered = hovered, scale.toFloat(), title, windowState)
+            drawButton(canvas, button, rect.toSkiko(scale), highlighted = highlighted, hovered = hovered, scale, title)
         }
     }
 }
