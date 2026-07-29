@@ -92,7 +92,7 @@ impl Drawable for OpenglState {
         let v_vertices: [f32; 6] = [animation_progress, 1.0, -1.0, -1.0, 1.0, -1.0];
         let gl = &self.gl;
         unsafe {
-            gl.Viewport(0, 0, physical_size.width.0, physical_size.height.0);
+            gl.Viewport(0, 0, physical_size.width.raw_physical(), physical_size.height.raw_physical());
             gl.Clear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
             gl.UseProgram(self.program);
             //let v_position = gl.GetAttribLocation)(program, c"vPosition".as_ptr());

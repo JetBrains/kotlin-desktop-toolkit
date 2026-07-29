@@ -24,6 +24,7 @@ import org.jetbrains.desktop.linux.KeyModifiers
 import org.jetbrains.desktop.linux.KeySym
 import org.jetbrains.desktop.linux.KotlinDesktopToolkit
 import org.jetbrains.desktop.linux.LogLevel
+import org.jetbrains.desktop.linux.LogicalPixelsInt
 import org.jetbrains.desktop.linux.LogicalPoint
 import org.jetbrains.desktop.linux.LogicalRect
 import org.jetbrains.desktop.linux.LogicalSize
@@ -31,6 +32,7 @@ import org.jetbrains.desktop.linux.MouseButton
 import org.jetbrains.desktop.linux.PhysicalSize
 import org.jetbrains.desktop.linux.PointerShape
 import org.jetbrains.desktop.linux.RenderingMode
+import org.jetbrains.desktop.linux.Scale
 import org.jetbrains.desktop.linux.ShowNotificationParams
 import org.jetbrains.desktop.linux.SoftwareDrawData
 import org.jetbrains.desktop.linux.StartDragAndDropParams
@@ -119,7 +121,7 @@ internal data class WmVersion(
 internal interface WmWindowState {
     fun getWindowId(): Int
     fun getTitle(): String
-    fun getClientAreaTopLeftGlobalPosition(): LogicalPoint
+    fun getClientAreaTopLeftGlobalPosition(): TestMousePosition
     fun getClientAreaSize(): LogicalSize
 }
 
@@ -211,7 +213,7 @@ internal class SwayWm : WmInteractions {
             val height: Int,
         ) {
             fun toLogicalSize(): LogicalSize {
-                return LogicalSize(width = width, height = height)
+                return LogicalSize(width = LogicalPixelsInt(width), height = LogicalPixelsInt(height))
             }
         }
 
@@ -316,8 +318,11 @@ internal class SwayWm : WmInteractions {
 
             override fun getTitle(): String = name
 
-            override fun getClientAreaTopLeftGlobalPosition(): LogicalPoint {
-                return LogicalPoint(x = (rect.x + current_border_width).toDouble(), y = (rect.y + current_border_width).toDouble())
+            override fun getClientAreaTopLeftGlobalPosition(): TestMousePosition {
+                return TestMousePosition(
+                    LogicalPixelsInt((rect.x + current_border_width)),
+                    LogicalPixelsInt((rect.y + current_border_width)),
+                )
             }
 
             override fun getClientAreaSize(): LogicalSize {
@@ -330,8 +335,11 @@ internal class SwayWm : WmInteractions {
 private val testStart by lazy { TimeSource.Monotonic.markNow() }
 private val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd HH:mm:ss.SSS")
 
-private fun LogicalPoint.shifted(x: Int, y: Int): LogicalPoint {
-    return LogicalPoint(x = this.x + x, y = this.y + y)
+private fun TestMousePosition.shifted(
+    x: LogicalPixelsInt = LogicalPixelsInt.Zero,
+    y: LogicalPixelsInt = LogicalPixelsInt.Zero,
+): TestMousePosition {
+    return TestMousePosition(this.x + x, this.y + y)
 }
 
 private fun withTimestamp(message: String): String {
@@ -813,12 +821,12 @@ private fun getPrimarySelectionContent(format: String): ByteArray? {
     return runCommandWithOutput(listOf("wl-paste", "--no-newline", "--primary", "-t", format))
 }
 
-private fun screenshot(outPath: Path, rect: Pair<LogicalPoint, LogicalSize>? = null, hideCursor: Boolean = true) {
+private fun screenshot(outPath: Path, rect: LogicalRect? = null, hideCursor: Boolean = true) {
     val cmd = buildList {
         add("grim")
-        rect?.let { (point, size) ->
+        if (rect != null) {
             add("-g")
-            add("${point.x.roundToInt()},${point.y.roundToInt()} ${size.width}x${size.height}")
+            add("${rect.x.rawLogical},${rect.y.rawLogical} ${rect.width.rawLogical}x${rect.height.rawLogical}")
         }
         if (!hideCursor) {
             add("-c")
@@ -885,11 +893,22 @@ private class Checklist(entries: List<String>) {
     }
 }
 
+internal data class TestMousePosition(
+    val x: LogicalPixelsInt,
+    val y: LogicalPixelsInt,
+) {
+    fun assertEquals(actual: LogicalPoint) {
+        val expected = Pair(x.toLogicalPixels(), y.toLogicalPixels())
+        val actualPair = Pair(actual.x, actual.y)
+        assertEquals(expected, actualPair)
+    }
+}
+
 private fun performSoftwareDrawing(size: PhysicalSize, softwareDrawData: SoftwareDrawData, draw: (SkCanvas) -> Unit) {
     return SkSurface.makeRasterDirect(
         imageInfo = SkImageInfo(
-            width = size.width,
-            height = size.height,
+            width = size.width.rawPhysical,
+            height = size.height.rawPhysical,
             colorType = SkColorType.BGRA_8888,
             alphaType = SkColorAlphaType.OPAQUE,
             colorSpace = SkColorSpace.sRGB,
@@ -983,6 +1002,15 @@ internal data class ExpectedWindowConfigure(
     }
 }
 
+internal fun checkPhysicalSize(expectedLogical: LogicalSize, scale: Scale, actual: PhysicalSize) {
+    val expected = Pair(
+        expectedLogical.width.toRawPhysical(scale).roundToInt(),
+        expectedLogical.height.toRawPhysical(scale).roundToInt(),
+    )
+    val actualPair = Pair(actual.width.rawPhysical, actual.height.rawPhysical)
+    assertEquals(expected, actualPair)
+}
+
 abstract class WaylandTestsBase {
     companion object {
         internal const val APP_ID = "org.jetbrains.desktop.linux.tests"
@@ -991,7 +1019,7 @@ abstract class WaylandTestsBase {
         internal const val HTML_TEXT_MIME_TYPE = "text/html"
         internal const val PNG_MIME_TYPE = "image/png"
 
-        internal val DEFAULT_MOUSE_POS = LogicalPoint(50.0, 50.0)
+        internal val DEFAULT_MOUSE_POS = TestMousePosition(LogicalPixelsInt(50), LogicalPixelsInt(50))
 
         internal val wm by lazy { SwayWm() }
 
@@ -1057,7 +1085,7 @@ abstract class WaylandTestsBase {
             return WindowParams(
                 windowId = 0,
                 title = "Test Window 1",
-                size = LogicalSize(width = 200, height = 300),
+                size = LogicalSize(width = LogicalPixelsInt(200), height = LogicalPixelsInt(300)),
                 minSize = null,
                 appId = APP_ID,
                 preferClientSideDecoration = false,
@@ -1085,7 +1113,7 @@ abstract class WaylandTestsBase {
     val eventQueue = LinkedBlockingQueue<Event>()
     var lastDrawEvents = mutableMapOf<WindowId, Event.WindowDraw>()
     var lastConfigureEvents = mutableMapOf<WindowId, Event.WindowConfigure>()
-    var lastScales = mutableMapOf<WindowId, Double>()
+    var lastScales = mutableMapOf<WindowId, Scale>()
     internal var lastScreenSize: LogicalSize? = null
     var testSuccessful = false
 
@@ -1101,8 +1129,8 @@ abstract class WaylandTestsBase {
                     }
                     is Event.WindowDraw -> {
                         val configure = lastConfigureEvents[event.windowId]!!
-                        val scale = lastScales[event.windowId] ?: 1.0
-                        assertEquals(configure.size.toPhysical(scale), event.size)
+                        val scale = lastScales[event.windowId] ?: Scale.NO_SCALE
+                        checkPhysicalSize(configure.size, scale, event.size)
                     }
                     is Event.WindowConfigure -> {
                         lastConfigureEvents[event.windowId] = event
@@ -1121,7 +1149,15 @@ abstract class WaylandTestsBase {
                                 canvas.clear(SkColor.WHITE)
                                 SkPaint().use { paint ->
                                     paint.color = SkColor.RED
-                                    canvas.drawRect(SkRect.makeXYWH(event.size.width - 10f, event.size.height - 10f, 10f, 10f), paint)
+                                    canvas.drawRect(
+                                        SkRect.makeXYWH(
+                                            event.size.width.rawPhysical.toFloat() - 10f,
+                                            event.size.height.rawPhysical.toFloat() - 10f,
+                                            10f,
+                                            10f,
+                                        ),
+                                        paint,
+                                    )
                                 }
                             }
                             EventHandlerResult.Stop
@@ -1325,22 +1361,22 @@ abstract class WaylandTestsBase {
         )
     }
 
-    internal fun moveMouseTo(pos: LogicalPoint) {
+    internal fun moveMouseTo(pos: TestMousePosition) {
         val screenSize = assertNotNull(lastScreenSize)
         doVirtualDeviceEvent(
-            "mousemove?x=${pos.x.roundToInt()}&y=${pos.y.roundToInt()}&x_extent=${screenSize.width}&y_extent=${screenSize.height}",
+            "mousemove?x=${pos.x.rawLogical}&y=${pos.y.rawLogical}&x_extent=${screenSize.width.rawLogical}&y_extent=${screenSize.height.rawLogical}",
         )
     }
 
-    internal fun wiggleMouseUntil(pos: LogicalPoint, timeout: Duration = 5.seconds, predicate: () -> Boolean): Boolean {
+    internal fun wiggleMouseUntil(pos: TestMousePosition, timeout: Duration = 5.seconds, predicate: () -> Boolean): Boolean {
         val startTime = TimeSource.Monotonic.markNow()
         var moveToRight = false
         while (startTime.elapsedNow() < timeout) {
             if (predicate()) {
                 return true
             }
-            val offset = if (moveToRight) 5 else 0
-            moveMouseTo(LogicalPoint(pos.x + offset, pos.y + offset))
+            val offset = if (moveToRight) LogicalPixelsInt(5) else LogicalPixelsInt(0)
+            moveMouseTo(TestMousePosition(pos.x + offset, pos.y + offset))
             ui {}
             Thread.sleep(1)
             moveToRight = !moveToRight
@@ -1399,7 +1435,7 @@ abstract class WaylandTestsBase {
         val otherEvents: List<Event>,
     )
 
-    internal fun createWindowAndWaitForFocus(windowParams: WindowParams, onScale: ((Double) -> Unit)? = null): InitialWindowData {
+    internal fun createWindowAndWaitForFocus(windowParams: WindowParams, onScale: ((Scale) -> Unit)? = null): InitialWindowData {
         val window = ui { app.createWindow(windowParams) }
         lateinit var scale: Event.WindowScaleChanged
         lateinit var configure: Event.WindowConfigure
@@ -1440,9 +1476,6 @@ abstract class WaylandTestsBase {
                     if (windowParams.windowId == event.windowId) {
                         draw = event
                         drawEventCount += 1
-                        if (drawEventCount > 1) {
-                            assertEquals(scale.newScale, event.scale)
-                        }
                         checklist.checkEntry("draw")
                     }
                 }
@@ -1536,28 +1569,28 @@ abstract class WaylandTestsBase {
         }
     }
 
-    fun waitForWindowClosed(windowId: WindowId) {
+    internal fun waitForWindowClosed(windowId: WindowId) {
         withNextEvent { event ->
             assertInstanceOf<Event.WindowClosed>(event)
             assertEquals(windowId, event.windowId)
         }
     }
 
-    fun getScreenSize(event: Event.DisplayConfigurationChange): LogicalSize {
+    internal fun getScreenSize(event: Event.DisplayConfigurationChange): LogicalSize {
         val screens = event.screens.screens
         val screen = screens.firstOrNull()
         assertNotNull(screen)
         return screen.size
     }
 
-    fun mouseLocationForOurWindow(): LogicalPoint {
+    internal fun mouseLocationForOurWindow(): TestMousePosition {
         // Aligned with sway_test_config (+ 50 to avoid window decorations)
-        return LogicalPoint(50.0, 50.0)
+        return TestMousePosition(LogicalPixelsInt(50), LogicalPixelsInt(50))
     }
 
-    fun mouseLocationForTestApp(): LogicalPoint {
+    internal fun mouseLocationForTestApp(): TestMousePosition {
         // Aligned with sway_test_config (+ 50 to avoid window decorations)
-        return LogicalPoint(350.0, 50.0)
+        return TestMousePosition(LogicalPixelsInt(350), LogicalPixelsInt(50))
     }
 
     @Volatile
@@ -1971,13 +2004,16 @@ class WaylandTests : WaylandTestsBase() {
         val screen = screens.firstOrNull()
         assertNotNull(screen)
         val fullscreenWindowSize = screen.size
-        assertEquals(LogicalPoint(0.0, 0.0), screen.origin)
+        assertEquals(0.0, screen.origin.x.rawLogical)
+        assertEquals(0.0, screen.origin.y.rawLogical)
         if (screen.name != "WL-1") {
             assertEquals("HEADLESS-1", screen.name)
         }
         assertNotEquals(0, screen.screenId)
 
-        val windowParams = defaultWindowParams().copy(minSize = LogicalSize(width = 100, height = 70))
+        val windowParams = defaultWindowParams().copy(
+            minSize = LogicalSize(width = LogicalPixelsInt(100), height = LogicalPixelsInt(70)),
+        )
         val requestedSize = assertNotNull(windowParams.size)
         val window = ui { app.createWindow(windowParams) }
 
@@ -1999,15 +2035,14 @@ class WaylandTests : WaylandTestsBase() {
             expectedConfigureEvent.assertEquals(event)
         }
 
-        var scale: Double? = null
+        var scale = Scale.NO_SCALE
 
         withNextEvent { event ->
             assertNotNull(event)
             assertInstanceOf<Event.WindowDraw>(event)
             assertEquals(windowParams.windowId, event.windowId)
-            scale = event.scale
-//            assertEquals(1.0, event.scale) // https://github.com/swaywm/sway/issues/7668
-            assertEquals(requestedSize.toPhysical(event.scale), event.size)
+            // https://github.com/swaywm/sway/issues/7668
+            checkPhysicalSize(requestedSize, Scale.NO_SCALE, event.size)
         }
 
         withNextEvent { event ->
@@ -2042,12 +2077,7 @@ class WaylandTests : WaylandTestsBase() {
         withNextEvent { event ->
             val configureEvent = if (event is Event.WindowDraw) {
                 assertEquals(windowParams.windowId, event.windowId)
-                if (scale != null && scale != 1.0) {
-                    assertEquals(scale, event.scale)
-                } else {
-                    scale = event.scale
-                }
-                assertEquals(requestedSize.toPhysical(event.scale), event.size)
+                checkPhysicalSize(requestedSize, scale, event.size)
                 getNextEvent()
             } else {
                 event
@@ -2055,8 +2085,6 @@ class WaylandTests : WaylandTestsBase() {
             expectedConfigureEvent.assertEquals(configureEvent)
             true
         }
-
-        assertNotNull(scale)
 
         val otherEvents = checkNextEvents(
             checks = mapOf(
@@ -2099,21 +2127,20 @@ class WaylandTests : WaylandTestsBase() {
             ),
         )
 
-        var mousePos = DEFAULT_MOUSE_POS.shifted(10, 10)
+        var mousePos = DEFAULT_MOUSE_POS.shifted(LogicalPixelsInt(10), LogicalPixelsInt(10))
         moveMouseTo(mousePos)
 
         withNextEvent { event ->
             val mouseMovedEvent = if (event is Event.WindowDraw) {
                 assertEquals(windowParams.windowId, event.windowId)
-                assertEquals(scale, event.scale)
-                assertEquals(requestedSize.toPhysical(event.scale), event.size)
+                checkPhysicalSize(requestedSize, scale, event.size)
                 getNextEvent()
             } else {
                 event
             }
             assertInstanceOf<Event.MouseMoved>(mouseMovedEvent)
             assertEquals(windowParams.windowId, mouseMovedEvent.windowId)
-            assertEquals(mousePos, mouseMovedEvent.locationInWindow)
+            mousePos.assertEquals(mouseMovedEvent.locationInWindow)
             assertNotEquals(Duration.ZERO, mouseMovedEvent.timestamp.toDuration())
             true
         }
@@ -2123,7 +2150,7 @@ class WaylandTests : WaylandTestsBase() {
                 assertInstanceOf<Event.MouseDown>(event)
                 assertEquals(windowParams.windowId, event.windowId)
                 assertEquals(MouseButton.LEFT, event.button)
-                assertEquals(mousePos, event.locationInWindow)
+                mousePos.assertEquals(event.locationInWindow)
                 assertNotEquals(Duration.ZERO, event.timestamp.toDuration())
             }
         }
@@ -2133,13 +2160,15 @@ class WaylandTests : WaylandTestsBase() {
             assertEquals(MouseButton.LEFT, event.button)
         }
 
-        mousePos = LogicalPoint(lastScreenSize!!.width.toDouble() - 50, lastScreenSize!!.height.toDouble() - 50)
+        mousePos = TestMousePosition(
+            lastScreenSize!!.width - LogicalPixelsInt(50),
+            lastScreenSize!!.height - LogicalPixelsInt(50),
+        )
         moveMouseTo(mousePos)
         withNextEvent { event ->
             val mouseExitedEvent = if (event is Event.WindowDraw) {
                 assertEquals(windowParams.windowId, event.windowId)
-                assertEquals(scale, event.scale)
-                assertEquals(requestedSize.toPhysical(event.scale), event.size)
+                checkPhysicalSize(requestedSize, scale, event.size)
                 getNextEvent()
             } else {
                 event
@@ -2173,8 +2202,7 @@ class WaylandTests : WaylandTestsBase() {
                 assertNotNull(event)
                 assertInstanceOf<Event.WindowDraw>(event)
                 assertEquals(windowParams.windowId, event.windowId)
-                assertEquals(scale, event.scale)
-                assertEquals(lastScreenSize?.toPhysical(event.scale), event.size)
+                checkPhysicalSize(lastScreenSize!!, scale, event.size)
             }
 
             withNextEvent { event ->
@@ -2187,7 +2215,7 @@ class WaylandTests : WaylandTestsBase() {
                 }
                 assertInstanceOf<Event.MouseEntered>(mouseEnteredEvent)
                 assertEquals(windowParams.windowId, mouseEnteredEvent.windowId)
-                assertEquals(mousePos, mouseEnteredEvent.locationInWindow)
+                mousePos.assertEquals(mouseEnteredEvent.locationInWindow)
             }
 
             ui {
@@ -2213,8 +2241,7 @@ class WaylandTests : WaylandTestsBase() {
                 assertNotNull(event)
                 assertInstanceOf<Event.WindowDraw>(event)
                 assertEquals(windowParams.windowId, event.windowId)
-                assertEquals(scale, event.scale)
-                assertEquals(requestedSize.toPhysical(event.scale), event.size)
+                checkPhysicalSize(requestedSize, scale, event.size)
             }
 
             withNextEvent { event ->
@@ -2253,18 +2280,17 @@ class WaylandTests : WaylandTestsBase() {
         val screenshots = mutableListOf<Path>()
         val tempDir = Files.createTempDirectory("test_linux_screenshots")
 
-        val mouseLoc = LogicalPoint(100.0, 100.0)
-        val screenshotPoint = LogicalPoint(50.0, 50.0)
-        val screenshotSize = LogicalSize(150, 150)
+        val mouseLoc = TestMousePosition(LogicalPixelsInt(100), LogicalPixelsInt(100))
+        val screenshotRect = LogicalRect.makeXYWH(x = 50, y = 50, width = 150, height = 150)
 
         ui { app.setCursorTheme("phinger-cursors-light", 48U) }
         ui {}
 
         val screenSize = assertNotNull(lastScreenSize)
-        moveMouseTo(LogicalPoint(screenSize.width.toDouble(), screenSize.height.toDouble()))
+        moveMouseTo(TestMousePosition(screenSize.width, screenSize.height))
         awaitEventOfType<Event.MouseExited> { true }
         val blank = tempDir.resolve("_blank.png").also {
-            screenshot(it, Pair(screenshotPoint, screenshotSize), hideCursor = false)
+            screenshot(it, screenshotRect, hideCursor = false)
             screenshots.add(it)
         }
 
@@ -2280,7 +2306,7 @@ class WaylandTests : WaylandTestsBase() {
             tempDir.resolve("$shape.png").also { shapeScreenshotPath ->
                 var retryCount = 20
                 while (retryCount > 0) {
-                    screenshot(shapeScreenshotPath, Pair(screenshotPoint, screenshotSize), hideCursor = false)
+                    screenshot(shapeScreenshotPath, screenshotRect, hideCursor = false)
                     val same = screenshots.find {
                         val isIdentical = Files.mismatch(shapeScreenshotPath, it) == -1L
                         if (shape == PointerShape.Hidden && it == blank) {
@@ -2401,9 +2427,11 @@ class WaylandTests : WaylandTestsBase() {
     fun testWindowCreationLargeSizeValues() {
         run(defaultApplicationConfig())
 
+        val maxVal = LogicalPixelsInt(Int.MAX_VALUE)
+
         val windowParams = defaultWindowParams().copy(
-            size = LogicalSize(width = Int.MAX_VALUE, height = Int.MAX_VALUE),
-            minSize = LogicalSize(width = Int.MAX_VALUE, height = Int.MAX_VALUE),
+            size = LogicalSize(width = maxVal, height = maxVal),
+            minSize = LogicalSize(width = maxVal, height = maxVal),
         )
         val w = ui { app.createWindow(windowParams) }
 
@@ -2467,7 +2495,7 @@ class WaylandTests : WaylandTestsBase() {
 
         val window1WmId = wm.getFocusedWindowState()!!.getWindowId()
 
-        val requestedWindow2Size = LogicalSize(width = 300, height = 200)
+        val requestedWindow2Size = LogicalSize(width = LogicalPixelsInt(300), height = LogicalPixelsInt(200))
         val window2Params = WindowParams(
             windowId = 1,
             title = "Test Window 2",
@@ -3386,7 +3414,7 @@ text/plain;charset=utf-8
     fun testTextInputContext() {
         var textInputContext = TextInputContext(
             contentPurpose = TextInputContentPurpose.Normal,
-            cursorRectangle = LogicalRect(x = 50, y = 20, width = 5, height = 10),
+            cursorRectangle = LogicalRect.makeXYWH(x = 50, y = 20, width = 5, height = 10),
             surroundingText = "",
             cursorCodepointOffset = 0U,
             selectionStartCodepointOffset = 0U,
@@ -3459,7 +3487,7 @@ text/plain;charset=utf-8
         textInputContext = textInputContext.copy(
             contentPurpose = TextInputContentPurpose.Phone,
             hints = setOf(TextInputContentHint.Lowercase),
-            cursorRectangle = LogicalRect(x = 1000000000, y = 1000000000, width = 1000000000, height = 1000000000),
+            cursorRectangle = LogicalRect.makeXYWH(x = 1000000000, y = 1000000000, width = 1000000000, height = 1000000000),
         )
         assertEquals(
             "content_purpose: Phone, content_hints: [Lowercase]",
@@ -3491,7 +3519,7 @@ text/plain;charset=utf-8
         textInputContext = textInputContext.copy(
             contentPurpose = TextInputContentPurpose.Name,
             hints = setOf(TextInputContentHint.HiddenText),
-            cursorRectangle = LogicalRect(x = 1, y = 2, width = 3, height = 4),
+            cursorRectangle = LogicalRect.makeXYWH(x = 1, y = 2, width = 3, height = 4),
         )
         assertEquals(
             "content_purpose: Name, content_hints: [HiddenText]",
@@ -3566,7 +3594,7 @@ text/plain;charset=utf-8
 
         var textInputContext = TextInputContext(
             contentPurpose = TextInputContentPurpose.Normal,
-            cursorRectangle = LogicalRect(x = 200, y = 100, width = 10, height = 20),
+            cursorRectangle = LogicalRect.makeXYWH(x = 200, y = 100, width = 10, height = 20),
             surroundingText = "",
             cursorCodepointOffset = 0U,
             selectionStartCodepointOffset = 0U,
@@ -3953,13 +3981,16 @@ text/plain;charset=utf-8
             awaitEventOfType<Event.MouseDown> { true }
             ui { window.startMove() }
             awaitEventOfType<Event.MouseExited> { true }
-            moveMouseTo(DEFAULT_MOUSE_POS.shifted(100, 50))
+            moveMouseTo(DEFAULT_MOUSE_POS.shifted(LogicalPixelsInt(100), LogicalPixelsInt(50)))
         }
         awaitEventOfType<Event.MouseEntered> { true }
 
         val stateAfter = assertNotNull(wm.getFocusedWindowState())
         assertEquals(stateBefore.getClientAreaSize(), stateAfter.getClientAreaSize())
-        assertEquals(stateBefore.getClientAreaTopLeftGlobalPosition().shifted(100, 50), stateAfter.getClientAreaTopLeftGlobalPosition())
+        assertEquals(
+            stateBefore.getClientAreaTopLeftGlobalPosition().shifted(LogicalPixelsInt(100), LogicalPixelsInt(50)),
+            stateAfter.getClientAreaTopLeftGlobalPosition(),
+        )
 
         fixStuckPressedButtons(button)
     }
@@ -3981,11 +4012,11 @@ text/plain;charset=utf-8
 
     fun implTestWindowResizeToSmaller(
         button: MouseButton,
-        moveX: Int = 50,
-        moveY: Int = 100,
+        moveX: LogicalPixelsInt = LogicalPixelsInt(50),
+        moveY: LogicalPixelsInt = LogicalPixelsInt(100),
         windowParams: WindowParams = defaultWindowParams(),
-        expectedDecreaseX: Int = moveX,
-        expectedDecreaseY: Int = moveY,
+        expectedDecreaseX: LogicalPixelsInt = moveX,
+        expectedDecreaseY: LogicalPixelsInt = moveY,
     ) {
         run(defaultApplicationConfig())
 
@@ -4004,7 +4035,7 @@ text/plain;charset=utf-8
         )
 
         // Move the mouse to the top-left part of the window
-        val mousePos = stateBefore.getClientAreaTopLeftGlobalPosition().shifted(5, 5)
+        val mousePos = stateBefore.getClientAreaTopLeftGlobalPosition().shifted(LogicalPixelsInt(5), LogicalPixelsInt(5))
         moveMouseTo(mousePos)
         withMouseButtonDown(button) {
             awaitEventOfType<Event.MouseDown> { true }
@@ -4018,7 +4049,7 @@ text/plain;charset=utf-8
         }
         val stateAfter = assertNotNull(wm.getFocusedWindowState())
 
-        moveMouseTo(stateAfter.getClientAreaTopLeftGlobalPosition().shifted(4, 4))
+        moveMouseTo(stateAfter.getClientAreaTopLeftGlobalPosition().shifted(LogicalPixelsInt(4), LogicalPixelsInt(4)))
         awaitAnyEvent { event ->
             event is Event.MouseMoved || event is Event.MouseEntered
         }
@@ -4049,8 +4080,8 @@ text/plain;charset=utf-8
 
     @Test
     fun testWindowResizeWithMinSize() {
-        val size = LogicalSize(width = 200, height = 300)
-        val minSize = LogicalSize(width = 100, height = 70)
+        val size = LogicalSize(width = LogicalPixelsInt(200), height = LogicalPixelsInt(300))
+        val minSize = LogicalSize(width = LogicalPixelsInt(100), height = LogicalPixelsInt(70))
         val windowParams = defaultWindowParams().copy(size = size, minSize = minSize)
         implTestWindowResizeToSmaller(
             MouseButton.LEFT,
@@ -4174,8 +4205,8 @@ text/plain;charset=utf-8
                 )
                 for (data in queryDragAndDropTargetTriggered.drainAll()) {
                     assertEquals(windowParams.windowId, data.windowId)
-                    assertNotEquals(0.0, data.locationInWindow.x)
-                    assertNotEquals(0.0, data.locationInWindow.y)
+                    assertNotEquals(0.0, data.locationInWindow.x.rawLogical)
+                    assertNotEquals(0.0, data.locationInWindow.y.rawLogical)
                     assertEquals(expectedSourceMimeTypes, data.mimeTypes)
                     assertEquals(setOf(DragAndDropAction.Copy, DragAndDropAction.Move), data.actions)
                 }
@@ -4206,8 +4237,8 @@ text/plain;charset=utf-8
                 ui {}
                 for (data in queryDragAndDropTargetTriggered.drainAll()) {
                     assertEquals(windowParams.windowId, data.windowId)
-                    assertNotEquals(0.0, data.locationInWindow.x)
-                    assertNotEquals(0.0, data.locationInWindow.y)
+                    assertNotEquals(0.0, data.locationInWindow.x.rawLogical)
+                    assertNotEquals(0.0, data.locationInWindow.y.rawLogical)
                     assertEquals(expectedSourceMimeTypes, data.mimeTypes)
                     assertEquals(setOf(DragAndDropAction.Copy, DragAndDropAction.Move), data.actions)
                 }
@@ -4359,19 +4390,19 @@ text/plain;charset=utf-8
                         actions = setOf(DragAndDropAction.Copy, DragAndDropAction.Move),
                         dragIconParams = DragIconParams(
                             renderingMode = RenderingMode.Software,
-                            size = LogicalSize(100, 50),
+                            size = LogicalSize(LogicalPixelsInt(100), LogicalPixelsInt(50)),
                         ),
                     ),
                 )
             }
-            mousePos = mousePos.copy(x = mousePos.x + 10)
+            mousePos = mousePos.shifted(x = LogicalPixelsInt(10))
             moveMouseTo(mousePos)
             awaitEventOfType<Event.MouseExited> { true }
             waitUntilEq(true) { dragIconDrawTriggered.isNotEmpty() }
 
-            mousePos = mousePos.copy(x = mousePos.x + 10)
+            mousePos = mousePos.shifted(x = LogicalPixelsInt(10))
             moveMouseTo(mousePos)
-            mousePos = mousePos.copy(x = mousePos.x + 10)
+            mousePos = mousePos.shifted(x = LogicalPixelsInt(10))
             moveMouseTo(mousePos)
             waitUntilEq(true) { queryDragAndDropTargetTriggered.isNotEmpty() }
         }
@@ -4388,7 +4419,7 @@ text/plain;charset=utf-8
             assertNotNull(content)
             assertEquals(TEXT_UTF8_MIME_TYPE, content.mimeType)
             assertContentEquals(textContent, content.data)
-            assertEquals(mousePos, event.locationInWindow)
+            mousePos.assertEquals(event.locationInWindow)
             true
         }
         awaitEventOfType<Event.DragAndDropFinished> { event ->
@@ -4415,11 +4446,11 @@ text/plain;charset=utf-8
         withNextEvent { event ->
             assertInstanceOf<Event.ScrollWheel>(event)
             assertEquals(windowParams.windowId, event.windowId, "scrollMouseDown: windowId")
-            assertEquals(0.0, event.horizontalScroll.delta, "scrollMouseDown: horizontalScroll.delta")
+            assertEquals(0.0, event.horizontalScroll.delta.rawLogical, "scrollMouseDown: horizontalScroll.delta")
             assertEquals(0, event.horizontalScroll.wheelValue120, "scrollMouseDown: horizontalScroll.wheelValue120")
             assertFalse(event.horizontalScroll.isInverted, "scrollMouseDown: horizontalScroll.isInverted")
             assertFalse(event.horizontalScroll.isStop, "scrollMouseDown: horizontalScroll.isStop")
-            assertEquals(10.0, event.verticalScroll.delta, "scrollMouseDown: verticalScroll.delta")
+            assertEquals(10.0, event.verticalScroll.delta.rawLogical, "scrollMouseDown: verticalScroll.delta")
             assertEquals(120, event.verticalScroll.wheelValue120, "scrollMouseDown: verticalScroll.wheelValue120")
             assertFalse(event.verticalScroll.isInverted, "scrollMouseDown: verticalScroll.isInverted")
             assertFalse(event.verticalScroll.isStop, "scrollMouseDown: verticalScroll.isStop")
@@ -4430,11 +4461,11 @@ text/plain;charset=utf-8
         withNextEvent { event ->
             assertInstanceOf<Event.ScrollWheel>(event)
             assertEquals(windowParams.windowId, event.windowId, "scrollMouseUp: windowId")
-            assertEquals(0.0, event.horizontalScroll.delta, "scrollMouseUp: horizontalScroll.delta")
+            assertEquals(0.0, event.horizontalScroll.delta.rawLogical, "scrollMouseUp: horizontalScroll.delta")
             assertEquals(0, event.horizontalScroll.wheelValue120, "scrollMouseUp: horizontalScroll.wheelValue120")
             assertFalse(event.horizontalScroll.isInverted, "scrollMouseUp: horizontalScroll.isInverted")
             assertFalse(event.horizontalScroll.isStop, "scrollMouseUp: horizontalScroll.isStop")
-            assertEquals(-10.0, event.verticalScroll.delta, "scrollMouseUp: verticalScroll.delta")
+            assertEquals(-10.0, event.verticalScroll.delta.rawLogical, "scrollMouseUp: verticalScroll.delta")
             assertEquals(-120, event.verticalScroll.wheelValue120, "scrollMouseUp: verticalScroll.wheelValue120")
             assertFalse(event.verticalScroll.isInverted, "scrollMouseUp: verticalScroll.isInverted")
             assertFalse(event.verticalScroll.isStop, "scrollMouseUp: verticalScroll.isStop")
@@ -4665,8 +4696,8 @@ text/plain;charset=utf-8
     fun testRendering() {
         val backgroundColor = SkColor.BLUE
         val rectColor = SkColor.RED
-        val rectSize = LogicalSize(100, 50)
-        var scale: Double? = null
+        val rectSize = LogicalSize(LogicalPixelsInt(100), LogicalPixelsInt(50))
+        var scale = Scale.NO_SCALE
 
         val draw: (Event.WindowDraw) -> Unit = { event ->
             val softwareDrawData = event.softwareDrawData
@@ -4675,17 +4706,11 @@ text/plain;charset=utf-8
                 canvas.clear(backgroundColor)
                 SkPaint().use { paint ->
                     paint.color = rectColor
-                    val scale = scale ?: event.scale // https://github.com/swaywm/sway/issues/7668
                     log("Draw window: scale=$scale")
                     canvas.drawRect(
-                        SkRect.makeXYWH(
-                            0f,
-                            0f,
-                            (rectSize.width.toDouble() * scale).toFloat(),
-                            (
-                                rectSize.height.toDouble() *
-                                    scale
-                                ).toFloat(),
+                        SkRect.makeWH(
+                            rectSize.width.toRawPhysical(scale).toFloat(),
+                            rectSize.height.toRawPhysical(scale).toFloat(),
                         ),
                         paint,
                     )
@@ -4717,7 +4742,8 @@ text/plain;charset=utf-8
 
         ui { window.setFullScreen() }
         awaitEventOfType<Event.WindowDraw> {
-            it.size == lastScreenSize.toPhysical(it.scale)
+            it.size.width.rawPhysical == lastScreenSize.width.toRawPhysical(scale).roundToInt() &&
+                it.size.height.rawPhysical == lastScreenSize.height.toRawPhysical(scale).roundToInt()
         }
         ui {}
 
@@ -4728,14 +4754,14 @@ text/plain;charset=utf-8
         assertNotNull(drawEvent)
 
         val image = SkImage.makeFromEncoded(screenshotPath.readBytes())
-        val imageScale = lastScreenSize.width.toDouble() / image.width
+        val imageScale = lastScreenSize.width.rawLogical.toDouble() / image.width
         val bitmap = SkBitmap.makeFromImage(image)
 
         val path = screenshotPath.absolutePathString()
 
         val bottomRightRectColor = bitmap.getColor(
-            ((rectSize.width - 1).toDouble() * imageScale).roundToInt(),
-            ((rectSize.height - 1).toDouble() * imageScale).roundToInt(),
+            ((rectSize.width.rawLogical - 1).toDouble() * imageScale).roundToInt(),
+            ((rectSize.height.rawLogical - 1).toDouble() * imageScale).roundToInt(),
         )
         assertEquals(
             rectColor,

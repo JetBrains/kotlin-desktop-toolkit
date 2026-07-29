@@ -2,7 +2,7 @@ use crate::linux::{
     application_api::RenderingMode,
     application_state::{ApplicationState, EGLData},
     events::{SoftwareDrawData, WindowDecorationMode, WindowDrawEvent, WindowId},
-    geometry::{LogicalPoint, LogicalSize, PhysicalSize},
+    geometry::{LogicalPixelsInt, LogicalPoint, LogicalSize, PhysicalSize, Scale},
     pointer_shapes_api::PointerShape,
     rendering_egl::EglRendering,
     rendering_software::SoftwareRendering,
@@ -63,7 +63,7 @@ pub struct SimpleWindow {
     pub window: Window,
     pub set_cursor: bool,
     decorations_cursor: Option<CursorIcon>,
-    pub current_scale: f64,
+    pub current_scale: Scale,
     decoration_mode: DecorationMode,
     rendering_data: Option<RenderingData>,
     pub rendering_mode: RenderingMode,
@@ -100,16 +100,16 @@ impl SimpleWindow {
         window.set_title(params.title.get("WindowParams title")?);
         window.set_app_id(app_id.clone());
 
-        let mut size = if params.size.width == 0 { None } else { Some(params.size) };
+        let mut size = params.size.validate();
 
-        if params.min_size.width > 0 && params.min_size.height > 0 {
-            window.set_min_size(Some((params.min_size.width, params.min_size.height)));
+        if let Some(min_size) = params.min_size.validate() {
+            window.set_min_size(min_size.as_u32());
             if let Some(size) = &mut size {
-                if size.width < params.min_size.width {
-                    size.width = params.min_size.width;
+                if size.width < min_size.width {
+                    size.width = min_size.width;
                 }
-                if size.height < params.min_size.height {
-                    size.height = params.min_size.height;
+                if size.height < min_size.height {
+                    size.height = min_size.height;
                 }
             }
         }
@@ -117,7 +117,7 @@ impl SimpleWindow {
         // In order for the window to be mapped, we need to perform an initial commit with no attached buffer.
         // For more info, see WaylandSurface::commit
         //
-        // The compositor will respond with an initial configure that we can then use to present to the window with
+        // The compositor will respond with an initial `configure` that we can then use to present to the window with
         // the correct options.
         window.commit();
 
@@ -131,7 +131,7 @@ impl SimpleWindow {
             window,
             set_cursor: false,
             decorations_cursor: Some(CursorIcon::Default),
-            current_scale: 1.0,
+            current_scale: Scale::default(),
             decoration_mode: DecorationMode::Client,
             rendering_data: None,
             rendering_mode: params.rendering_mode,
@@ -144,25 +144,25 @@ impl SimpleWindow {
     }
 
     pub fn configure(&mut self, shm: &Shm, window: &Window, configure: &WindowConfigure, egl: Option<Rc<EGLData>>) -> bool {
-        const DEFAULT_WIDTH: u32 = 640;
-        const DEFAULT_HEIGHT: u32 = 480;
-        debug!("SimpleWindow::configure start for {:?}: {configure:?}", self.window_id);
+        const DEFAULT_WIDTH: LogicalPixelsInt = LogicalPixelsInt::new(640);
+        const DEFAULT_HEIGHT: LogicalPixelsInt = LogicalPixelsInt::new(480);
+        debug!("{:?}: configure start: {configure:?}", self.window_id);
 
         self.decoration_mode = configure.decoration_mode;
 
         let width = configure
             .new_size
             .0
-            .map(std::num::NonZero::get)
+            .map(|v| LogicalPixelsInt::new(v.get().cast_signed()))
             .or_else(|| self.size.map(|s| s.width))
-            .or_else(|| configure.suggested_bounds.map(|(w, _h)| w))
+            .or_else(|| configure.suggested_bounds.map(|(w, _h)| LogicalPixelsInt::new(w.cast_signed())))
             .unwrap_or(DEFAULT_WIDTH);
         let height = configure
             .new_size
             .1
-            .map(std::num::NonZero::get)
+            .map(|v| LogicalPixelsInt::new(v.get().cast_signed()))
             .or_else(|| self.size.map(|s| s.height))
-            .or_else(|| configure.suggested_bounds.map(|(_w, h)| h))
+            .or_else(|| configure.suggested_bounds.map(|(_w, h)| LogicalPixelsInt::new(h.cast_signed())))
             .unwrap_or(DEFAULT_HEIGHT);
         let size = LogicalSize { width, height };
         self.size = Some(size);
@@ -170,11 +170,8 @@ impl SimpleWindow {
         // window.set_window_geometry(0, 0, width, height);
         // TODO: wl_surface::set_opaque_region?
 
-        let physical_size = size.to_physical(self.current_scale);
-        debug!(
-            "SimpleWindow::configure for {:?}: size={size:?}, physical_size={physical_size:?}",
-            self.window_id
-        );
+        let physical_size = size.to_rounded_physical(self.current_scale);
+        debug!("{:?}: configure: size={size:?}, physical_size={physical_size:?}", self.window_id);
 
         self.on_resize(size, physical_size, shm);
 
@@ -239,19 +236,18 @@ impl SimpleWindow {
         self.update_pointer(conn, themed_pointer);
         let surface = self.window.wl_surface();
 
-        let physical_size = self.size.unwrap().to_physical(self.current_scale);
+        let physical_size = self.size.unwrap().to_rounded_physical(self.current_scale);
 
         let do_draw = |software_draw_data: SoftwareDrawData| {
             let did_draw = callback(WindowDrawEvent {
                 window_id: self.window_id,
                 software_draw_data,
                 physical_size,
-                scale: self.current_scale,
             });
 
             if did_draw {
                 // Damage the entire window
-                surface.damage_buffer(0, 0, physical_size.width.0, physical_size.height.0);
+                surface.damage_buffer(0, 0, physical_size.width.raw_physical(), physical_size.height.raw_physical());
             }
 
             // Request our next frame
@@ -270,14 +266,16 @@ impl SimpleWindow {
 
     fn on_resize(&mut self, size: LogicalSize, physical_size: PhysicalSize, shm: &Shm) {
         if let Some(viewport) = &self.viewport {
-            debug!("viewport.set_destination({}, {}) for {:?}", size.width, size.height, self.window_id);
-            viewport.set_destination(i32::try_from(size.width).unwrap(), i32::try_from(size.height).unwrap());
+            debug!(
+                "{:?}: viewport.set_destination({:?}, {:?}) for {:?}",
+                self.window_id, size.width, size.height, self.window_id
+            );
+            viewport.set_destination(size.width.raw_logical(), size.height.raw_logical());
         } else {
             let surface = self.window.wl_surface();
-            assert!(self.current_scale % 1.0 < 0.0001);
-            debug!("surface.set_buffer_scale({}) for {:?}", self.current_scale, self.window_id);
-            #[allow(clippy::cast_possible_truncation)]
-            surface.set_buffer_scale(self.current_scale as i32);
+            let buffer_scale = self.current_scale.to_scale_factor();
+            debug!("{:?}: surface.set_buffer_scale({buffer_scale})", self.window_id);
+            surface.set_buffer_scale(buffer_scale);
         }
 
         if let Some(rendering_data) = &mut self.rendering_data {
@@ -294,12 +292,12 @@ impl SimpleWindow {
         }
     }
 
-    pub fn scale_changed(&mut self, new_scale: f64, shm: &Shm) {
-        debug!("scale_changed: {new_scale} for {:?}", self.window_id);
+    pub fn scale_changed(&mut self, new_scale: Scale, shm: &Shm) {
+        debug!("{:?}: scale_changed: {new_scale:?}", self.window_id);
         self.current_scale = new_scale;
 
         if let Some(size) = self.size {
-            self.on_resize(size, size.to_physical(self.current_scale), shm);
+            self.on_resize(size, size.to_rounded_physical(self.current_scale), shm);
         }
     }
 
@@ -324,22 +322,12 @@ impl SimpleWindow {
     }
 
     pub fn set_max_size(&self, max_size: LogicalSize) {
-        let opt_max_size = if max_size.width == 0 || max_size.height == 0 {
-            None
-        } else {
-            Some((max_size.width, max_size.height))
-        };
-        self.window.set_max_size(opt_max_size);
+        self.window.set_max_size(max_size.as_u32());
         self.window.commit();
     }
 
     pub fn set_min_size(&self, min_size: LogicalSize) {
-        let opt_min_size = if min_size.width == 0 || min_size.height == 0 {
-            None
-        } else {
-            Some((min_size.width, min_size.height))
-        };
-        self.window.set_min_size(opt_min_size);
+        self.window.set_min_size(min_size.as_u32());
         self.window.commit();
     }
 }

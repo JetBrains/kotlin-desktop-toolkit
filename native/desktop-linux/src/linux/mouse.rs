@@ -35,7 +35,7 @@ impl From<AxisScroll> for ScrollData {
             value.discrete * 120
         };
         Self {
-            delta: LogicalPixels(value.absolute),
+            delta: LogicalPixels::new(value.absolute),
             wheel_value120,
             is_inverted: value.relative_direction == Some(AxisRelativeDirection::Inverted),
             is_stop: value.stop,
@@ -58,14 +58,13 @@ impl PointerHandler for ApplicationState {
                     window.set_cursor = true;
                     let res = self.send_event(MouseEnteredEvent {
                         window_id,
-                        location_in_window: LogicalPoint::from(event.position),
+                        location_in_window: LogicalPoint::new(event.position),
                     });
                     if let Some(themed_pointer) = self.themed_pointer.take() {
                         let pointer_surface = themed_pointer.surface();
                         if let Some(pointer_surface_data) = pointer_surface.data() {
-                            #[allow(clippy::cast_possible_truncation)]
                             let pointer_surface_event = wl_surface::Event::PreferredBufferScale {
-                                factor: scale.round() as i32,
+                                factor: scale.to_scale_factor(),
                             };
                             debug!("Setting cursor scale to {scale:?}");
                             Dispatch::<WlSurface, SurfaceData<()>>::event(
@@ -85,12 +84,12 @@ impl PointerHandler for ApplicationState {
                     window.num_pointer_buttons_down = 0;
                     self.send_event(MouseExitedEvent {
                         window_id,
-                        location_in_window: LogicalPoint::from(event.position),
+                        location_in_window: LogicalPoint::new(event.position),
                     })
                 }
                 PointerEventKind::Motion { time } => self.send_event(MouseMovedEvent {
                     window_id,
-                    location_in_window: LogicalPoint::from(event.position),
+                    location_in_window: LogicalPoint::new(event.position),
                     timestamp: Timestamp(time),
                 }),
                 PointerEventKind::Press { button, serial, time } => {
@@ -101,7 +100,7 @@ impl PointerHandler for ApplicationState {
                     self.send_event(MouseDownEvent {
                         window_id,
                         button: MouseButton(button),
-                        location_in_window: LogicalPoint::from(event.position),
+                        location_in_window: LogicalPoint::new(event.position),
                         timestamp: Timestamp(time),
                     })
                 }
@@ -113,7 +112,7 @@ impl PointerHandler for ApplicationState {
                     self.send_event(MouseUpEvent {
                         window_id,
                         button: MouseButton(button),
-                        location_in_window: LogicalPoint::from(event.position),
+                        location_in_window: LogicalPoint::new(event.position),
                         timestamp: Timestamp(time),
                     })
                 }
@@ -126,7 +125,7 @@ impl PointerHandler for ApplicationState {
                     debug!("wl_pointer vertical={vertical:?}");
                     self.send_event(ScrollWheelEvent {
                         window_id,
-                        location_in_window: LogicalPoint::from(event.position),
+                        location_in_window: LogicalPoint::new(event.position),
                         timestamp: Timestamp(time),
                         horizontal_scroll: ScrollData::from(horizontal),
                         vertical_scroll: ScrollData::from(vertical),

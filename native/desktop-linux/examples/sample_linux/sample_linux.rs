@@ -35,7 +35,7 @@ use desktop_linux::linux::{
     desktop_settings_api::FfiDesktopSetting,
     events::{DataTransferContent, Event, KeyDownEvent, KeyModifiers, RequestId, SoftwareDrawData, TextInputEvent, WindowId},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
-    geometry::{LogicalRect, LogicalSize, PhysicalSize},
+    geometry::{LogicalPixelsInt, LogicalRect, LogicalSize, PhysicalSize, Scale},
     text_input_api::{TextInputContentHints, TextInputContentPurpose, TextInputContext},
     window_api::{
         window_request_internal_activation_token,
@@ -79,7 +79,7 @@ pub struct WindowState {
     pub active: bool,
     maximized: bool,
     fullscreen: bool,
-    pub scale: f64,
+    pub scale: Scale,
     text_input_available: bool,
     composed_text: String,
     text: String,
@@ -127,7 +127,7 @@ thread_local! {
     static OBJ_ID_TO_DEALLOC: RefCell<HashMap<i64, Box<dyn FnOnce()>>> = RefCell::default();
 }
 
-pub const DRAG_AND_DROP_LEFT_OF: f64 = 100.;
+pub const DRAG_AND_DROP_LEFT_OF: LogicalPixelsInt = LogicalPixelsInt::new(100);
 
 impl State {
     fn add_data_request_source(&mut self, window_id: WindowId) -> i32 {
@@ -150,10 +150,10 @@ fn create_text_input_context(text: &str, change_caused_by_input_method: bool) ->
         hints: TextInputContentHints::Multiline,
         content_purpose: TextInputContentPurpose::Normal,
         cursor_rectangle: LogicalRect {
-            x: (codepoints_count * 10).into(),
-            y: 100,
-            width: 5,
-            height: 10,
+            x: LogicalPixelsInt::new((codepoints_count * 10).into()),
+            y: LogicalPixelsInt::new(100),
+            width: LogicalPixelsInt::new(5),
+            height: LogicalPixelsInt::new(10),
         },
         change_caused_by_input_method,
     }
@@ -282,8 +282,8 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> O
             state.windows.insert(new_window_id, WindowState::default());
             Some(Action::WindowCreate {
                 window_id: new_window_id,
-                size: LogicalSize { width: 300, height: 200 },
-                min_size: LogicalSize { width: 0, height: 0 },
+                size: LogicalSize::wh(300, 200),
+                min_size: LogicalSize::wh(0, 0),
                 title: "Window N".to_owned(),
                 app_id: APP_ID.to_owned(),
                 prefer_client_side_decoration: false,
@@ -407,8 +407,8 @@ fn on_application_started(state: &mut State) -> Vec<Action> {
     let mut actions = vec![
         Action::WindowCreate {
             window_id: window_1_id,
-            size: LogicalSize { width: 200, height: 300 },
-            min_size: LogicalSize { width: 100, height: 200 },
+            size: LogicalSize::wh(200, 300),
+            min_size: LogicalSize::wh(100, 200),
             title: "Window 1".to_owned(),
             app_id: APP_ID.to_owned(),
             prefer_client_side_decoration: true,
@@ -416,8 +416,8 @@ fn on_application_started(state: &mut State) -> Vec<Action> {
         },
         Action::WindowCreate {
             window_id: window_2_id,
-            size: LogicalSize { width: 300, height: 200 },
-            min_size: LogicalSize { width: 200, height: 100 },
+            size: LogicalSize::wh(300, 200),
+            min_size: LogicalSize::wh(200, 100),
             title: "Window 2".to_owned(),
             app_id: APP_ID.to_owned(),
             prefer_client_side_decoration: false,
@@ -531,7 +531,7 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
             Event::MouseDown(data) => match data.button.0 {
                 MOUSE_BUTTON_LEFT => {
                     if let Some(window_state) = state.windows.get_mut(&data.window_id)
-                        && data.location_in_window.x.0 < DRAG_AND_DROP_LEFT_OF
+                        && data.location_in_window.x < DRAG_AND_DROP_LEFT_OF
                     {
                         let mime_types = if state.key_modifiers == KeyModifiers::Shift {
                             ALL_MIMES
@@ -539,7 +539,7 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
                             TEXT_MIME_TYPE
                         };
                         let dnd_actions = DragAndDropActions(DragAndDropAction::Copy as u32 | DragAndDropAction::Move as u32);
-                        let drag_icon_size = LogicalSize { width: 300, height: 300 };
+                        let drag_icon_size = LogicalSize::wh(300, 300);
                         window_start_drag_and_drop(
                             app_ptr,
                             data.window_id,
@@ -714,7 +714,7 @@ extern "C" fn query_drag_and_drop_target(data: &DragAndDropQueryData) -> FfiDrag
         let window_state = state.windows.get_mut(&data.window_id).unwrap();
         window_state.drag_and_drop_target = true;
     });
-    if data.location_in_window.x.0 < DRAG_AND_DROP_LEFT_OF {
+    if data.location_in_window.x < DRAG_AND_DROP_LEFT_OF {
         const SUPPORTED_ACTIONS_PER_MIME: [FfiSupportedActionsForMime; 2] = [
             FfiSupportedActionsForMime {
                 supported_mime_type: BorrowedUtf8::new(URI_LIST_MIME_TYPE),

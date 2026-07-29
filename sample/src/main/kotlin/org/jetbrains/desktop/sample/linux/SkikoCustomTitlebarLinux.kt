@@ -7,6 +7,7 @@ import org.jetbrains.desktop.linux.Logger
 import org.jetbrains.desktop.linux.LogicalPixels
 import org.jetbrains.desktop.linux.LogicalPoint
 import org.jetbrains.desktop.linux.MouseButton
+import org.jetbrains.desktop.linux.Scale
 import org.jetbrains.desktop.linux.Timestamp
 import org.jetbrains.desktop.linux.Window
 import org.jetbrains.desktop.linux.WindowCapabilities
@@ -25,7 +26,7 @@ private fun jbIconBytes(): ByteArray {
 private fun LogicalPoint.isInsideCircle(center: LogicalPoint, radius: LogicalPixels): Boolean {
     val xDiff = this.x - center.x
     val yDiff = this.y - center.y
-    return xDiff.pow(2) + yDiff.pow(2) <= radius.pow(2)
+    return xDiff.rawLogical.pow(2) + yDiff.rawLogical.pow(2) <= radius.rawLogical.pow(2)
 }
 
 internal class SkikoCustomTitlebarLinux(
@@ -44,8 +45,8 @@ internal class SkikoCustomTitlebarLinux(
     private var titleTextLineCreator = TextLineCreator()
 
     companion object {
-        private const val BUTTON_LINE_WIDTH: LogicalPixels = 5.0
-        private const val MOVE_RADIUS: LogicalPixels = 3.0
+        private val BUTTON_LINE_WIDTH = LogicalPixels(5.0)
+        private val MOVE_RADIUS = LogicalPixels(3.0)
         private val COLOR_DARK_GRAY = Color.makeRGB(128, 128, 128)
         private val COLOR_LIGHT_GRAY = Color.makeRGB(211, 211, 211)
 
@@ -343,7 +344,7 @@ internal class SkikoCustomTitlebarLinux(
         rect: Rect,
         highlighted: Boolean,
         hovered: Boolean,
-        scale: Double,
+        scale: Scale,
         title: String,
     ) {
         when (button) {
@@ -419,7 +420,7 @@ internal class SkikoCustomTitlebarLinux(
         }
     }
 
-    fun draw(canvas: Canvas, xdgDesktopSettings: XdgDesktopSettings, title: String, scale: Double) {
+    fun draw(canvas: Canvas, xdgDesktopSettings: XdgDesktopSettings, title: String, scale: Scale) {
         Paint().use { paint ->
             paint.color = xdgDesktopSettings.accentColor
             canvas.drawRect(headerRect.toSkiko(scale), paint)

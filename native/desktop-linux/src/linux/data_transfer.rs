@@ -1,5 +1,5 @@
 use crate::linux::application::send_event;
-use crate::linux::geometry::{LogicalPixels, LogicalPoint};
+use crate::linux::geometry::LogicalPoint;
 use crate::linux::{
     application_api::{DataSource, DragAndDropAction, DragAndDropActions, DragAndDropQueryData},
     application_state::ApplicationState,
@@ -167,7 +167,7 @@ impl ApplicationState {
             warn!("Drop handler: couldn't find window for {surface:?}");
             return None;
         };
-        let mime_type_and_actions = self.get_drag_offer_actions(&drag_offer, (x, y).into(), window_id);
+        let mime_type_and_actions = self.get_drag_offer_actions(&drag_offer, LogicalPoint::new((x, y)), window_id);
         drag_offer.set_actions(mime_type_and_actions.supported_actions, mime_type_and_actions.preferred_action);
         drag_offer.accept_mime_type(drag_offer.serial, mime_type_and_actions.mime_type);
         Some(window_id)
@@ -213,8 +213,6 @@ impl DataDeviceHandler for ApplicationState {
             return;
         };
 
-        let x = drag_offer.x;
-        let y = drag_offer.y;
         let surface = &drag_offer.surface;
         let wl_action = drag_offer.selected_action;
 
@@ -225,10 +223,7 @@ impl DataDeviceHandler for ApplicationState {
             return;
         };
 
-        let location_in_window = LogicalPoint {
-            x: LogicalPixels(x),
-            y: LogicalPixels(y),
-        };
+        let location_in_window = LogicalPoint::new((drag_offer.x, drag_offer.y));
 
         let mime_type_and_actions = self.get_drag_offer_actions(&drag_offer, location_in_window, window_id);
         let Some(mime_type) = mime_type_and_actions.mime_type else {

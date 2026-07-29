@@ -1,11 +1,15 @@
 use crate::sample_linux::{DRAG_AND_DROP_LEFT_OF, WindowState};
 use desktop_linux::linux::events::SoftwareDrawData;
-use desktop_linux::linux::geometry::PhysicalSize;
+use desktop_linux::linux::geometry::{LogicalPixelsInt, PhysicalSize, Scale};
 
 const BYTES_PER_PIXEL: usize = 4;
 
 fn between(val: f64, min: f64, max: f64) -> bool {
     val > min && val < max
+}
+
+fn scaled(v: LogicalPixelsInt, scale: Scale) -> f64 {
+    v.to_raw_physical(scale)
 }
 
 #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
@@ -24,18 +28,18 @@ fn stride_offset(v: i32, stride: i32) -> isize {
 pub fn draw_software(data: &SoftwareDrawData, physical_size: PhysicalSize, window_state: &WindowState) {
     let scale = window_state.scale;
     let stride = data.stride;
-    let w = f64::from(physical_size.width.0);
-    let h = f64::from(physical_size.height.0);
+    let w = f64::from(physical_size.width.raw_physical());
+    let h = f64::from(physical_size.height.raw_physical());
 
-    let line_thickness = 4. * scale;
-    let drag_and_drop_left_of = DRAG_AND_DROP_LEFT_OF * scale;
-    let drag_source_indicator_height = 100. * scale;
+    let line_thickness = scaled(LogicalPixelsInt::new(4), scale);
+    let drag_and_drop_left_of = scaled(DRAG_AND_DROP_LEFT_OF, scale);
+    let drag_source_indicator_height = scaled(LogicalPixelsInt::new(100), scale);
 
     let mut horizontal_line = vec![0; stride_len(1, stride)];
 
     // Order of bytes in `pixel` is [b, g, r, a] (for the Argb8888 format)
-    for (pixel, i) in horizontal_line.as_chunks_mut::<BYTES_PER_PIXEL>().0.iter_mut().zip(0u32..) {
-        let x = f64::from(i % physical_size.width.0.cast_unsigned());
+    for (pixel, i) in horizontal_line.as_chunks_mut::<BYTES_PER_PIXEL>().0.iter_mut().zip(0..) {
+        let x = f64::from(i % physical_size.width.raw_physical());
         if between(x, drag_and_drop_left_of, drag_and_drop_left_of + line_thickness) {
             *pixel = [0, 0, 0, 255];
         } else if between(x, line_thickness, line_thickness * 2.) || between(x, w - (line_thickness * 2.), w - line_thickness) {
@@ -53,7 +57,7 @@ pub fn draw_software(data: &SoftwareDrawData, physical_size: PhysicalSize, windo
     let content_x_end_bytes = pixel_bytes(w);
     let half_line_thickness = line_thickness / 2.;
 
-    for y in 0..physical_size.height.0 {
+    for y in 0..physical_size.height.raw_physical() {
         let line = unsafe { std::slice::from_raw_parts_mut(data.canvas.offset(stride_offset(y, stride)), pixel_bytes(w)) };
         line.copy_from_slice(&horizontal_line);
 

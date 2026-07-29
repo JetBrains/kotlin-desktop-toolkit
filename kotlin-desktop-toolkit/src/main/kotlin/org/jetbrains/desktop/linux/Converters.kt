@@ -102,13 +102,13 @@ internal fun splitCsv(s: String): List<String> {
 }
 
 internal fun LogicalSize.Companion.fromNative(s: MemorySegment) = LogicalSize(
-    width = NativeLogicalSize.width(s),
-    height = NativeLogicalSize.height(s),
+    width = LogicalPixelsInt(NativeLogicalSize.width(s)),
+    height = LogicalPixelsInt(NativeLogicalSize.height(s)),
 )
 
 internal fun LogicalSize?.toNative(arena: Arena): MemorySegment {
-    val width = this?.width ?: 0
-    val height = this?.height ?: 0
+    val width = this?.width?.rawLogical ?: 0
+    val height = this?.height?.rawLogical ?: 0
     val result = NativeLogicalSize.allocate(arena)
     NativeLogicalSize.width(result, width)
     NativeLogicalSize.height(result, height)
@@ -116,29 +116,29 @@ internal fun LogicalSize?.toNative(arena: Arena): MemorySegment {
 }
 
 internal fun LogicalPoint.Companion.fromNative(s: MemorySegment) = LogicalPoint(
-    x = NativeLogicalPoint.x(s),
-    y = NativeLogicalPoint.y(s),
+    x = LogicalPixels(NativeLogicalPoint.x(s)),
+    y = LogicalPixels(NativeLogicalPoint.y(s)),
 )
 
 internal fun LogicalPoint.toNative(arena: Arena): MemorySegment {
     val result = NativeLogicalPoint.allocate(arena)
-    NativeLogicalPoint.x(result, x)
-    NativeLogicalPoint.y(result, y)
+    NativeLogicalPoint.x(result, x.rawLogical)
+    NativeLogicalPoint.y(result, y.rawLogical)
     return result
 }
 
 internal fun LogicalRect.toNative(arena: Arena): MemorySegment {
     val result = NativeLogicalRect.allocate(arena)
-    NativeLogicalRect.x(result, x)
-    NativeLogicalRect.y(result, y)
-    NativeLogicalRect.width(result, width)
-    NativeLogicalRect.height(result, height)
+    NativeLogicalRect.x(result, x.rawLogical)
+    NativeLogicalRect.y(result, y.rawLogical)
+    NativeLogicalRect.width(result, width.rawLogical)
+    NativeLogicalRect.height(result, height.rawLogical)
     return result
 }
 
 internal fun PhysicalSize.Companion.fromNative(s: MemorySegment) = PhysicalSize(
-    width = NativePhysicalSize.width(s),
-    height = NativePhysicalSize.height(s),
+    width = PhysicalPixels(NativePhysicalSize.width(s)),
+    height = PhysicalPixels(NativePhysicalSize.height(s)),
 )
 
 private fun bitmaskContains(mask: Int, value: Int): Boolean {
@@ -609,7 +609,7 @@ internal fun DragAndDropQueryResponse.toNative(arena: Arena, objId: Long): Memor
 
 internal fun ScrollData.Companion.fromNative(s: MemorySegment): ScrollData {
     return ScrollData(
-        delta = NativeScrollData.delta(s),
+        delta = LogicalPixels(NativeScrollData.delta(s)),
         wheelValue120 = NativeScrollData.wheel_value120(s),
         isInverted = NativeScrollData.is_inverted(s),
         isStop = NativeScrollData.is_stop(s),
@@ -729,7 +729,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             Event.DragIconDraw(
                 softwareDrawData = SoftwareDrawData.fromNative(NativeDragIconDrawEvent.software_draw_data(nativeEvent)),
                 size = PhysicalSize.fromNative(NativeDragIconDrawEvent.physical_size(nativeEvent)),
-                scale = NativeDragIconDrawEvent.scale(nativeEvent),
+                scale = Scale.fromValue120(NativeDragIconDrawEvent.scale(nativeEvent)),
             )
         }
 
@@ -952,7 +952,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 windowId = NativeWindowDrawEvent.window_id(nativeEvent),
                 softwareDrawData = SoftwareDrawData.fromNative(NativeWindowDrawEvent.software_draw_data(nativeEvent)),
                 size = PhysicalSize.fromNative(NativeWindowDrawEvent.physical_size(nativeEvent)),
-                scale = NativeWindowDrawEvent.scale(nativeEvent),
             )
         }
 
@@ -960,7 +959,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             val nativeEvent = NativeEvent.window_scale_changed(s)
             Event.WindowScaleChanged(
                 windowId = NativeWindowScaleChangedEvent.window_id(nativeEvent),
-                newScale = NativeWindowScaleChangedEvent.new_scale(nativeEvent),
+                newScale = Scale.fromValue120(NativeWindowScaleChangedEvent.new_scale(nativeEvent)),
             )
         }
 
