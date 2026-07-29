@@ -2150,7 +2150,7 @@ class X11Tests : X11TestsBase() {
     fun testWindowCreationLargeSizeValues() {
         run(defaultApplicationConfig())
 
-        val maxVal = LogicalPixelsUInt(Int.MAX_VALUE.toUInt())
+        val maxVal = LogicalPixelsInt(Application.MAX_PIXEL_VALUE.toInt())
 
         val windowParams = defaultWindowParams().copy(
             size = LogicalSize(width = maxVal, height = maxVal),
@@ -2164,6 +2164,21 @@ class X11Tests : X11TestsBase() {
             assertEquals(windowParams.windowId, event.windowId)
             true
         }
+    }
+
+    @Test
+    fun testPhysicalPixelsValueTooLarge() {
+        assertThrows<IllegalArgumentException> { PhysicalPixels(Application.MAX_PIXEL_VALUE.toInt() + 1) }
+    }
+
+    @Test
+    fun testLogicalPixelsValueTooLarge() {
+        assertThrows<IllegalArgumentException> { LogicalPixels(Application.MAX_PIXEL_VALUE.toDouble() + 1) }
+    }
+
+    @Test
+    fun testLogicalPixelsUIntValueTooLarge() {
+        assertThrows<IllegalArgumentException> { LogicalPixelsInt((Application.MAX_PIXEL_VALUE + 1U).toInt()) }
     }
 
     @Test
@@ -3154,7 +3169,7 @@ text/plain;charset=utf-8
             val initialWindowData = createWindowAndWaitForFocus(windowParams)
             val window = initialWindowData.window
             val scale = initialWindowData.scale.newScale
-            val maxValue = floor(Short.MAX_VALUE / scale).roundToInt().toUInt()
+            val maxValue = floor(Application.MAX_PIXEL_VALUE.toDouble() / 2 / scale.rawValue).roundToInt()
             ui { window.textInputEnable(textInputContext) }
 
             assertEquals("do_set_capabilities: ['PREEDIT_TEXT', 'FOCUS', 'SURROUNDING_TEXT']", capsTextOutput.read())

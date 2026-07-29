@@ -2,6 +2,12 @@ package org.jetbrains.desktop.gtk
 
 @JvmInline
 public value class PhysicalPixels(public val rawPhysical: Int) {
+    init {
+        require(rawPhysical <= Application.MAX_PIXEL_VALUE.toInt()) {
+            "PhysicalPixels value too large (max ${Application.MAX_PIXEL_VALUE}, but was $rawPhysical)"
+        }
+    }
+
     public companion object {
         public val Zero: PhysicalPixels = PhysicalPixels(0)
     }
@@ -16,6 +22,12 @@ public value class PhysicalPixels(public val rawPhysical: Int) {
 public value class LogicalPixels(public val rawLogical: Double) {
     public companion object {
         public val Zero: LogicalPixels = LogicalPixels(0.0)
+    }
+
+    init {
+        require(rawLogical <= Application.MAX_PIXEL_VALUE.toDouble()) {
+            "LogicalPixels value too large (max ${Application.MAX_PIXEL_VALUE}, but was $rawLogical)"
+        }
     }
 
     public fun toRawPhysical(scale: Scale): Double {
@@ -33,6 +45,12 @@ public value class LogicalPixels(public val rawLogical: Double) {
 
 @JvmInline
 public value class LogicalPixelsInt(public val rawLogical: Int) {
+    init {
+        require(rawLogical <= Application.MAX_PIXEL_VALUE.toInt()) {
+            "LogicalPixelsUInt value too large (max ${Application.MAX_PIXEL_VALUE}, but was $rawLogical)"
+        }
+    }
+
     public companion object {
         public val Zero: LogicalPixelsInt = LogicalPixelsInt(0)
     }
