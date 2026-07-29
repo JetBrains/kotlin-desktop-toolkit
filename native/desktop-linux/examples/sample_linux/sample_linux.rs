@@ -41,7 +41,7 @@ use desktop_linux::linux::{
     geometry::{LogicalPixelsInt, LogicalRect, LogicalSize, PhysicalSize, Scale},
     text_input_api::{TextInputContentHints, TextInputContentPurpose, TextInputContext},
     window_api::{
-        window_request_internal_activation_token,
+        window_request_activation_token,
         window_show_open_file_dialog,
         window_show_save_file_dialog,
         window_start_drag_and_drop,
@@ -218,7 +218,7 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> O
         }
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::Tab) => {
             if let Some(&window_id) = state.windows.keys().find(|&&w| Some(w) != state.key_window_id) {
-                let request_id = window_request_internal_activation_token(app_ptr, state.key_window_id.unwrap());
+                let request_id = window_request_activation_token(app_ptr, state.key_window_id.unwrap());
                 if request_id.0 > 0 {
                     state
                         .activation_token_action
@@ -326,7 +326,7 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> O
             },
         }),
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyL) => {
-            let request_id = window_request_internal_activation_token(app_ptr, window_id);
+            let request_id = window_request_activation_token(app_ptr, window_id);
             if request_id.0 > 0 {
                 state
                     .activation_token_action
@@ -337,7 +337,7 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> O
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyU) => {
             let window_state = state.windows.get_mut(&window_id).unwrap();
             if let Some(path) = window_state.last_received_path.clone() {
-                let request_id = window_request_internal_activation_token(app_ptr, window_id);
+                let request_id = window_request_activation_token(app_ptr, window_id);
                 if request_id.0 > 0 {
                     state
                         .activation_token_action
@@ -537,7 +537,7 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
             Event::DisplayConfigurationChange => {
                 let ffi_screens = screen_list(app_ptr);
                 let screen_infos = unsafe { std::slice::from_raw_parts_mut(ffi_screens.ptr.cast_mut(), ffi_screens.len) };
-                println!("DisplayConfigurationChange: {screen_infos:?}");
+                debug!("DisplayConfigurationChange: {screen_infos:?}");
             }
             Event::DesktopSettingChange(data) => {
                 on_desktop_settings_change(data, state);

@@ -4,6 +4,17 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
 @JvmInline
+public value class EventSerial private constructor(private val value: UInt) {
+    internal companion object {
+        internal fun fromNative(value: Int): EventSerial {
+            return EventSerial(value.toUInt())
+        }
+    }
+
+    internal fun toNative(): Int = value.toInt()
+}
+
+@JvmInline
 public value class Timestamp private constructor(
     /** Count of milliseconds since some fixed but arbitrary moment in the past */
     private val value: Long,
@@ -254,6 +265,7 @@ public sealed class Event {
 
     @ConsistentCopyVisibility
     public data class KeyDown internal constructor(
+        val serial: EventSerial,
         val keyCode: KeyCode,
         val characters: String?,
         val key: KeySym,
@@ -262,12 +274,16 @@ public sealed class Event {
 
     @ConsistentCopyVisibility
     public data class KeyUp internal constructor(
+        val serial: EventSerial,
         val keyCode: KeyCode,
         val key: KeySym,
     ) : Event()
 
     @ConsistentCopyVisibility
-    public data class ModifiersChanged internal constructor(val modifiers: Set<KeyModifiers>) : Event()
+    public data class ModifiersChanged internal constructor(
+        val serial: EventSerial,
+        val modifiers: Set<KeyModifiers>,
+    ) : Event()
 
     @ConsistentCopyVisibility
     public data class MouseMoved internal constructor(
@@ -278,18 +294,21 @@ public sealed class Event {
 
     @ConsistentCopyVisibility
     public data class MouseEntered internal constructor(
+        val serial: EventSerial,
         val windowId: WindowId,
         val locationInWindow: LogicalPoint,
     ) : Event()
 
     @ConsistentCopyVisibility
     public data class MouseExited internal constructor(
+        val serial: EventSerial,
         val windowId: WindowId,
         val locationInWindow: LogicalPoint,
     ) : Event()
 
     @ConsistentCopyVisibility
     public data class MouseUp internal constructor(
+        val serial: EventSerial,
         val windowId: WindowId,
         val button: MouseButton,
         val locationInWindow: LogicalPoint,
@@ -298,6 +317,7 @@ public sealed class Event {
 
     @ConsistentCopyVisibility
     public data class MouseDown internal constructor(
+        val serial: EventSerial,
         val windowId: WindowId,
         val button: MouseButton,
         val locationInWindow: LogicalPoint,
@@ -375,13 +395,17 @@ public sealed class Event {
 
     @ConsistentCopyVisibility
     public data class WindowKeyboardEnter internal constructor(
+        val serial: EventSerial,
         val windowId: WindowId,
         val keyCodes: List<KeyCode>,
         val keySyms: List<KeySym>,
     ) : Event()
 
     @ConsistentCopyVisibility
-    public data class WindowKeyboardLeave internal constructor(val windowId: WindowId) : Event()
+    public data class WindowKeyboardLeave internal constructor(
+        val serial: EventSerial,
+        val windowId: WindowId,
+    ) : Event()
 
     @ConsistentCopyVisibility
     public data class WindowDraw internal constructor(

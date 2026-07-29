@@ -37,7 +37,7 @@ internal class SkikoCustomTitlebarLinux(
     private var rectangles = ArrayList<Pair<LogicalDoubleRect, WindowButtonType>>()
     private var lastHeaderMouseDownTime: Timestamp? = null
     private var lastMouseLocation: LogicalPoint? = null
-    private var leftClickStartLocation: LogicalPoint? = null
+    private var leftClickStartEvent: Event.MouseDown? = null
     private var isDragging: Boolean = false
     private var isActive: Boolean = false
     private var isMaximized: Boolean = false
@@ -183,7 +183,7 @@ internal class SkikoCustomTitlebarLinux(
         }
     }
 
-    private fun executeTitlebarAction(action: DesktopTitlebarAction, window: Window, event: Event.MouseUp) {
+    private fun executeTitlebarAction(action: DesktopTitlebarAction, window: Window, event: Event.MouseDown) {
         when (action) {
             DesktopTitlebarAction.ToggleMaximize -> {
                 toggleMaximize(window)
@@ -195,40 +195,14 @@ internal class SkikoCustomTitlebarLinux(
 
             DesktopTitlebarAction.None -> {}
             DesktopTitlebarAction.Menu -> {
-                window.showMenu(event.locationInWindow)
+                window.showMenu(event.serial, event.locationInWindow)
             }
         }
     }
 
-    private fun executeWindowAction(
-        windowButton: WindowButtonType,
-        event: Event.MouseUp,
-        window: Window,
-        xdgDesktopSettings: XdgDesktopSettings,
-    ): EventHandlerResult {
+    private fun executeWindowAction(windowButton: WindowButtonType, event: Event.MouseUp, window: Window): EventHandlerResult {
         Logger.info { "executeWindowAction: ${event.button} , $windowButton" }
         return when (windowButton) {
-            WindowButtonType.AppMenu, WindowButtonType.Icon -> {
-                window.showMenu(event.locationInWindow)
-                EventHandlerResult.Stop
-            }
-
-            WindowButtonType.Spacer,
-            WindowButtonType.Title,
-            -> when (event.button) {
-                MouseButton.RIGHT -> {
-                    executeTitlebarAction(xdgDesktopSettings.actionRightClickTitlebar, window, event)
-                    EventHandlerResult.Stop
-                }
-
-                MouseButton.MIDDLE -> {
-                    executeTitlebarAction(xdgDesktopSettings.actionMiddleClickTitlebar, window, event)
-                    EventHandlerResult.Stop
-                }
-
-                else -> EventHandlerResult.Continue
-            }
-
             WindowButtonType.Minimize -> {
                 window.minimize()
                 EventHandlerResult.Stop
@@ -243,6 +217,7 @@ internal class SkikoCustomTitlebarLinux(
                 requestClose()
                 EventHandlerResult.Stop
             }
+            else -> EventHandlerResult.Continue
         }
     }
 
@@ -252,7 +227,8 @@ internal class SkikoCustomTitlebarLinux(
             val timeDiff = (timestamp.toDuration() - prevTime.toDuration())
             Logger.info { "timeDiff: $timeDiff" }
             if (timeDiff <= doubleClickInterval) {
-                lastHeaderMouseDownTime = timestamp
+                lastHeaderMouseDownTime = null
+                leftClickStartEvent = null
                 return true
             }
         }
@@ -260,60 +236,90 @@ internal class SkikoCustomTitlebarLinux(
         return false
     }
 
-    fun onMouseDown(event: Event.MouseDown): EventHandlerResult {
-        return if (headerRect.contains(event.locationInWindow) && event.button == MouseButton.LEFT) {
-            leftClickStartLocation = event.locationInWindow
-            isDragging = false
-            EventHandlerResult.Stop
-        } else {
-            EventHandlerResult.Continue
+    fun onMouseDown(event: Event.MouseDown, xdgDesktopSettings: XdgDesktopSettings, window: Window): EventHandlerResult {
+        val windowButton = rectangles.firstOrNull { it.first.contains(event.locationInWindow) }?.second
+        if (windowButton == null) {
+            return EventHandlerResult.Continue
         }
+
+        if (event.button == MouseButton.LEFT) {
+            leftClickStartEvent = event
+            isDragging = false
+        }
+
+        val action: DesktopTitlebarAction? = when (windowButton) {
+            WindowButtonType.AppMenu, WindowButtonType.Icon -> DesktopTitlebarAction.Menu
+            WindowButtonType.Spacer, WindowButtonType.Title -> when (event.button) {
+                MouseButton.LEFT -> {
+                    if (handlePotentialDoubleClick(event.timestamp, xdgDesktopSettings.doubleClickInterval)) {
+                        xdgDesktopSettings.actionDoubleClickTitlebar
+                    } else {
+                        null
+                    }
+                }
+
+                MouseButton.RIGHT -> xdgDesktopSettings.actionRightClickTitlebar
+                MouseButton.MIDDLE -> xdgDesktopSettings.actionMiddleClickTitlebar
+                else -> null
+            }
+
+            else -> null
+        }
+
+        if (action != null) {
+            executeTitlebarAction(action, window, event)
+        }
+
+        return EventHandlerResult.Stop
     }
 
-    fun onMouseUp(event: Event.MouseUp, xdgDesktopSettings: XdgDesktopSettings, window: Window): EventHandlerResult {
-        val leftClickStartWindowButton = leftClickStartLocation?.let { leftClickStartLocation ->
-            rectangles.firstOrNull { it.first.contains(leftClickStartLocation) }?.second
+    fun onMouseUp(event: Event.MouseUp, window: Window): EventHandlerResult {
+        val windowButton = rectangles.firstOrNull { it.first.contains(event.locationInWindow) }?.second
+
+        val leftClickStartWindowButton = leftClickStartEvent?.let { leftClickStartEvent ->
+            rectangles.firstOrNull { it.first.contains(leftClickStartEvent.locationInWindow) }?.second
         }
+
         if (event.button == MouseButton.LEFT) {
-            leftClickStartLocation = null
+            leftClickStartEvent = null
             isDragging = false
         }
-        return rectangles.firstOrNull { it.first.contains(event.locationInWindow) }?.second?.let { windowButton ->
-            if (event.button == MouseButton.LEFT && leftClickStartWindowButton != windowButton) {
-                EventHandlerResult.Continue
-            } else if ((windowButton == WindowButtonType.Title || windowButton == WindowButtonType.Spacer) &&
-                event.button == MouseButton.LEFT &&
-                handlePotentialDoubleClick(event.timestamp, xdgDesktopSettings.doubleClickInterval)
-            ) {
-                executeTitlebarAction(
-                    xdgDesktopSettings.actionDoubleClickTitlebar,
-                    window,
-                    event,
-                )
+
+        if (windowButton == null) {
+            return EventHandlerResult.Continue
+        }
+
+        when (event.button) {
+            MouseButton.RIGHT if windowButton == WindowButtonType.Minimize -> {
+                window.requestActivationToken()
                 EventHandlerResult.Stop
-            } else if (windowButton == WindowButtonType.Minimize && event.button == MouseButton.RIGHT) {
-                window.requestInternalActivationToken()
-                EventHandlerResult.Stop
-            } else {
+            }
+            MouseButton.LEFT if leftClickStartWindowButton == windowButton -> {
                 executeWindowAction(
                     windowButton,
                     event,
                     window,
-                    xdgDesktopSettings,
                 )
             }
-        } ?: EventHandlerResult.Continue
+        }
+
+        return EventHandlerResult.Stop
     }
 
     fun onMouseMoved(locationInWindow: LogicalPoint, window: Window): EventHandlerResult {
         lastMouseLocation = locationInWindow
-        return if (headerRect.contains(locationInWindow) &&
-            !isDragging &&
-            (leftClickStartLocation?.isInsideCircle(locationInWindow, MOVE_RADIUS) == false)
-        ) {
-            isDragging = true
-            leftClickStartLocation = null
-            window.startMove()
+        leftClickStartEvent?.let {
+            if (!isDragging &&
+                !it.locationInWindow.isInsideCircle(locationInWindow, MOVE_RADIUS)
+            ) {
+                isDragging = true
+                leftClickStartEvent = null
+                window.startMove(it.serial)
+                return EventHandlerResult.Stop
+            }
+        }
+
+        return if (headerRect.contains(locationInWindow)) {
             EventHandlerResult.Stop
         } else {
             EventHandlerResult.Continue
@@ -321,13 +327,16 @@ internal class SkikoCustomTitlebarLinux(
     }
 
     fun onMouseEntered(): EventHandlerResult {
+        lastMouseLocation = null
+        leftClickStartEvent = null
         isDragging = false
         return EventHandlerResult.Continue
     }
 
     fun onMouseExited(): EventHandlerResult {
         lastMouseLocation = null
-        leftClickStartLocation = null
+        leftClickStartEvent = null
+        isDragging = false
         return EventHandlerResult.Continue
     }
 
@@ -427,7 +436,7 @@ internal class SkikoCustomTitlebarLinux(
         }
         for ((rect, button) in rectangles) {
             val hovered = !isDragging && (lastMouseLocation?.let { rect.contains(it) } == true)
-            val highlighted = hovered && (leftClickStartLocation?.let { rect.contains(it) } == true)
+            val highlighted = hovered && (leftClickStartEvent?.locationInWindow?.let { rect.contains(it) } == true)
             drawButton(canvas, button, rect.toSkiko(scale), highlighted = highlighted, hovered = hovered, scale, title)
         }
     }

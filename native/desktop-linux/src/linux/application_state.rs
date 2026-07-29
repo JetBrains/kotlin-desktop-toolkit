@@ -7,6 +7,7 @@ use crate::linux::{
     events::{
         ActivationTokenResponse,
         Event,
+        EventSerial,
         RequestId,
         ScreenId,
         WindowCapabilities,
@@ -300,6 +301,10 @@ impl ApplicationState {
         send_event(self.callbacks.event_handler, event_data)
     }
 
+    pub fn get_default_seat(&self) -> Option<WlSeat> {
+        self.seat_state.seats().next()
+    }
+
     pub fn get_latest_pointer_button_seat_and_serial(&self) -> Option<(&WlSeat, u32)> {
         if let Some(p) = &self.themed_pointer
             && let Some(pointer_data) = p.pointer().data::<PointerData<()>>()
@@ -314,7 +319,7 @@ impl ApplicationState {
     pub fn get_latest_event_seat_and_serial(&self) -> Option<(&WlSeat, u32)> {
         let pointer_event_seat_and_serial = self.get_latest_pointer_button_seat_and_serial();
         if let Some(keyboard_event_serial) = self.last_keyboard_event_serial
-            && Some(keyboard_event_serial) > pointer_event_seat_and_serial.map(|e| e.1)
+            && pointer_event_seat_and_serial.is_none_or(|(_, serial)| keyboard_event_serial > serial)
             && let Some(keyboard) = &self.keyboard
             && let Some(keyboard_data) = keyboard.data::<KeyboardData<Self, ()>>()
         {
@@ -358,8 +363,8 @@ impl SeatHandler for ApplicationState {
         &mut self.seat_state
     }
 
-    fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlSeat) {
-        debug!("SeatHandler::new_seat");
+    fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, seat: WlSeat) {
+        debug!("SeatHandler::new_seat: {}", seat.id());
     }
 
     fn new_capability(&mut self, _conn: &Connection, qh: &QueueHandle<Self>, seat: WlSeat, capability: Capability) {
@@ -369,8 +374,9 @@ impl SeatHandler for ApplicationState {
             self.primary_selection_device = self.primary_selection_manager.as_ref().map(|m| m.get_selection_device(qh, &seat));
         }
 
+        debug!("New capability for seat {}: {capability:?}", seat.id());
+
         if capability == Capability::Keyboard && self.keyboard.is_none() {
-            debug!("Set keyboard capability");
             let keyboard = self
                 .seat_state
                 .get_keyboard_with_repeat(
@@ -382,7 +388,7 @@ impl SeatHandler for ApplicationState {
                         // Since wl_keyboard version 10, [smithay_client_toolkit::seat::keyboard::KeyboardHandler::repeat_key]
                         // is used instead.
                         if wl_kbd.version() < 10 {
-                            send_key_down_event(state, &event, true);
+                            send_key_down_event(state, &event, EventSerial(0), true);
                         }
                     }),
                 )
@@ -395,23 +401,22 @@ impl SeatHandler for ApplicationState {
         }
 
         if capability == Capability::Pointer && self.themed_pointer.is_none() {
-            debug!("Set pointer capability");
             self.update_themed_cursor_with_seat(qh, &seat).expect("Failed to create pointer");
         }
     }
 
-    fn remove_capability(&mut self, _conn: &Connection, _: &QueueHandle<Self>, _: WlSeat, capability: Capability) {
+    fn remove_capability(&mut self, _conn: &Connection, _: &QueueHandle<Self>, seat: WlSeat, capability: Capability) {
+        debug!("Remove capability for seat {}: {capability:?}", seat.id());
+
         if capability == Capability::Keyboard
             && let Some(keyboard) = self.keyboard.take()
         {
-            debug!("Unset keyboard capability");
             keyboard.release();
         }
 
         if capability == Capability::Pointer
             && let Some(themed_pointer) = self.themed_pointer.take()
         {
-            debug!("Unset pointer capability");
             themed_pointer.pointer().release();
         }
     }

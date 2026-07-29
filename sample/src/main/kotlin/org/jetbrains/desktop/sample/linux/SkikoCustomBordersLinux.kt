@@ -132,7 +132,7 @@ internal class SkikoCustomBordersLinux {
     fun onMouseDown(event: Event.MouseDown, window: Window): EventHandlerResult {
         val edge = toEdge(event.locationInWindow)
         return if (edge != null) {
-            window.startResize(edge)
+            window.startResize(event.serial, edge)
             EventHandlerResult.Stop
         } else {
             EventHandlerResult.Continue

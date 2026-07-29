@@ -1,7 +1,7 @@
 use crate::linux::{
     application_api::RenderingMode,
     application_state::{ApplicationState, EGLData},
-    events::{SoftwareDrawData, WindowConfigureEvent, WindowDrawEvent, WindowFrame, WindowId},
+    events::{EventSerial, SoftwareDrawData, WindowConfigureEvent, WindowDrawEvent, WindowFrame, WindowId},
     geometry::{LogicalPixelsInt, LogicalPoint, LogicalRect, LogicalSize, PhysicalSize, Scale},
     pointer_shapes_api::PointerShape,
     rendering_egl::EglRendering,
@@ -388,16 +388,17 @@ impl SimpleWindow {
         }
     }
 
-    pub fn start_move(&self, seat: &WlSeat, serial: u32) {
-        self.window.move_(seat, serial);
+    pub fn start_move(&self, seat: &WlSeat, event_serial: EventSerial) {
+        self.window.move_(seat, event_serial.0);
     }
 
-    pub fn start_resize(&self, edge: WindowResizeEdge, seat: &WlSeat, serial: u32) {
-        self.window.resize(seat, serial, edge.into());
+    pub fn start_resize(&self, edge: WindowResizeEdge, seat: &WlSeat, event_serial: EventSerial) {
+        self.window.resize(seat, event_serial.0, edge.into());
     }
 
-    pub fn show_menu(&self, position: LogicalPoint, seat: &WlSeat, serial: u32) {
-        self.window.show_window_menu(seat, serial, (position.x.round(), position.y.round()));
+    pub fn show_menu(&self, position: LogicalPoint, seat: &WlSeat, event_serial: EventSerial) {
+        self.window
+            .show_window_menu(seat, event_serial.0, (position.x.round(), position.y.round()));
     }
 
     pub fn set_max_size(&self, max_size: LogicalSize) {

@@ -3,7 +3,7 @@ use crate::linux::{
     application::Application,
     application_api::{AppPtr, DragAndDropActions, RenderingMode},
     data_transfer::MimeTypes,
-    events::{RequestId, WindowFrame, WindowId},
+    events::{EventSerial, RequestId, WindowFrame, WindowId},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPoint, LogicalSize},
     pointer_shapes_api::PointerShape,
@@ -101,26 +101,26 @@ pub extern "C" fn window_set_title(app_ptr: AppPtr, window_id: WindowId, new_tit
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_start_move(app_ptr: AppPtr, window_id: WindowId) {
+pub extern "C" fn window_start_move(app_ptr: AppPtr, window_id: WindowId, event_serial: EventSerial) {
     ffi_boundary("window_start_move", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        app.window_start_move(window_id)
+        app.window_start_move(window_id, event_serial)
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_start_resize(app_ptr: AppPtr, window_id: WindowId, edge: WindowResizeEdge) {
+pub extern "C" fn window_start_resize(app_ptr: AppPtr, window_id: WindowId, event_serial: EventSerial, edge: WindowResizeEdge) {
     ffi_boundary("window_start_resize", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        app.window_start_resize(window_id, edge)
+        app.window_start_resize(window_id, event_serial, edge)
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_show_menu(app_ptr: AppPtr, window_id: WindowId, position: LogicalPoint) {
+pub extern "C" fn window_show_menu(app_ptr: AppPtr, window_id: WindowId, event_serial: EventSerial, position: LogicalPoint) {
     ffi_boundary("window_show_menu", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        app.window_show_menu(window_id, position)
+        app.window_show_menu(window_id, event_serial, position)
     });
 }
 
@@ -262,10 +262,10 @@ pub extern "C" fn window_show_save_file_dialog(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_request_internal_activation_token(mut app_ptr: AppPtr, window_id: WindowId) -> RequestId {
-    ffi_boundary("window_request_internal_activation_token", || {
+pub extern "C" fn window_request_activation_token(mut app_ptr: AppPtr, window_id: WindowId) -> RequestId {
+    ffi_boundary("window_request_activation_token", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.request_internal_activation_token(window_id)
+        app.request_activation_token(window_id)
     })
 }
 

@@ -1,6 +1,9 @@
 use crate::linux::{
     application_state::ApplicationState,
-    events::{KeyCode, KeyDownEvent, KeyModifiers, KeyUpEvent, ModifiersChangedEvent, WindowKeyboardEnterEvent, WindowKeyboardLeaveEvent},
+    events::{
+        EventSerial, KeyCode, KeyDownEvent, KeyModifiers, KeyUpEvent, ModifiersChangedEvent, WindowKeyboardEnterEvent,
+        WindowKeyboardLeaveEvent,
+    },
 };
 use log::debug;
 use smithay_client_toolkit::{
@@ -11,9 +14,9 @@ use smithay_client_toolkit::{
     seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
 };
 
-pub fn send_key_down_event(state: &ApplicationState, event: &KeyEvent, is_repeat: bool) {
+pub fn send_key_down_event(state: &ApplicationState, event: &KeyEvent, serial: EventSerial, is_repeat: bool) {
     let code = KeyCode(event.raw_code + 8);
-    state.send_event(KeyDownEvent::new(code, event.keysym.raw(), event.utf8.as_ref(), is_repeat));
+    state.send_event(KeyDownEvent::new(serial, code, event.keysym.raw(), event.utf8.as_ref(), is_repeat));
 }
 
 impl KeyboardHandler for ApplicationState {
@@ -32,29 +35,33 @@ impl KeyboardHandler for ApplicationState {
             debug!("Keyboard focus on window with pressed syms: {keysyms:?}");
             let xkb_codes = raw.iter().map(|v| v + 8).collect();
             let ks: Vec<u32> = keysyms.iter().map(|e| e.raw()).collect();
-            self.send_event(WindowKeyboardEnterEvent::new(window_id, &xkb_codes, &ks));
+            self.send_event(WindowKeyboardEnterEvent::new(EventSerial(serial), window_id, &xkb_codes, &ks));
         }
     }
 
-    fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlKeyboard, surface: &WlSurface, _serial: u32) {
+    fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlKeyboard, surface: &WlSurface, serial: u32) {
         if let Some(window_id) = self.get_window_id(surface) {
-            self.send_event(WindowKeyboardLeaveEvent { window_id });
+            self.send_event(WindowKeyboardLeaveEvent {
+                serial: EventSerial(serial),
+                window_id,
+            });
         }
     }
 
     fn press_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _keyboard: &WlKeyboard, serial: u32, event: KeyEvent) {
         self.last_keyboard_event_serial = Some(serial);
-        send_key_down_event(self, &event, false);
+        send_key_down_event(self, &event, EventSerial(serial), false);
     }
 
-    fn repeat_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _keyboard: &WlKeyboard, _serial: u32, event: KeyEvent) {
-        send_key_down_event(self, &event, true);
+    fn repeat_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _keyboard: &WlKeyboard, serial: u32, event: KeyEvent) {
+        send_key_down_event(self, &event, EventSerial(serial), true);
     }
 
     fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlKeyboard, serial: u32, event: KeyEvent) {
         self.last_keyboard_event_serial = Some(serial);
         debug!("KeyboardHandler::release_key");
         self.send_event(KeyUpEvent {
+            serial: EventSerial(serial),
             code: KeyCode(event.raw_code + 8),
             key: event.keysym.raw(),
         });
@@ -91,7 +98,10 @@ impl KeyboardHandler for ApplicationState {
             if modifiers.num_lock {
                 key_modifiers |= KeyModifiers::NumLock;
             }
-            ModifiersChangedEvent { modifiers: key_modifiers }
+            ModifiersChangedEvent {
+                serial: EventSerial(serial),
+                modifiers: key_modifiers,
+            }
         };
         self.send_event(event);
     }

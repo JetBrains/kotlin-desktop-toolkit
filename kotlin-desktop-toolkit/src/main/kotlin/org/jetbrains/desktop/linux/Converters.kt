@@ -804,6 +804,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             val nativeU8Array = NativeKeyDownEvent.characters(nativeEvent)
             val characters = readNativeU8Array(nativeU8Array)?.decodeToString()
             Event.KeyDown(
+                serial = EventSerial.fromNative(NativeKeyDownEvent.serial(nativeEvent)),
                 keyCode = KeyCode(NativeKeyDownEvent.code(nativeEvent).toUInt()),
                 characters = characters,
                 key = KeySym(NativeKeyDownEvent.key(nativeEvent).toUInt()),
@@ -814,6 +815,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         desktop_linux_h.NativeEvent_KeyUp() -> {
             val nativeEvent = NativeEvent.key_up(s)
             Event.KeyUp(
+                serial = EventSerial.fromNative(NativeKeyUpEvent.serial(nativeEvent)),
                 key = KeySym(NativeKeyUpEvent.key(nativeEvent).toUInt()),
                 keyCode = KeyCode(NativeKeyUpEvent.code(nativeEvent).toUInt()),
             )
@@ -853,7 +855,10 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         desktop_linux_h.NativeEvent_ModifiersChanged() -> {
             val nativeEvent = NativeEvent.modifiers_changed(s)
             val nativeModifiers = NativeModifiersChangedEvent.modifiers(nativeEvent)
-            Event.ModifiersChanged(modifiers = keyModifiersFromNative(nativeModifiers))
+            Event.ModifiersChanged(
+                serial = EventSerial.fromNative(NativeModifiersChangedEvent.serial(nativeEvent)),
+                modifiers = keyModifiersFromNative(nativeModifiers),
+            )
         }
 
         desktop_linux_h.NativeEvent_MouseMoved() -> {
@@ -868,6 +873,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         desktop_linux_h.NativeEvent_MouseEntered() -> {
             val nativeEvent = NativeEvent.mouse_entered(s)
             Event.MouseEntered(
+                serial = EventSerial.fromNative(NativeMouseEnteredEvent.serial(nativeEvent)),
                 windowId = NativeMouseEnteredEvent.window_id(nativeEvent),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseEnteredEvent.location_in_window(nativeEvent)),
             )
@@ -876,6 +882,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         desktop_linux_h.NativeEvent_MouseExited() -> {
             val nativeEvent = NativeEvent.mouse_exited(s)
             Event.MouseExited(
+                serial = EventSerial.fromNative(NativeMouseExitedEvent.serial(nativeEvent)),
                 windowId = NativeMouseExitedEvent.window_id(nativeEvent),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseExitedEvent.location_in_window(nativeEvent)),
             )
@@ -884,6 +891,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         desktop_linux_h.NativeEvent_MouseUp() -> {
             val nativeEvent = NativeEvent.mouse_up(s)
             Event.MouseUp(
+                serial = EventSerial.fromNative(NativeMouseUpEvent.serial(nativeEvent)),
                 windowId = NativeMouseUpEvent.window_id(nativeEvent),
                 button = MouseButton(NativeMouseUpEvent.button(nativeEvent)),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseUpEvent.location_in_window(nativeEvent)),
@@ -894,6 +902,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         desktop_linux_h.NativeEvent_MouseDown() -> {
             val nativeEvent = NativeEvent.mouse_down(s)
             Event.MouseDown(
+                serial = EventSerial.fromNative(NativeMouseDownEvent.serial(nativeEvent)),
                 windowId = NativeMouseDownEvent.window_id(nativeEvent),
                 button = MouseButton(NativeMouseDownEvent.button(nativeEvent)),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseDownEvent.location_in_window(nativeEvent)),
@@ -967,15 +976,19 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             val keySyms = readNativeU32Array(NativeWindowKeyboardEnterEvent.keysyms(nativeEvent))!!.map { KeySym(it.toUInt()) }
 
             Event.WindowKeyboardEnter(
+                serial = EventSerial.fromNative(NativeWindowKeyboardEnterEvent.serial(nativeEvent)),
                 windowId = NativeWindowKeyboardEnterEvent.window_id(nativeEvent),
-                keyCodes,
-                keySyms,
+                keyCodes = keyCodes,
+                keySyms = keySyms,
             )
         }
 
         desktop_linux_h.NativeEvent_WindowKeyboardLeave() -> {
             val nativeEvent = NativeEvent.window_keyboard_leave(s)
-            Event.WindowKeyboardLeave(windowId = NativeWindowKeyboardLeaveEvent.window_id(nativeEvent))
+            Event.WindowKeyboardLeave(
+                serial = EventSerial.fromNative(NativeWindowKeyboardLeaveEvent.serial(nativeEvent)),
+                windowId = NativeWindowKeyboardLeaveEvent.window_id(nativeEvent),
+            )
         }
 
         desktop_linux_h.NativeEvent_WindowCloseRequest() -> {

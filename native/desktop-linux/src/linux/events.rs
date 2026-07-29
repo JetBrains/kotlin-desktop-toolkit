@@ -13,6 +13,14 @@ pub type EventHandler = extern "C" fn(&Event) -> bool;
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
+pub struct EventSerial(pub(crate) u32);
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct EventSeat(pub(crate) u32);
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
 pub struct Timestamp(pub u32);
 
 #[repr(transparent)]
@@ -196,6 +204,7 @@ impl From<DataTransferCancelledEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct KeyDownEvent<'a> {
+    pub serial: EventSerial,
     pub characters: BorrowedUtf8<'a>,
     pub code: KeyCode,
     pub key: u32,
@@ -209,8 +218,9 @@ impl<'a> From<KeyDownEvent<'a>> for Event<'a> {
 }
 
 impl<'a> KeyDownEvent<'a> {
-    pub(crate) fn new(code: KeyCode, key: u32, characters: Option<&'a String>, is_repeat: bool) -> Self {
+    pub(crate) fn new(serial: EventSerial, code: KeyCode, key: u32, characters: Option<&'a String>, is_repeat: bool) -> Self {
         Self {
+            serial,
             code,
             characters: BorrowedUtf8::optional(characters.and_then(|s| if s.is_empty() { None } else { Some(s) })),
             key,
@@ -222,6 +232,7 @@ impl<'a> KeyDownEvent<'a> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct KeyUpEvent {
+    pub serial: EventSerial,
     pub code: KeyCode,
     pub key: u32,
 }
@@ -235,6 +246,7 @@ impl From<KeyUpEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct ModifiersChangedEvent {
+    pub serial: EventSerial,
     pub modifiers: KeyModifiers,
 }
 
@@ -247,6 +259,7 @@ impl From<ModifiersChangedEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseEnteredEvent {
+    pub serial: EventSerial,
     pub window_id: WindowId,
     pub location_in_window: LogicalPoint,
 }
@@ -260,6 +273,7 @@ impl From<MouseEnteredEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseExitedEvent {
+    pub serial: EventSerial,
     pub window_id: WindowId,
     pub location_in_window: LogicalPoint,
 }
@@ -287,6 +301,7 @@ impl From<MouseMovedEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseDownEvent {
+    pub serial: EventSerial,
     pub window_id: WindowId,
     pub button: MouseButton,
     pub location_in_window: LogicalPoint,
@@ -302,6 +317,7 @@ impl From<MouseDownEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseUpEvent {
+    pub serial: EventSerial,
     pub window_id: WindowId,
     pub button: MouseButton,
     pub location_in_window: LogicalPoint,
@@ -519,14 +535,16 @@ impl From<DragIconDrawEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowKeyboardEnterEvent<'a> {
+    pub serial: EventSerial,
     pub window_id: WindowId,
     pub raw: BorrowedArray<'a, u32>,
     pub keysyms: BorrowedArray<'a, u32>,
 }
 
 impl<'a> WindowKeyboardEnterEvent<'a> {
-    pub(crate) const fn new(window_id: WindowId, raw: &'a Vec<u32>, keysyms: &'a [u32]) -> Self {
+    pub(crate) const fn new(serial: EventSerial, window_id: WindowId, raw: &'a Vec<u32>, keysyms: &'a [u32]) -> Self {
         Self {
+            serial,
             window_id,
             raw: BorrowedArray::from_slice(raw.as_slice()),
             keysyms: BorrowedArray::from_slice(keysyms),
@@ -543,6 +561,7 @@ impl<'a> From<WindowKeyboardEnterEvent<'a>> for Event<'a> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowKeyboardLeaveEvent {
+    pub serial: EventSerial,
     pub window_id: WindowId,
 }
 
