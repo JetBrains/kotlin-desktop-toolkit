@@ -1,5 +1,6 @@
-#[cfg(all(target_os = "linux", not(feature = "skia")))]
+#[cfg(target_os = "linux")]
 mod sample_gtk_draw;
+
 #[cfg(all(target_os = "linux", feature = "skia"))]
 mod sample_gtk_draw_skia;
 
