@@ -88,14 +88,16 @@ public data class DragAndDropQueryResponse(public val supportedActionsPerMime: L
     internal companion object;
 }
 
-public enum class WindowDecorationMode {
+public sealed class WindowDecorationMode {
     /** The window should draw client side decorations. */
-    Client,
+    public data class Client(val frame: WindowFrame) : WindowDecorationMode()
 
     /** The server will draw window decorations. */
-    Server,
-
-    ;
+    public object Server : WindowDecorationMode() {
+        override fun toString(): String {
+            return "Server"
+        }
+    }
 
     internal companion object;
 }
@@ -123,6 +125,57 @@ public data class ScrollData internal constructor(
     val isStop: Boolean,
 ) {
     internal companion object
+}
+
+@ConsistentCopyVisibility
+public data class WindowFrameSide internal constructor(
+    public val padding: LogicalPixelsInt,
+    public val resizerThickness: LogicalPixelsInt,
+    public val tiled: Boolean,
+) {
+    public constructor(padding: LogicalPixelsInt, resizerThickness: LogicalPixelsInt) : this(padding, resizerThickness, false)
+
+    internal companion object;
+}
+
+public data class WindowFrame(
+    public val left: WindowFrameSide,
+    public val top: WindowFrameSide,
+    public val right: WindowFrameSide,
+    public val bottom: WindowFrameSide,
+) {
+    public companion object {
+        public fun all(frameSide: WindowFrameSide): WindowFrame {
+            return WindowFrame(left = frameSide, top = frameSide, right = frameSide, bottom = frameSide)
+        }
+
+        public fun withSameResizerThickness(
+            resizerThickness: LogicalPixelsInt,
+            left: LogicalPixelsInt,
+            top: LogicalPixelsInt,
+            right: LogicalPixelsInt,
+            bottom: LogicalPixelsInt,
+        ): WindowFrame {
+            return WindowFrame(
+                left = WindowFrameSide(
+                    padding = left,
+                    resizerThickness = resizerThickness,
+                ),
+                top = WindowFrameSide(
+                    padding = top,
+                    resizerThickness = resizerThickness,
+                ),
+                right = WindowFrameSide(
+                    padding = right,
+                    resizerThickness = resizerThickness,
+                ),
+                bottom = WindowFrameSide(
+                    padding = bottom,
+                    resizerThickness = resizerThickness,
+                ),
+            )
+        }
+    }
 }
 
 public sealed class Event {
@@ -316,19 +369,6 @@ public sealed class Event {
         val active: Boolean,
         val maximized: Boolean,
         val fullscreen: Boolean,
-
-        /** The window is currently in a tiled layout and the left edge is  considered to be adjacent to another part of the tiling grid. */
-        val tiledLeft: Boolean,
-
-        /** The window is currently in a tiled layout and the right edge is considered to be adjacent to another part of the tiling grid. */
-        val tiledRight: Boolean,
-
-        /** The window is currently in a tiled layout and the top edge is considered to be adjacent to another part of the tiling grid. */
-        val tiledTop: Boolean,
-
-        /** The window is currently in a tiled layout and the bottom edge is considered to be adjacent to another part of the tiling grid. */
-        val tiledBottom: Boolean,
-
         val decorationMode: WindowDecorationMode,
         val capabilities: WindowCapabilities,
     ) : Event()

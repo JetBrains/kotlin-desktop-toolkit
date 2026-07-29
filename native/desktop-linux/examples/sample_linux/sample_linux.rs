@@ -33,7 +33,10 @@ use desktop_linux::linux::{
         //
     },
     desktop_settings_api::FfiDesktopSetting,
-    events::{DataTransferContent, Event, KeyDownEvent, KeyModifiers, RequestId, SoftwareDrawData, TextInputEvent, WindowId},
+    events::{
+        DataTransferContent, Event, KeyDownEvent, KeyModifiers, RequestId, SoftwareDrawData, TextInputEvent, WindowDecorationMode,
+        WindowFrame, WindowFrameSide, WindowId,
+    },
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPixelsInt, LogicalRect, LogicalSize, PhysicalSize, Scale},
     text_input_api::{TextInputContentHints, TextInputContentPurpose, TextInputContext},
@@ -79,6 +82,7 @@ pub struct WindowState {
     pub active: bool,
     maximized: bool,
     fullscreen: bool,
+    pub frame: WindowFrame,
     pub scale: Scale,
     text_input_available: bool,
     composed_text: String,
@@ -189,6 +193,7 @@ const fn shortcut_modifiers(all_modifiers: KeyModifiers) -> KeyModifiers {
 fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> Option<Action> {
     const KEY_MODIFIER_NONE: KeyModifiers = KeyModifiers::empty();
     const KEY_MODIFIER_CTRL: KeyModifiers = KeyModifiers::Ctrl;
+    const KEY_MODIFIER_CTRL_SHIFT: KeyModifiers = KeyModifiers::Ctrl.or(KeyModifiers::Shift);
 
     let modifiers = shortcut_modifiers(state.key_modifiers);
     let window_id = state.key_window_id.expect("Key window not found");
@@ -288,8 +293,38 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> O
                 app_id: APP_ID.to_owned(),
                 prefer_client_side_decoration: false,
                 rendering_mode: RenderingMode::Auto,
+                client_side_decoration_frame: WindowFrame::default(),
             })
         }
+        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyG) => Some(Action::WindowSetClientFrame {
+            window_id,
+            frame: WindowFrame::default(),
+        }),
+        (KEY_MODIFIER_CTRL_SHIFT, keycode::KeyMappingCode::KeyG) => Some(Action::WindowSetClientFrame {
+            window_id,
+            frame: WindowFrame {
+                left: WindowFrameSide {
+                    padding: LogicalPixelsInt::new(5),
+                    resizer_thickness: LogicalPixelsInt::new(5),
+                    tiled: false,
+                },
+                right: WindowFrameSide {
+                    padding: LogicalPixelsInt::new(40),
+                    resizer_thickness: LogicalPixelsInt::new(20),
+                    tiled: false,
+                },
+                top: WindowFrameSide {
+                    padding: LogicalPixelsInt::new(20),
+                    resizer_thickness: LogicalPixelsInt::new(10),
+                    tiled: false,
+                },
+                bottom: WindowFrameSide {
+                    padding: LogicalPixelsInt::new(50),
+                    resizer_thickness: LogicalPixelsInt::new(25),
+                    tiled: false,
+                },
+            },
+        }),
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyL) => {
             let request_id = window_request_internal_activation_token(app_ptr, window_id);
             if request_id.0 > 0 {
@@ -413,6 +448,28 @@ fn on_application_started(state: &mut State) -> Vec<Action> {
             app_id: APP_ID.to_owned(),
             prefer_client_side_decoration: true,
             rendering_mode: RenderingMode::Software,
+            client_side_decoration_frame: WindowFrame {
+                left: WindowFrameSide {
+                    padding: LogicalPixelsInt::new(12),
+                    resizer_thickness: LogicalPixelsInt::new(12),
+                    tiled: false,
+                },
+                right: WindowFrameSide {
+                    padding: LogicalPixelsInt::new(20),
+                    resizer_thickness: LogicalPixelsInt::new(12),
+                    tiled: false,
+                },
+                top: WindowFrameSide {
+                    padding: LogicalPixelsInt::new(15),
+                    resizer_thickness: LogicalPixelsInt::new(12),
+                    tiled: false,
+                },
+                bottom: WindowFrameSide {
+                    padding: LogicalPixelsInt::new(25),
+                    resizer_thickness: LogicalPixelsInt::new(12),
+                    tiled: false,
+                },
+            },
         },
         Action::WindowCreate {
             window_id: window_2_id,
@@ -422,6 +479,7 @@ fn on_application_started(state: &mut State) -> Vec<Action> {
             app_id: APP_ID.to_owned(),
             prefer_client_side_decoration: false,
             rendering_mode: RenderingMode::Auto,
+            client_side_decoration_frame: WindowFrame::default(),
         },
     ];
 
@@ -494,6 +552,10 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
                     window_state.active = data.active;
                     window_state.maximized = data.maximized;
                     window_state.fullscreen = data.fullscreen;
+                    window_state.frame = match &data.decoration_mode {
+                        WindowDecorationMode::Client(frame) => frame.clone(),
+                        WindowDecorationMode::Server => WindowFrame::default(),
+                    };
                     window_state.redraw = true;
                 }
             }
@@ -530,27 +592,30 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
             }
             Event::MouseDown(data) => match data.button.0 {
                 MOUSE_BUTTON_LEFT => {
-                    if let Some(window_state) = state.windows.get_mut(&data.window_id)
-                        && data.location_in_window.x < DRAG_AND_DROP_LEFT_OF
-                    {
-                        let mime_types = if state.key_modifiers == KeyModifiers::Shift {
-                            ALL_MIMES
-                        } else {
-                            TEXT_MIME_TYPE
-                        };
-                        let dnd_actions = DragAndDropActions(DragAndDropAction::Copy as u32 | DragAndDropAction::Move as u32);
-                        let drag_icon_size = LogicalSize::wh(300, 300);
-                        window_start_drag_and_drop(
-                            app_ptr,
-                            data.window_id,
-                            BorrowedUtf8::new(mime_types),
-                            dnd_actions,
-                            RenderingMode::Auto,
-                            drag_icon_size,
-                        );
-                        window_state.drag_and_drop_source = true;
-                        window_state.redraw = true;
-                        actions.push(Action::Dummy);
+                    if let Some(window_state) = state.windows.get_mut(&data.window_id) {
+                        if data.location_in_window.x < window_state.frame.left.padding {
+                        } else if data.location_in_window.x < DRAG_AND_DROP_LEFT_OF + window_state.frame.left.padding {
+                            let mime_types = if state.key_modifiers == KeyModifiers::Shift {
+                                ALL_MIMES
+                            } else {
+                                TEXT_MIME_TYPE
+                            };
+                            let dnd_actions = DragAndDropActions(DragAndDropAction::Copy as u32 | DragAndDropAction::Move as u32);
+                            let drag_icon_size = LogicalSize::wh(300, 300);
+                            window_start_drag_and_drop(
+                                app_ptr,
+                                data.window_id,
+                                BorrowedUtf8::new(mime_types),
+                                dnd_actions,
+                                RenderingMode::Auto,
+                                drag_icon_size,
+                            );
+                            if let Some(window_state) = state.windows.get_mut(&data.window_id) {
+                                window_state.drag_and_drop_source = true;
+                                window_state.redraw = true;
+                            }
+                            actions.push(Action::Dummy);
+                        }
                     }
                 }
                 MOUSE_BUTTON_MIDDLE => {
@@ -710,11 +775,18 @@ fn on_desktop_settings_change(s: &FfiDesktopSetting, state: &mut State) {
 }
 
 extern "C" fn query_drag_and_drop_target(data: &DragAndDropQueryData) -> FfiDragAndDropQueryResponse {
-    STATE.with_borrow_mut(|state| {
+    let (padding_left, padding_top) = STATE.with_borrow_mut(|state| {
         let window_state = state.windows.get_mut(&data.window_id).unwrap();
-        window_state.drag_and_drop_target = true;
+        if !window_state.drag_and_drop_target {
+            window_state.drag_and_drop_target = true;
+            window_state.redraw = true;
+        }
+        (window_state.frame.left.padding, window_state.frame.top.padding)
     });
-    if data.location_in_window.x < DRAG_AND_DROP_LEFT_OF {
+    if data.location_in_window.x > padding_left
+        && data.location_in_window.y > padding_top
+        && data.location_in_window.x < DRAG_AND_DROP_LEFT_OF + padding_left
+    {
         const SUPPORTED_ACTIONS_PER_MIME: [FfiSupportedActionsForMime; 2] = [
             FfiSupportedActionsForMime {
                 supported_mime_type: BorrowedUtf8::new(URI_LIST_MIME_TYPE),

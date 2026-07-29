@@ -41,12 +41,6 @@ public class Window internal constructor(
         return "${javaClass.typeName}(windowId=$windowId, appPtr=0x${appPtr.address().toString(16)})"
     }
 
-    public fun getSize(): LogicalSize {
-        return Arena.ofConfined().use { arena ->
-            LogicalSize.fromNative(ffiDownCall { desktop_linux_h.window_get_size(arena, appPtr, windowId) })
-        }
-    }
-
     public fun setTitle(title: String) {
         Arena.ofConfined().use { arena ->
             ffiDownCall { desktop_linux_h.window_set_title(appPtr, windowId, title.toNativeUtf8(arena)) }
@@ -125,9 +119,17 @@ public class Window internal constructor(
         }
     }
 
-    public fun requestDecorationMode(decorationMode: WindowDecorationMode) {
+    public fun setPreferClientSideDecoration(value: Boolean) {
         ffiDownCall {
-            desktop_linux_h.window_request_decoration_mode(appPtr, windowId, decorationMode.toNative())
+            desktop_linux_h.window_set_prefer_client_side_decoration(appPtr, windowId, value)
+        }
+    }
+
+    public fun setClientSideDecorationFrame(frame: WindowFrame) {
+        Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_linux_h.window_set_client_side_decoration_frame(appPtr, windowId, frame.toNative(arena))
+            }
         }
     }
 

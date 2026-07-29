@@ -2,19 +2,17 @@ package org.jetbrains.desktop.sample.linux
 
 import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.EventHandlerResult
-import org.jetbrains.desktop.linux.LogicalPixels
+import org.jetbrains.desktop.linux.LogicalPixelsInt
 import org.jetbrains.desktop.linux.LogicalPoint
+import org.jetbrains.desktop.linux.LogicalRect
+import org.jetbrains.desktop.linux.LogicalSize
 import org.jetbrains.desktop.linux.PointerShape
 import org.jetbrains.desktop.linux.Window
+import org.jetbrains.desktop.linux.WindowFrame
 import org.jetbrains.desktop.linux.WindowResizeEdge
 
 internal class SkikoCustomBordersLinux {
     companion object {
-        val BORDER_SIZE_LEFT: LogicalPixels = LogicalPixels(5.0)
-        val BORDER_SIZE_RIGHT: LogicalPixels = LogicalPixels(5.0)
-        val BORDER_SIZE_TOP: LogicalPixels = LogicalPixels(5.0)
-        val BORDER_SIZE_BOTTOM: LogicalPixels = LogicalPixels(5.0)
-
         fun edgeToPointerShape(edge: WindowResizeEdge): PointerShape {
             return when (edge) {
                 WindowResizeEdge.Top -> PointerShape.NResize
@@ -29,53 +27,53 @@ internal class SkikoCustomBordersLinux {
         }
     }
 
-    private var rectangles = ArrayList<Pair<LogicalDoubleRect, WindowResizeEdge>>()
+    private var rectangles = ArrayList<Pair<LogicalRect, WindowResizeEdge>>()
 
-    fun configure(event: Event.WindowConfigure) {
-        val w = event.size.width.toLogicalPixels()
-        val h = event.size.height.toLogicalPixels()
-
+    fun configure(size: LogicalSize, frame: WindowFrame) {
+        val w = size.width
+        val h = size.height
         rectangles.clear()
+
         rectangles.add(
             Pair(
-                LogicalDoubleRect(
-                    x = LogicalPixels.Zero,
-                    y = LogicalPixels.Zero,
-                    width = BORDER_SIZE_LEFT,
-                    height = BORDER_SIZE_TOP,
+                LogicalRect(
+                    x = LogicalPixelsInt.Zero,
+                    y = LogicalPixelsInt.Zero,
+                    width = frame.left.padding,
+                    height = frame.top.padding,
                 ),
                 WindowResizeEdge.TopLeft,
             ),
         )
         rectangles.add(
             Pair(
-                LogicalDoubleRect(
-                    x = w - BORDER_SIZE_RIGHT,
-                    y = LogicalPixels.Zero,
-                    width = BORDER_SIZE_RIGHT,
-                    height = BORDER_SIZE_TOP,
+                LogicalRect(
+                    x = w - frame.right.padding,
+                    y = LogicalPixelsInt.Zero,
+                    width = frame.right.padding,
+                    height = frame.top.padding,
                 ),
                 WindowResizeEdge.TopRight,
             ),
         )
         rectangles.add(
             Pair(
-                LogicalDoubleRect(
-                    x = LogicalPixels.Zero,
-                    y = h - BORDER_SIZE_BOTTOM,
-                    width = BORDER_SIZE_LEFT,
-                    height = BORDER_SIZE_BOTTOM,
+                LogicalRect(
+                    x = LogicalPixelsInt.Zero,
+                    y = h - frame.bottom.padding,
+                    width = frame.left.padding,
+                    height = frame.bottom.padding,
                 ),
                 WindowResizeEdge.BottomLeft,
             ),
         )
         rectangles.add(
             Pair(
-                LogicalDoubleRect(
-                    x = w - BORDER_SIZE_RIGHT,
-                    y = h - BORDER_SIZE_BOTTOM,
-                    width = BORDER_SIZE_RIGHT,
-                    height = BORDER_SIZE_BOTTOM,
+                LogicalRect(
+                    x = w - frame.right.padding,
+                    y = h - frame.bottom.padding,
+                    width = frame.right.padding,
+                    height = frame.bottom.padding,
                 ),
                 WindowResizeEdge.BottomRight,
             ),
@@ -83,10 +81,10 @@ internal class SkikoCustomBordersLinux {
 
         rectangles.add(
             Pair(
-                LogicalDoubleRect(
-                    x = LogicalPixels.Zero,
-                    y = LogicalPixels.Zero,
-                    width = BORDER_SIZE_LEFT,
+                LogicalRect(
+                    x = LogicalPixelsInt.Zero,
+                    y = LogicalPixelsInt.Zero,
+                    width = frame.left.padding,
                     height = h,
                 ),
                 WindowResizeEdge.Left,
@@ -94,10 +92,10 @@ internal class SkikoCustomBordersLinux {
         )
         rectangles.add(
             Pair(
-                LogicalDoubleRect(
-                    x = w - BORDER_SIZE_RIGHT,
-                    y = LogicalPixels.Zero,
-                    width = BORDER_SIZE_RIGHT,
+                LogicalRect(
+                    x = w - frame.right.padding,
+                    y = LogicalPixelsInt.Zero,
+                    width = frame.right.padding,
                     height = h,
                 ),
                 WindowResizeEdge.Right,
@@ -105,17 +103,17 @@ internal class SkikoCustomBordersLinux {
         )
         rectangles.add(
             Pair(
-                LogicalDoubleRect(x = LogicalPixels.Zero, y = LogicalPixels.Zero, width = w, height = BORDER_SIZE_TOP),
+                LogicalRect(x = LogicalPixelsInt.Zero, y = LogicalPixelsInt.Zero, width = w, height = frame.top.padding),
                 WindowResizeEdge.Top,
             ),
         )
         rectangles.add(
             Pair(
-                LogicalDoubleRect(
-                    x = LogicalPixels.Zero,
-                    y = h - BORDER_SIZE_BOTTOM,
+                LogicalRect(
+                    x = LogicalPixelsInt.Zero,
+                    y = h - frame.bottom.padding,
                     width = w,
-                    height = BORDER_SIZE_BOTTOM,
+                    height = frame.bottom.padding,
                 ),
                 WindowResizeEdge.Bottom,
             ),

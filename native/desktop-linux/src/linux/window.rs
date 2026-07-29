@@ -1,8 +1,8 @@
 use crate::linux::{
     application_api::RenderingMode,
     application_state::{ApplicationState, EGLData},
-    events::{SoftwareDrawData, WindowDecorationMode, WindowDrawEvent, WindowId},
-    geometry::{LogicalPixelsInt, LogicalPoint, LogicalSize, PhysicalSize, Scale},
+    events::{SoftwareDrawData, WindowConfigureEvent, WindowDrawEvent, WindowFrame, WindowId},
+    geometry::{LogicalPixelsInt, LogicalPoint, LogicalRect, LogicalSize, PhysicalSize, Scale},
     pointer_shapes_api::PointerShape,
     rendering_egl::EglRendering,
     rendering_software::SoftwareRendering,
@@ -10,8 +10,8 @@ use crate::linux::{
     window_resize_edge_api::WindowResizeEdge,
 };
 use log::{debug, error, warn};
-use smithay_client_toolkit::compositor::FrameCallbackData;
 use smithay_client_toolkit::{
+    compositor::{CompositorState, FrameCallbackData, Region},
     reexports::{
         client::{
             Connection, Proxy as _, QueueHandle,
@@ -22,7 +22,10 @@ use smithay_client_toolkit::{
     seat::pointer::{CursorIcon, ThemedPointer},
     shell::{
         WaylandSurface,
-        xdg::window::{DecorationMode, Window, WindowConfigure, WindowDecorations},
+        xdg::{
+            XdgSurface,
+            window::{DecorationMode, Window, WindowConfigure, WindowDecorations},
+        },
     },
     shm::Shm,
 };
@@ -45,20 +48,13 @@ impl RenderingData {
     }
 }
 
-impl From<DecorationMode> for WindowDecorationMode {
-    fn from(value: DecorationMode) -> Self {
-        match value {
-            DecorationMode::Client => Self::Client,
-            DecorationMode::Server => Self::Server,
-        }
-    }
-}
-
 pub struct SimpleWindow {
     pub window_id: WindowId,
     pub app_id: String,
     pub close: bool,
-    pub size: Option<LogicalSize>,
+    pub content_size: Option<LogicalSize>,
+    pub surface_size: Option<LogicalSize>,
+    last_geometry: Option<LogicalRect>,
     viewport: Option<WpViewport>,
     pub window: Window,
     pub set_cursor: bool,
@@ -68,6 +64,8 @@ pub struct SimpleWindow {
     rendering_data: Option<RenderingData>,
     pub rendering_mode: RenderingMode,
     pub num_pointer_buttons_down: u32,
+    pub default_client_side_decoration_frame: WindowFrame,
+    pub last_configure_event: Option<WindowConfigureEvent>,
 }
 
 impl SimpleWindow {
@@ -75,7 +73,7 @@ impl SimpleWindow {
         window_id: WindowId,
         app_state: &ApplicationState,
         qh: &QueueHandle<ApplicationState>,
-        params: &WindowParams,
+        params: WindowParams,
     ) -> anyhow::Result<Self> {
         let state = app_state;
 
@@ -103,7 +101,9 @@ impl SimpleWindow {
         let mut size = params.size.validate();
 
         if let Some(min_size) = params.min_size.validate() {
-            window.set_min_size(min_size.as_u32());
+            window
+                .xdg_toplevel()
+                .set_min_size(min_size.width.raw_logical(), min_size.height.raw_logical());
             if let Some(size) = &mut size {
                 if size.width < min_size.width {
                     size.width = min_size.width;
@@ -126,7 +126,9 @@ impl SimpleWindow {
             window_id,
             app_id,
             close: false,
-            size,
+            content_size: size,
+            surface_size: None,
+            last_geometry: None,
             viewport,
             window,
             set_cursor: false,
@@ -136,6 +138,8 @@ impl SimpleWindow {
             rendering_data: None,
             rendering_mode: params.rendering_mode,
             num_pointer_buttons_down: 0,
+            default_client_side_decoration_frame: params.client_side_decoration_frame,
+            last_configure_event: None,
         })
     }
 
@@ -143,37 +147,55 @@ impl SimpleWindow {
         self.close = true;
     }
 
-    pub fn configure(&mut self, shm: &Shm, window: &Window, configure: &WindowConfigure, egl: Option<Rc<EGLData>>) -> bool {
+    #[allow(clippy::too_many_arguments)]
+    pub fn configure(
+        &mut self,
+        shm: &Shm,
+        compositor_state: &CompositorState,
+        window: &Window,
+        configure: &WindowConfigure,
+        egl: Option<Rc<EGLData>>,
+        frame: &WindowFrame,
+    ) -> bool {
         const DEFAULT_WIDTH: LogicalPixelsInt = LogicalPixelsInt::new(640);
         const DEFAULT_HEIGHT: LogicalPixelsInt = LogicalPixelsInt::new(480);
         debug!("{:?}: configure start: {configure:?}", self.window_id);
 
         self.decoration_mode = configure.decoration_mode;
 
-        let width = configure
+        let content_width = configure
             .new_size
             .0
             .map(|v| LogicalPixelsInt::new(v.get().cast_signed()))
-            .or_else(|| self.size.map(|s| s.width))
+            .or_else(|| self.content_size.map(|s| s.width))
             .or_else(|| configure.suggested_bounds.map(|(w, _h)| LogicalPixelsInt::new(w.cast_signed())))
             .unwrap_or(DEFAULT_WIDTH);
-        let height = configure
+
+        let content_height = configure
             .new_size
             .1
             .map(|v| LogicalPixelsInt::new(v.get().cast_signed()))
-            .or_else(|| self.size.map(|s| s.height))
+            .or_else(|| self.content_size.map(|s| s.height))
             .or_else(|| configure.suggested_bounds.map(|(_w, h)| LogicalPixelsInt::new(h.cast_signed())))
             .unwrap_or(DEFAULT_HEIGHT);
-        let size = LogicalSize { width, height };
-        self.size = Some(size);
 
-        // window.set_window_geometry(0, 0, width, height);
+        let content_size = LogicalSize {
+            width: content_width,
+            height: content_height,
+        };
+        self.content_size = Some(content_size);
+
+        let surface_size = self.update_window_geometry(content_size, frame, compositor_state, shm);
+
         // TODO: wl_surface::set_opaque_region?
 
-        let physical_size = size.to_rounded_physical(self.current_scale);
-        debug!("{:?}: configure: size={size:?}, physical_size={physical_size:?}", self.window_id);
+        let physical_size = surface_size.to_rounded_physical(self.current_scale);
+        debug!(
+            "{:?}: configure: size={surface_size:?}, physical_size={physical_size:?}",
+            self.window_id
+        );
 
-        self.on_resize(size, physical_size, shm);
+        self.on_resize(surface_size, physical_size, shm);
 
         let is_first_configure = self.rendering_data.is_none();
         if is_first_configure {
@@ -202,6 +224,63 @@ impl SimpleWindow {
             };
         }
         is_first_configure
+    }
+
+    fn update_window_geometry(
+        &mut self,
+        content_size: LogicalSize,
+        frame: &WindowFrame,
+        compositor_state: &CompositorState,
+        shm: &Shm,
+    ) -> LogicalSize {
+        let surface_size = LogicalSize {
+            width: content_size.width + frame.left.padding + frame.right.padding,
+            height: content_size.height + frame.top.padding + frame.bottom.padding,
+        };
+        if self.surface_size != Some(surface_size) {
+            self.on_resize(surface_size, surface_size.to_rounded_physical(self.current_scale), shm);
+            self.surface_size = Some(surface_size);
+        }
+
+        let geometry = LogicalRect {
+            x: frame.left.padding,
+            y: frame.top.padding,
+            width: content_size.width,
+            height: content_size.height,
+        };
+
+        if self.last_geometry != Some(geometry) {
+            self.last_geometry = Some(geometry);
+
+            self.window.xdg_surface().set_window_geometry(
+                geometry.x.raw_logical(),
+                geometry.y.raw_logical(),
+                geometry.width.raw_logical(),
+                geometry.height.raw_logical(),
+            );
+
+            let input_region_rect = LogicalRect {
+                x: geometry.x - frame.left.resizer_thickness,
+                y: geometry.y - frame.top.resizer_thickness,
+                width: geometry.width + frame.left.resizer_thickness + frame.right.resizer_thickness,
+                height: geometry.height + frame.top.resizer_thickness + frame.bottom.resizer_thickness,
+            };
+
+            if input_region_rect == geometry {
+                self.window.set_input_region(None);
+            } else {
+                let input_region = Region::new(compositor_state).unwrap();
+                input_region.add(
+                    input_region_rect.x.raw_logical(),
+                    input_region_rect.y.raw_logical(),
+                    input_region_rect.width.raw_logical(),
+                    input_region_rect.height.raw_logical(),
+                );
+                self.window.set_input_region(Some(input_region.wl_region()));
+            }
+        }
+
+        surface_size
     }
 
     pub fn update_pointer(&mut self, conn: &Connection, themed_pointer: Option<&mut ThemedPointer>) {
@@ -236,7 +315,7 @@ impl SimpleWindow {
         self.update_pointer(conn, themed_pointer);
         let surface = self.window.wl_surface();
 
-        let physical_size = self.size.unwrap().to_rounded_physical(self.current_scale);
+        let physical_size = self.surface_size.unwrap().to_rounded_physical(self.current_scale);
 
         let do_draw = |software_draw_data: SoftwareDrawData| {
             let did_draw = callback(WindowDrawEvent {
@@ -296,7 +375,7 @@ impl SimpleWindow {
         debug!("{:?}: scale_changed: {new_scale:?}", self.window_id);
         self.current_scale = new_scale;
 
-        if let Some(size) = self.size {
+        if let Some(size) = self.surface_size {
             self.on_resize(size, size.to_rounded_physical(self.current_scale), shm);
         }
     }
@@ -322,12 +401,37 @@ impl SimpleWindow {
     }
 
     pub fn set_max_size(&self, max_size: LogicalSize) {
-        self.window.set_max_size(max_size.as_u32());
+        self.window
+            .xdg_toplevel()
+            .set_max_size(max_size.width.raw_logical(), max_size.height.raw_logical());
         self.window.commit();
     }
 
     pub fn set_min_size(&self, min_size: LogicalSize) {
-        self.window.set_min_size(min_size.as_u32());
+        self.window
+            .xdg_toplevel()
+            .set_min_size(min_size.width.raw_logical(), min_size.height.raw_logical());
         self.window.commit();
+    }
+
+    pub fn set_client_side_decoration_frame(&mut self, frame: &WindowFrame, compositor_state: &CompositorState, shm: &Shm) {
+        debug!("{:?}: set_client_side_decoration_frame: {frame:?}", self.window_id);
+        if self.decoration_mode == DecorationMode::Client
+            && let Some(content_size) = self.content_size
+        {
+            self.update_window_geometry(content_size, frame, compositor_state, shm);
+        }
+    }
+
+    pub fn set_prefer_client_side_decoration(&self, prefer_client_side_decoration: bool) {
+        debug!(
+            "{:?}: set_prefer_client_side_decoration: {prefer_client_side_decoration}",
+            self.window_id
+        );
+        if prefer_client_side_decoration {
+            self.window.request_decoration_mode(Some(DecorationMode::Client));
+        } else {
+            self.window.request_decoration_mode(Some(DecorationMode::Server));
+        }
     }
 }

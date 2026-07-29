@@ -51,7 +51,10 @@ import org.jetbrains.desktop.linux.generated.NativeTextInputPreeditStringData
 import org.jetbrains.desktop.linux.generated.NativeWindowCapabilities
 import org.jetbrains.desktop.linux.generated.NativeWindowCloseRequestEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowConfigureEvent
+import org.jetbrains.desktop.linux.generated.NativeWindowDecorationMode
 import org.jetbrains.desktop.linux.generated.NativeWindowDrawEvent
+import org.jetbrains.desktop.linux.generated.NativeWindowFrame
+import org.jetbrains.desktop.linux.generated.NativeWindowFrameSide
 import org.jetbrains.desktop.linux.generated.NativeWindowKeyboardEnterEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowKeyboardLeaveEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScaleChangedEvent
@@ -240,19 +243,27 @@ private fun DesktopTitlebarAction.Companion.fromNative(raw: Int): DesktopTitleba
     }
 }
 
-private fun WindowDecorationMode.Companion.fromNative(raw: Int): WindowDecorationMode {
-    return when (raw) {
-        desktop_linux_h.NativeWindowDecorationMode_Client() -> WindowDecorationMode.Client
+private fun WindowDecorationMode.Companion.fromNative(native: MemorySegment): WindowDecorationMode {
+    return when (val nativeTag = NativeWindowDecorationMode.tag(native)) {
+        desktop_linux_h.NativeWindowDecorationMode_Client() -> WindowDecorationMode.Client(
+            WindowFrame.fromNative(NativeWindowDecorationMode.client(native)),
+        )
+
         desktop_linux_h.NativeWindowDecorationMode_Server() -> WindowDecorationMode.Server
-        else -> error("Unexpected Window decoration mode: $raw")
+        else -> error("Unexpected Window decoration mode: $nativeTag")
     }
 }
 
-internal fun WindowDecorationMode.toNative(): Int {
-    return when (this) {
-        WindowDecorationMode.Client -> desktop_linux_h.NativeWindowDecorationMode_Client()
-        WindowDecorationMode.Server -> desktop_linux_h.NativeWindowDecorationMode_Server()
+internal fun WindowDecorationMode.toNative(arena: Arena): MemorySegment {
+    val result = NativeWindowDecorationMode.allocate(arena)
+    when (this) {
+        WindowDecorationMode.Server -> NativeWindowDecorationMode.tag(result, desktop_linux_h.NativeWindowDecorationMode_Server())
+        is WindowDecorationMode.Client -> {
+            NativeWindowDecorationMode.tag(result, desktop_linux_h.NativeWindowDecorationMode_Client())
+            NativeWindowDecorationMode.client(result, frame.toNative(arena))
+        }
     }
+    return result
 }
 
 internal fun DesktopSetting.Companion.fromNative(s: MemorySegment): DesktopSetting {
@@ -616,6 +627,36 @@ internal fun ScrollData.Companion.fromNative(s: MemorySegment): ScrollData {
     )
 }
 
+internal fun WindowFrameSide.Companion.fromNative(s: MemorySegment) = WindowFrameSide(
+    padding = LogicalPixelsInt(NativeWindowFrameSide.padding(s)),
+    resizerThickness = LogicalPixelsInt(NativeWindowFrameSide.resizer_thickness(s)),
+    tiled = NativeWindowFrameSide.tiled(s),
+)
+
+internal fun WindowFrameSide.toNative(arena: Arena): MemorySegment {
+    val result = NativeWindowFrame.allocate(arena)
+    NativeWindowFrameSide.padding(result, padding.rawLogical)
+    NativeWindowFrameSide.resizer_thickness(result, resizerThickness.rawLogical)
+    NativeWindowFrameSide.tiled(result, tiled)
+    return result
+}
+
+internal fun WindowFrame.Companion.fromNative(s: MemorySegment) = WindowFrame(
+    left = WindowFrameSide.fromNative(NativeWindowFrame.left(s)),
+    top = WindowFrameSide.fromNative(NativeWindowFrame.top(s)),
+    right = WindowFrameSide.fromNative(NativeWindowFrame.right(s)),
+    bottom = WindowFrameSide.fromNative(NativeWindowFrame.bottom(s)),
+)
+
+internal fun WindowFrame.toNative(arena: Arena): MemorySegment {
+    val result = NativeWindowFrame.allocate(arena)
+    NativeWindowFrame.left(result, left.toNative(arena))
+    NativeWindowFrame.top(result, top.toNative(arena))
+    NativeWindowFrame.right(result, right.toNative(arena))
+    NativeWindowFrame.bottom(result, bottom.toNative(arena))
+    return result
+}
+
 internal fun readNativeAutoDropU8Array(nativeU8Array: MemorySegment): ByteArray? {
     val dataPtr = NativeAutoDropArray_u8.ptr(nativeU8Array)
     if (dataPtr == MemorySegment.NULL) {
@@ -914,10 +955,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 active = NativeWindowConfigureEvent.active(nativeEvent),
                 maximized = NativeWindowConfigureEvent.maximized(nativeEvent),
                 fullscreen = NativeWindowConfigureEvent.fullscreen(nativeEvent),
-                tiledLeft = NativeWindowConfigureEvent.tiled_left(nativeEvent),
-                tiledRight = NativeWindowConfigureEvent.tiled_right(nativeEvent),
-                tiledTop = NativeWindowConfigureEvent.tiled_top(nativeEvent),
-                tiledBottom = NativeWindowConfigureEvent.tiled_bottom(nativeEvent),
                 decorationMode = WindowDecorationMode.fromNative(NativeWindowConfigureEvent.decoration_mode(nativeEvent)),
                 capabilities = WindowCapabilities.fromNative(NativeWindowConfigureEvent.capabilities(nativeEvent)),
             )

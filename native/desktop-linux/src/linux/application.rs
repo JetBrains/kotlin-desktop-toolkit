@@ -271,7 +271,7 @@ impl Application {
         Ok(())
     }
 
-    pub fn new_window(&mut self, params: &WindowParams) -> anyhow::Result<()> {
+    pub fn new_window(&mut self, params: WindowParams) -> anyhow::Result<()> {
         let window_id = params.window_id;
         if self.state.window_id_to_surface_id.contains_key(&window_id) {
             return Err(anyhow!("Window with ID {window_id:?} already exists"));

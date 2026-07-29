@@ -14,6 +14,7 @@ use crate::linux::{
         WindowConfigureEvent,
         WindowDecorationMode,
         WindowDrawEvent,
+        WindowFrame,
         WindowId,
         WindowScaleChangedEvent,
         WindowScreenChangeEvent,
@@ -76,7 +77,7 @@ use smithay_client_toolkit::{
         WaylandSurface,
         xdg::{
             XdgShell,
-            window::{Window, WindowConfigure, WindowHandler},
+            window::{DecorationMode, Window, WindowConfigure, WindowHandler},
         },
     },
     shm::{Shm, ShmHandler},
@@ -326,6 +327,30 @@ impl ApplicationState {
             None
         }
     }
+
+    pub fn set_window_client_side_decoration_frame(&mut self, window_id: WindowId, frame: WindowFrame) -> anyhow::Result<()> {
+        let w = self
+            .window_id_to_surface_id
+            .get(&window_id)
+            .and_then(|surface_id| self.windows.get_mut(surface_id))
+            .with_context(|| format!("Couldn't find window for {window_id:?}"))?;
+        w.default_client_side_decoration_frame = frame.clone();
+
+        if let Some(mut event) = w.last_configure_event.clone()
+            && matches!(event.decoration_mode, WindowDecorationMode::Client(_))
+            && !event.maximized
+            && !event.fullscreen
+        {
+            w.set_client_side_decoration_frame(&frame, &self.compositor_state, &self.shm_state);
+
+            event.decoration_mode = WindowDecorationMode::Client(frame);
+            event.size = w.surface_size.unwrap();
+
+            w.last_configure_event = Some(event.clone());
+            _ = send_event(self.callbacks.event_handler, event);
+        }
+        Ok(())
+    }
 }
 
 impl SeatHandler for ApplicationState {
@@ -502,29 +527,43 @@ impl WindowHandler for ApplicationState {
                 RenderingMode::Auto | RenderingMode::EGL => get_egl(&mut self.egl, &self.wl_display),
                 RenderingMode::Software => None,
             };
-            let is_first_configure = w.configure(&self.shm_state, window, &configure, egl);
 
-            _ = send_event(
-                self.callbacks.event_handler,
-                WindowConfigureEvent {
-                    window_id: w.window_id,
-                    size: w.size.unwrap(),
-                    active: configure.is_activated(),
-                    maximized: configure.is_maximized(),
-                    fullscreen: configure.is_fullscreen(),
-                    tiled_left: configure.is_tiled_left(),
-                    tiled_right: configure.is_tiled_right(),
-                    tiled_top: configure.is_tiled_top(),
-                    tiled_bottom: configure.is_tiled_bottom(),
-                    decoration_mode: WindowDecorationMode::from(configure.decoration_mode),
-                    capabilities: WindowCapabilities {
-                        window_menu: configure.capabilities.contains(WindowManagerCapabilities::WINDOW_MENU),
-                        maximize: configure.capabilities.contains(WindowManagerCapabilities::MAXIMIZE),
-                        fullscreen: configure.capabilities.contains(WindowManagerCapabilities::FULLSCREEN),
-                        minimize: configure.capabilities.contains(WindowManagerCapabilities::MINIMIZE),
-                    },
+            let mut frame = if configure.decoration_mode == DecorationMode::Server || configure.is_maximized() || configure.is_fullscreen()
+            {
+                WindowFrame::default()
+            } else {
+                w.default_client_side_decoration_frame.clone()
+            };
+            frame.left.tiled = configure.is_tiled_left();
+            frame.right.tiled = configure.is_tiled_right();
+            frame.top.tiled = configure.is_tiled_top();
+            frame.bottom.tiled = configure.is_tiled_bottom();
+
+            let is_first_configure = w.configure(&self.shm_state, &self.compositor_state, window, &configure, egl, &frame);
+
+            let decoration_mode = match configure.decoration_mode {
+                DecorationMode::Client => WindowDecorationMode::Client(frame),
+                DecorationMode::Server => WindowDecorationMode::Server,
+            };
+
+            let event = WindowConfigureEvent {
+                window_id: w.window_id,
+                size: w.surface_size.unwrap(),
+                active: configure.is_activated(),
+                maximized: configure.is_maximized(),
+                fullscreen: configure.is_fullscreen(),
+                decoration_mode,
+                capabilities: WindowCapabilities {
+                    window_menu: configure.capabilities.contains(WindowManagerCapabilities::WINDOW_MENU),
+                    maximize: configure.capabilities.contains(WindowManagerCapabilities::MAXIMIZE),
+                    fullscreen: configure.capabilities.contains(WindowManagerCapabilities::FULLSCREEN),
+                    minimize: configure.capabilities.contains(WindowManagerCapabilities::MINIMIZE),
                 },
-            );
+            };
+
+            if w.last_configure_event.replace(event.clone()).is_none_or(|e| e != event) {
+                _ = send_event(self.callbacks.event_handler, event);
+            }
 
             if is_first_configure {
                 // Initiate the first draw.

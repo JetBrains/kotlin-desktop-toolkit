@@ -3,7 +3,7 @@ use crate::linux::{
     application::Application,
     application_api::{AppPtr, DragAndDropActions, RenderingMode},
     data_transfer::MimeTypes,
-    events::{RequestId, WindowDecorationMode, WindowId},
+    events::{RequestId, WindowFrame, WindowId},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPoint, LogicalSize},
     pointer_shapes_api::PointerShape,
@@ -13,7 +13,6 @@ use anyhow::Context;
 use desktop_common::ffi_utils::BorrowedUtf8;
 use desktop_common::logger::{PanicDefault, ffi_boundary};
 use log::debug;
-use smithay_client_toolkit::shell::xdg::window::DecorationMode;
 
 fn with_window<R: PanicDefault>(
     app_ptr: &AppPtr,
@@ -62,6 +61,8 @@ pub struct WindowParams<'a> {
     pub prefer_client_side_decoration: bool,
 
     pub rendering_mode: RenderingMode,
+
+    pub client_side_decoration_frame: WindowFrame,
 }
 
 #[unsafe(no_mangle)]
@@ -70,7 +71,7 @@ pub extern "C" fn window_create(mut app_ptr: AppPtr, params: WindowParams) {
         debug!("window_create");
 
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.new_window(&params)
+        app.new_window(params)
     });
 }
 
@@ -88,11 +89,6 @@ pub extern "C" fn window_set_pointer_shape(mut app_ptr: AppPtr, window_id: Windo
         w.set_cursor_icon(pointer_shape);
         Ok(())
     });
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn window_get_size(app_ptr: AppPtr, window_id: WindowId) -> LogicalSize {
-    with_window(&app_ptr, window_id, "window_get_size", |w| Ok(w.size)).unwrap_or_default()
 }
 
 #[unsafe(no_mangle)]
@@ -170,7 +166,8 @@ pub extern "C" fn window_set_min_size(app_ptr: AppPtr, window_id: WindowId, size
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_set_fullscreen(app_ptr: AppPtr, window_id: WindowId) {
-    with_window(&app_ptr, window_id, "window_toggle_full_screen", |w| {
+    debug!("window_set_fullscreen: {window_id:?}");
+    with_window(&app_ptr, window_id, "window_set_fullscreen", |w| {
         w.window.set_fullscreen(None /* output, let the compositor choose */);
         Ok(())
     });
@@ -178,7 +175,8 @@ pub extern "C" fn window_set_fullscreen(app_ptr: AppPtr, window_id: WindowId) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_unset_fullscreen(app_ptr: AppPtr, window_id: WindowId) {
-    with_window(&app_ptr, window_id, "window_toggle_full_screen", |w| {
+    debug!("window_unset_fullscreen: {window_id:?}");
+    with_window(&app_ptr, window_id, "window_unset_fullscreen", |w| {
         w.window.unset_fullscreen();
         Ok(())
     });
@@ -207,25 +205,19 @@ pub extern "C" fn window_start_drag_and_drop(
     });
 }
 
-impl From<WindowDecorationMode> for DecorationMode {
-    fn from(value: WindowDecorationMode) -> Self {
-        match value {
-            WindowDecorationMode::Client => Self::Client,
-            WindowDecorationMode::Server => Self::Server,
-        }
-    }
+#[unsafe(no_mangle)]
+pub extern "C" fn window_set_prefer_client_side_decoration(app_ptr: AppPtr, window_id: WindowId, prefer_client_side_decoration: bool) {
+    with_window(&app_ptr, window_id, "window_set_prefer_client_side_decoration", |w| {
+        w.set_prefer_client_side_decoration(prefer_client_side_decoration);
+        Ok(())
+    });
 }
 
-/// Requests the window should use the specified decoration mode.
-///
-/// The compositor can decide not to use the client's mode and enforce a different mode instead.
-/// See <https://wayland.app/protocols/xdg-decoration-unstable-v1#zxdg_toplevel_decoration_v1:request:set_mode>
 #[unsafe(no_mangle)]
-pub extern "C" fn window_request_decoration_mode(app_ptr: AppPtr, window_id: WindowId, decoration_mode: WindowDecorationMode) {
-    with_window(&app_ptr, window_id, "window_request_decoration_mode", |w| {
-        let decoration = Some(decoration_mode.into());
-        w.window.request_decoration_mode(decoration);
-        Ok(())
+pub extern "C" fn window_set_client_side_decoration_frame(mut app_ptr: AppPtr, window_id: WindowId, frame: WindowFrame) {
+    ffi_boundary("window_set_client_side_decoration_frame", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        app.state.set_window_client_side_decoration_frame(window_id, frame)
     });
 }
 
