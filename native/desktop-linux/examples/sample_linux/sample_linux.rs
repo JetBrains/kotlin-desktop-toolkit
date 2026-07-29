@@ -1,3 +1,4 @@
+use crate::sample_linux_actions::Action;
 use crate::sample_linux_draw::{OpenglState, draw_opengl_triangle_with_init, draw_software, draw_software_drag_icon};
 use core::str;
 use desktop_common::ffi_utils::BorrowedStrPtr;
@@ -6,11 +7,7 @@ use desktop_common::{
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
 use desktop_linux::linux::application_api::{FfiDragAndDropQueryResponse, FfiSupportedActionsForMime, FfiTransferDataResponse};
-use desktop_linux::linux::geometry::PhysicalSize;
 use desktop_linux::linux::screen::screen_list;
-use desktop_linux::linux::window_api::{
-    window_maximize, window_minimize, window_set_fullscreen, window_unmaximize, window_unset_fullscreen,
-};
 use desktop_linux::linux::{
     application_api::{
         AppPtr,
@@ -20,19 +17,15 @@ use desktop_linux::linux::{
         DragAndDropActions,
         DragAndDropQueryData,
         RenderingMode,
-        application_clipboard_paste,
-        application_clipboard_put,
         application_close_notification,
         application_init,
         application_is_event_loop_thread,
         application_open_file_manager,
         application_open_url,
-        application_primary_selection_paste,
         application_request_show_notification,
         application_run_event_loop,
         application_set_cursor_theme,
         application_shutdown,
-        application_stop_event_loop,
         application_text_input_disable,
         application_text_input_enable,
         application_text_input_update,
@@ -44,10 +37,6 @@ use desktop_linux::linux::{
     geometry::{LogicalRect, LogicalSize},
     text_input_api::{TextInputContentHints, TextInputContentPurpose, TextInputContext},
     window_api::{
-        WindowParams,
-        window_activate,
-        window_close,
-        window_create,
         window_request_internal_activation_token,
         window_show_open_file_dialog,
         window_show_save_file_dialog,
@@ -84,6 +73,8 @@ struct Settings {
 #[derive(Debug, Default)]
 pub struct WindowState {
     pub active: bool,
+    maximized: bool,
+    fullscreen: bool,
     text_input_available: bool,
     composed_text: String,
     text: String,
@@ -92,7 +83,7 @@ pub struct WindowState {
     pub drag_and_drop_source: bool,
     pub opengl: Option<OpenglState>,
     last_received_path: Option<String>,
-    last_draw_event_size_and_scale: Option<(PhysicalSize, f64)>,
+    redraw: bool,
 }
 
 impl WindowState {
@@ -189,26 +180,30 @@ const fn shortcut_modifiers(all_modifiers: KeyModifiers) -> KeyModifiers {
 }
 
 #[allow(clippy::too_many_lines)]
-fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> bool {
+fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> Option<Action> {
     const KEY_MODIFIER_NONE: KeyModifiers = KeyModifiers::empty();
     const KEY_MODIFIER_CTRL: KeyModifiers = KeyModifiers::Ctrl;
-    const KEY_MODIFIER_CTRL_SHIFT: KeyModifiers = KeyModifiers::Ctrl.and(KeyModifiers::Shift);
 
     let modifiers = shortcut_modifiers(state.key_modifiers);
     let window_id = state.key_window_id.expect("Key window not found");
-    let Some(key_code) = decode_key_code(event.code.0) else {
-        return false;
-    };
+    let key_code = decode_key_code(event.code.0)?;
+    let window_state = state.windows.get_mut(&window_id).unwrap();
 
     match (modifiers, key_code) {
         (KEY_MODIFIER_NONE, keycode::KeyMappingCode::Backspace) => {
-            let window_state = state.windows.get_mut(&window_id).unwrap();
             window_state.text.pop();
             if window_state.text_input_available {
                 update_text_input_context(app_ptr, &window_state.text, false);
             }
             debug!("{window_id:?} : {} : {}", window_state.text.len(), window_state.text);
-            true
+            Some(Action::Dummy)
+        }
+        (KEY_MODIFIER_NONE, keycode::KeyMappingCode::F11) => {
+            if window_state.fullscreen {
+                Some(Action::WindowUnsetFullscreen(window_id))
+            } else {
+                Some(Action::WindowSetFullscreen(window_id))
+            }
         }
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::Tab) => {
             if let Some(&window_id) = state.windows.keys().find(|&&w| Some(w) != state.key_window_id) {
@@ -219,40 +214,23 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
                         .insert(request_id, ActivationTokenAction::ActivateWindow(window_id));
                 }
             }
-            true
+            Some(Action::Dummy)
         }
-        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyQ) => {
-            window_close(app_ptr, window_id);
-            true
+        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyQ) => Some(Action::WindowClose(window_id)),
+        (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyM) => {
+            if window_state.maximized {
+                Some(Action::WindowUnmaximize(window_id))
+            } else {
+                Some(Action::WindowMaximize(window_id))
+            }
         }
-        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyF) => {
-            window_set_fullscreen(app_ptr, window_id);
-            true
-        }
-        (KEY_MODIFIER_CTRL_SHIFT, keycode::KeyMappingCode::KeyF) => {
-            window_unset_fullscreen(app_ptr, window_id);
-            true
-        }
-        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyM) => {
-            window_maximize(app_ptr, window_id);
-            true
-        }
-        (KEY_MODIFIER_CTRL_SHIFT, keycode::KeyMappingCode::KeyM) => {
-            window_unmaximize(app_ptr, window_id);
-            true
-        }
-        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyH) => {
-            window_minimize(app_ptr, window_id);
-            true
-        }
-        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyV) => {
-            application_clipboard_paste(app_ptr, state.add_data_request_source(window_id), BorrowedUtf8::new(TEXT_MIME_TYPE));
-            true
-        }
-        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyC) => {
-            application_clipboard_put(app_ptr, BorrowedUtf8::new(ALL_MIMES));
-            true
-        }
+        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyH) => Some(Action::WindowMinimize(window_id)),
+        (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyV) => Some(Action::ApplicationClipboardPaste {
+            serial: state.add_data_request_source(window_id),
+            supported_mime_types: TEXT_MIME_TYPE,
+        }),
+        (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyC) => Some(Action::ApplicationClipboardPut(ALL_MIMES)),
+        (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyF) => Some(Action::ApplicationClipboardPut("")),
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyP) => {
             let title = format!("Notification from window {}", window_id.0);
             let body = format!("Clicking this notification will activate window {}", window_id.0);
@@ -261,7 +239,7 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
             if request_id.0 != 0 {
                 state.request_sources.insert(request_id, window_id);
             }
-            true
+            Some(Action::Dummy)
         }
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyO) => {
             let common_params = CommonFileDialogParams {
@@ -276,7 +254,7 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
             };
             let request_id = window_show_open_file_dialog(app_ptr, window_id, &common_params, &open_params);
             debug!("Requested open file dialog for {window_id:?}, request_id = {request_id:?}");
-            true
+            Some(Action::Dummy)
         }
 
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyS) => {
@@ -291,52 +269,48 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
             };
             let request_id = window_show_save_file_dialog(app_ptr, window_id, &common_params, &save_params);
             debug!("Requested open file dialog for {window_id:?}, request_id = {request_id:?}");
-            true
+            Some(Action::Dummy)
         }
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyN) => {
             let new_window_id = WindowId(state.windows.len() as i64 + 1);
-            window_create(
-                state.app_ptr.get(),
-                WindowParams {
-                    window_id: new_window_id,
-                    size: LogicalSize { width: 300, height: 200 },
-                    min_size: LogicalSize { width: 0, height: 0 },
-                    title: BorrowedUtf8::new("Window N"),
-                    app_id: BorrowedUtf8::new(APP_ID),
-                    prefer_client_side_decoration: true,
-                    rendering_mode: RenderingMode::Auto,
-                },
-            );
             state.windows.insert(new_window_id, WindowState::default());
-            true
+            Some(Action::WindowCreate {
+                window_id: new_window_id,
+                size: LogicalSize { width: 300, height: 200 },
+                min_size: LogicalSize { width: 0, height: 0 },
+                title: "Window N".to_owned(),
+                app_id: APP_ID.to_owned(),
+                prefer_client_side_decoration: false,
+                rendering_mode: RenderingMode::Auto,
+            })
         }
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyL) => {
-            let request_id = window_request_internal_activation_token(app_ptr, state.key_window_id.unwrap());
+            let request_id = window_request_internal_activation_token(app_ptr, window_id);
             if request_id.0 > 0 {
                 state
                     .activation_token_action
                     .insert(request_id, ActivationTokenAction::OpenUrl("https://jetbrains.com".to_owned()));
             }
-            true
+            Some(Action::Dummy)
         }
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyU) => {
             let window_state = state.windows.get_mut(&window_id).unwrap();
             if let Some(path) = window_state.last_received_path.clone() {
-                let request_id = window_request_internal_activation_token(app_ptr, state.key_window_id.unwrap());
+                let request_id = window_request_internal_activation_token(app_ptr, window_id);
                 if request_id.0 > 0 {
                     state
                         .activation_token_action
                         .insert(request_id, ActivationTokenAction::OpenFileManager(path));
                 }
             }
-            true
+            Some(Action::Dummy)
         }
         (_, _) => {
             if let Some(s) = event.characters.get_optional("KeyDownEvent: characters").unwrap() {
                 let window_state = state.windows.get_mut(&window_id).unwrap();
                 window_state.text += s;
             }
-            false
+            Some(Action::Dummy)
         }
     }
 }
@@ -417,47 +391,50 @@ fn on_data_transfer_received(content: &DataTransferContent, window_state: &mut W
     window_state.drag_and_drop_target = false;
 }
 
-fn on_application_started(state: &mut State) {
+fn on_application_started(state: &mut State) -> Vec<Action> {
     let window_1_id = WindowId(1);
-    window_create(
-        state.app_ptr.get(),
-        WindowParams {
-            window_id: window_1_id,
-            size: LogicalSize { width: 200, height: 300 },
-            min_size: LogicalSize { width: 100, height: 200 },
-            title: BorrowedUtf8::new("Window 1"),
-            app_id: BorrowedUtf8::new(APP_ID),
-            prefer_client_side_decoration: false,
-            rendering_mode: RenderingMode::Software,
-        },
-    );
     state.windows.insert(window_1_id, WindowState::default());
 
     let window_2_id = WindowId(2);
-    window_create(
-        state.app_ptr.get(),
-        WindowParams {
+    state.windows.insert(window_2_id, WindowState::default());
+
+    let mut actions = vec![
+        Action::WindowCreate {
+            window_id: window_1_id,
+            size: LogicalSize { width: 200, height: 300 },
+            min_size: LogicalSize { width: 100, height: 200 },
+            title: "Window 1".to_owned(),
+            app_id: APP_ID.to_owned(),
+            prefer_client_side_decoration: true,
+            rendering_mode: RenderingMode::Software,
+        },
+        Action::WindowCreate {
             window_id: window_2_id,
             size: LogicalSize { width: 300, height: 200 },
             min_size: LogicalSize { width: 200, height: 100 },
-            title: BorrowedUtf8::new("Window 2"),
-            app_id: BorrowedUtf8::new(APP_ID),
-            prefer_client_side_decoration: true,
+            title: "Window 2".to_owned(),
+            app_id: APP_ID.to_owned(),
+            prefer_client_side_decoration: false,
             rendering_mode: RenderingMode::Auto,
         },
-    );
-    state.windows.insert(window_2_id, WindowState::default());
+    ];
 
     if let Ok(activation_token) = env::var("XDG_ACTIVATION_TOKEN") {
-        window_activate(state.app_ptr.get(), window_1_id, BorrowedUtf8::new(activation_token.as_str()));
-        window_activate(state.app_ptr.get(), window_2_id, BorrowedUtf8::new(activation_token.as_str()));
+        actions.push(Action::WindowActivate {
+            window_id: window_2_id,
+            token: Some(activation_token),
+        });
     }
+
+    actions
 }
 
 #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
-extern "C" fn event_handler(event: &Event) -> bool {
+fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
     const MOUSE_BUTTON_LEFT: u32 = 0x110;
     const MOUSE_BUTTON_MIDDLE: u32 = 0x112;
+
+    let mut actions = Vec::new();
 
     match event {
         Event::WindowDraw(_) | Event::MouseMoved(_) => {}
@@ -473,36 +450,26 @@ extern "C" fn event_handler(event: &Event) -> bool {
 
         match event {
             Event::ApplicationStarted => {
-                on_application_started(state);
-                true
+                actions.append(&mut on_application_started(state));
             }
             Event::DisplayConfigurationChange => {
                 let ffi_screens = screen_list(app_ptr);
                 let screen_infos = unsafe { std::slice::from_raw_parts_mut(ffi_screens.ptr.cast_mut(), ffi_screens.len) };
                 println!("DisplayConfigurationChange: {screen_infos:?}");
-                false
             }
             Event::DesktopSettingChange(data) => {
                 on_desktop_settings_change(data, state);
-                true
             }
             Event::WindowConfigure(data) => {
                 if let Some(window_state) = state.windows.get_mut(&data.window_id) {
                     window_state.active = data.active;
+                    window_state.maximized = data.maximized;
+                    window_state.fullscreen = data.fullscreen;
+                    window_state.redraw = true;
                 }
-                true
             }
             Event::WindowDraw(data) => {
                 if let Some(window_state) = state.windows.get_mut(&data.window_id) {
-                    if window_state
-                        .last_draw_event_size_and_scale
-                        .replace((data.physical_size, data.scale))
-                        .is_none_or(|(previous_size, previous_scale)| {
-                            previous_size != data.physical_size || (previous_scale - data.scale).abs() > 0.01
-                        })
-                    {
-                        debug!("different draw data: {event:?}");
-                    }
                     window_state.animation_tick();
 
                     if data.software_draw_data.canvas.is_null() {
@@ -510,9 +477,8 @@ extern "C" fn event_handler(event: &Event) -> bool {
                     } else {
                         draw_software(&data.software_draw_data, data.physical_size, data.scale, window_state);
                     }
-                    true
-                } else {
-                    false
+                    actions.push(Action::Dummy);
+                    window_state.redraw = false;
                 }
             }
             Event::DragIconDraw(data) => {
@@ -525,11 +491,11 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 } else {
                     draw_software_drag_icon(&data.software_draw_data, data.physical_size, data.scale);
                 }
-                true
+                actions.push(Action::Dummy);
+                window_state.redraw = false;
             }
             Event::WindowCloseRequest(data) => {
-                window_close(app_ptr.clone(), data.window_id);
-                true
+                actions.push(Action::WindowClose(data.window_id));
             }
             Event::WindowClosed(data) => {
                 state.windows.retain(|&k, _v| k != data.window_id);
@@ -538,58 +504,57 @@ extern "C" fn event_handler(event: &Event) -> bool {
                     application_close_notification(app_ptr.clone(), notification_id);
                 }
                 if state.windows.is_empty() {
-                    application_stop_event_loop(app_ptr);
+                    actions.push(Action::ApplicationStopEventLoop);
                 }
-                true
             }
             Event::MouseDown(data) => match data.button.0 {
                 MOUSE_BUTTON_LEFT => {
-                    if data.location_in_window.x.0 < DRAG_AND_DROP_LEFT_OF {
+                    if let Some(window_state) = state.windows.get_mut(&data.window_id)
+                        && data.location_in_window.x.0 < DRAG_AND_DROP_LEFT_OF
+                    {
                         let mime_types = if state.key_modifiers == KeyModifiers::Shift {
                             ALL_MIMES
                         } else {
                             TEXT_MIME_TYPE
                         };
-                        let actions = DragAndDropActions(DragAndDropAction::Copy as u32 | DragAndDropAction::Move as u32);
+                        let dnd_actions = DragAndDropActions(DragAndDropAction::Copy as u32 | DragAndDropAction::Move as u32);
                         let drag_icon_size = LogicalSize { width: 300, height: 300 };
                         window_start_drag_and_drop(
                             app_ptr,
                             data.window_id,
                             BorrowedUtf8::new(mime_types),
-                            actions,
+                            dnd_actions,
                             RenderingMode::Auto,
                             drag_icon_size,
                         );
-                        if let Some(window_state) = state.windows.get_mut(&data.window_id) {
-                            window_state.drag_and_drop_source = true;
-                        }
+                        window_state.drag_and_drop_source = true;
+                        window_state.redraw = true;
+                        actions.push(Action::Dummy);
                     }
-                    true
                 }
                 MOUSE_BUTTON_MIDDLE => {
-                    application_primary_selection_paste(
-                        app_ptr,
-                        state.add_data_request_source(data.window_id),
-                        BorrowedUtf8::new(TEXT_MIME_TYPE),
-                    );
-                    true
+                    actions.push(Action::ApplicationPrimarySelectionPaste {
+                        serial: state.add_data_request_source(data.window_id),
+                        supported_mime_types: TEXT_MIME_TYPE,
+                    });
                 }
-                _ => false,
+                _ => {}
             },
             Event::ModifiersChanged(data) => {
                 state.key_modifiers = data.modifiers;
-                true
             }
             Event::WindowKeyboardEnter(event) => {
                 state.key_window_id = Some(event.window_id);
-                true
             }
             Event::WindowKeyboardLeave(event) => {
                 assert_eq!(state.key_window_id, Some(event.window_id));
                 state.key_window_id = None;
-                true
             }
-            Event::KeyDown(event) => on_keydown(event, app_ptr, state),
+            Event::KeyDown(event) => {
+                if let Some(action) = on_keydown(event, app_ptr, state) {
+                    actions.push(action);
+                }
+            }
             Event::FileChooserResponse(file_chooser_response) => {
                 if let Some(s) = file_chooser_response
                     .newline_separated_files
@@ -599,61 +564,45 @@ extern "C" fn event_handler(event: &Event) -> bool {
                     let files = s.trim_ascii_end().split("\r\n").collect::<Vec<_>>();
                     info!("Selected files: {files:?}");
                 }
-                true
             }
             Event::DataTransfer(data) => {
                 if let Some(window_id) = state.get_window_for_request(data.serial)
                     && let Some(window_state) = state.windows.get_mut(&window_id)
                 {
                     on_data_transfer_received(&data.content, window_state);
-                    true
-                } else {
-                    false
                 }
             }
             Event::DropPerformed(data) => {
                 if let Some(window_state) = state.windows.get_mut(&data.window_id) {
                     on_data_transfer_received(&data.content, window_state);
-                    true
-                } else {
-                    false
                 }
             }
             Event::DragAndDropLeave(data) => {
                 if let Some(window_state) = state.windows.get_mut(&data.window_id) {
                     window_state.drag_and_drop_target = false;
-                    true
-                } else {
-                    false
+                    window_state.redraw = true;
                 }
             }
             Event::DragAndDropFinished(data) => {
                 state.windows.remove(&DRAG_ICON_WINDOW_ID);
                 if let Some(window_state) = state.windows.get_mut(&data.window_id) {
                     window_state.drag_and_drop_source = false;
+                    window_state.redraw = true;
                     info!("Finished initiated drag and drop with action {:?}", data.action);
-                    true
-                } else {
-                    false
                 }
             }
             Event::DataTransferCancelled(data) => {
                 if data.data_source == DataSource::DragAndDrop {
                     for window_state in state.windows.values_mut() {
                         window_state.drag_and_drop_source = false;
+                        window_state.redraw = true;
                     }
                     state.windows.remove(&DRAG_ICON_WINDOW_ID);
-                    true
-                } else {
-                    false
                 }
             }
             Event::TextInputAvailability(data) => {
                 if let Some(window_state) = state.windows.get_mut(&data.window_id) {
                     on_text_input_availability_changed(data.available, app_ptr, window_state);
-                    true
-                } else {
-                    false
                 }
             }
             Event::TextInput(event) => {
@@ -661,16 +610,16 @@ extern "C" fn event_handler(event: &Event) -> bool {
                     && let Some(window_state) = state.windows.get_mut(&key_window_id)
                 {
                     on_text_input(event, app_ptr, key_window_id, window_state);
-                    true
-                } else {
-                    false
                 }
             }
             Event::ActivationTokenResponse(data) => {
                 let token = data.token.get("ActivationTokenResponse.token").unwrap();
                 match state.activation_token_action.remove(&data.request_id).unwrap() {
                     ActivationTokenAction::ActivateWindow(window_id) => {
-                        window_activate(app_ptr, window_id, BorrowedUtf8::new(token));
+                        actions.push(Action::WindowActivate {
+                            window_id,
+                            token: Some(token.to_owned()),
+                        });
                     }
                     ActivationTokenAction::OpenFileManager(path) => {
                         application_open_file_manager(app_ptr, BorrowedUtf8::new(&path), BorrowedUtf8::new(token));
@@ -679,7 +628,6 @@ extern "C" fn event_handler(event: &Event) -> bool {
                         application_open_url(app_ptr, BorrowedUtf8::new(&url), BorrowedUtf8::new(token));
                     }
                 }
-                true
             }
             Event::NotificationShown(data) => {
                 if data.notification_id > 0 {
@@ -689,22 +637,35 @@ extern "C" fn event_handler(event: &Event) -> bool {
                         application_close_notification(app_ptr, data.notification_id);
                     }
                 }
-                true
             }
             Event::NotificationClosed(data) => {
-                if let Some(window_id_to_activate) = state.notification_sources.remove(&data.notification_id)
-                    && let Some(activation_token) = data
-                        .activation_token
-                        .get_optional("Event::NotificationClosed.activation_token")
-                        .unwrap()
+                if data.action.get_optional("NotificationClosedEvent.action").unwrap().is_some()
+                    && let Some(window_id_to_activate) = state.notification_sources.remove(&data.notification_id)
                 {
-                    window_activate(app_ptr, window_id_to_activate, BorrowedUtf8::new(activation_token));
+                    let activation_token = data
+                        .activation_token
+                        .get_optional("NotificationClosedEvent.activation_token")
+                        .unwrap()
+                        .map(ToOwned::to_owned);
+                    actions.push(Action::WindowActivate {
+                        window_id: window_id_to_activate,
+                        token: activation_token,
+                    });
                 }
-                true
             }
-            _ => false,
+            _ => {}
         }
+        (actions, state.app_ptr.get())
     })
+}
+
+extern "C" fn event_handler(event: &Event) -> bool {
+    let (actions, app_ptr) = event_handler_impl(event);
+    let handled = !actions.is_empty();
+    for action in actions {
+        action.perform(app_ptr.clone());
+    }
+    handled
 }
 
 fn on_desktop_settings_change(s: &FfiDesktopSetting, state: &mut State) {

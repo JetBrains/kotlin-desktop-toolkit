@@ -2,6 +2,9 @@
 mod sample_linux;
 
 #[cfg(target_os = "linux")]
+mod sample_linux_actions;
+
+#[cfg(target_os = "linux")]
 mod sample_linux_draw;
 
 #[cfg(target_os = "linux")]

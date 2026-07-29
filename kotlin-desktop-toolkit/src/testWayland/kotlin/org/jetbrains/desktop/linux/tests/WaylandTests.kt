@@ -1084,6 +1084,8 @@ abstract class WaylandTestsBase {
     private var appExecutingResult: Future<Error?>? = null
     val eventQueue = LinkedBlockingQueue<Event>()
     var lastDrawEvents = mutableMapOf<WindowId, Event.WindowDraw>()
+    var lastConfigureEvents = mutableMapOf<WindowId, Event.WindowConfigure>()
+    var lastScales = mutableMapOf<WindowId, Double>()
     internal var lastScreenSize: LogicalSize? = null
     var testSuccessful = false
 
@@ -1093,6 +1095,20 @@ abstract class WaylandTestsBase {
     ): ApplicationConfig {
         return ApplicationConfig(
             eventHandler = { event ->
+                when (event) {
+                    is Event.WindowScaleChanged -> {
+                        lastScales[event.windowId] = event.newScale
+                    }
+                    is Event.WindowDraw -> {
+                        val configure = lastConfigureEvents[event.windowId]!!
+                        val scale = lastScales[event.windowId] ?: 1.0
+                        assertEquals(configure.size.toPhysical(scale), event.size)
+                    }
+                    is Event.WindowConfigure -> {
+                        lastConfigureEvents[event.windowId] = event
+                    }
+                    else -> {}
+                }
                 val shouldDraw = event is Event.WindowDraw && lastDrawEvents[event.windowId]?.size != event.size
                 if (shouldDraw) {
                     lastDrawEvents[event.windowId] = event
@@ -2569,6 +2585,7 @@ class WaylandTests : WaylandTestsBase() {
         awaitEventOfType<Event.WindowConfigure>(msg = "Second window active after activating it") { event ->
             window2Params.windowId == event.windowId && event.active
         }
+        awaitEventOfType<Event.KeyUp> { true }
 
         val screens = ui { app.allScreens() }.screens
         val screen = screens.firstOrNull()
