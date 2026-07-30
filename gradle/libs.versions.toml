@@ -2,10 +2,21 @@
 # https://docs.gradle.org/current/userguide/platforms.html#sub::toml-dependencies-format
 
 [versions]
+# Compose Multiplatform. Bumping this requires bumping `skikoVersion` in sample/build.gradle.kts to
+# the Skiko version `org.jetbrains.compose.ui:ui-graphics-desktop` depends on, otherwise the Skiko
+# classes and the Skiko native library on the classpath come from different releases.
+compose = "1.11.1"
+# Compose Multiplatform pins material3 behind the rest of the artifacts; the value here is
+# `composeMaterial3Version` from the Compose Gradle plugin's ComposeBuildConfig for `compose` above.
+compose-material3 = "1.9.0"
 junit-jupiter-engine = "5.14.4"
 jpackage = "1.7.6"
 
 [libraries]
+compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose" }
+compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "compose-material3" }
+compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose" }
+compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose" }
 junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junit-jupiter-engine" }
 
 [plugins]
