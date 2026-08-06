@@ -1,21 +1,25 @@
 #![allow(clippy::inline_always)]
 #![allow(clippy::ref_as_ptr)]
 
+use std::sync::OnceLock;
+
 use anyhow::Context;
 use windows::Win32::{
-    Foundation::{COLORREF, E_POINTER, HWND, POINT, POINTL, SIZE},
-    Graphics::Gdi::{DeleteObject, HGDIOBJ},
+    Foundation::{COLORREF, E_POINTER, HWND, LPARAM, POINT, POINTL, SIZE, WPARAM},
+    Graphics::Gdi::{DeleteObject, HGDIOBJ, ScreenToClient},
     System::{
         Com::{CLSCTX_INPROC_SERVER, CoCreateInstance, IDataObject},
         Ole::{
             DROPEFFECT, DROPEFFECT_NONE, DoDragDrop, IDropSource, IDropSource_Impl, IDropTarget, IDropTarget_Impl, RegisterDragDrop,
             RevokeDragDrop,
         },
-        SystemServices::MODIFIERKEYS_FLAGS,
+        SystemServices::{MK_LBUTTON, MK_MBUTTON, MK_RBUTTON, MK_XBUTTON1, MK_XBUTTON2, MODIFIERKEYS_FLAGS},
     },
     UI::{
         Controls::CLR_NONE,
+        Input::KeyboardAndMouse::{GetKeyState, VK_LBUTTON, VK_MBUTTON, VK_RBUTTON, VK_XBUTTON1, VK_XBUTTON2},
         Shell::{CLSID_DragDropHelper, DSH_ALLOWDROPDESCRIPTIONTEXT, IDragSourceHelper2, IDropTargetHelper, SHDRAGIMAGE},
+        WindowsAndMessaging::{GetCursorPos, PostMessageW, WM_MOUSEMOVE},
     },
 };
 use windows_core::{BOOL, HRESULT, Ref as WinRef, Result as WinResult, implement};
@@ -53,7 +57,69 @@ pub fn register_drop_target(window: &Window, callbacks: DropTargetCallbacks) -> 
     Ok(())
 }
 
+/// Escape hatch for reproducing the stall [`seed_drag_input_queue`] prevents; nothing in production should
+/// set `KDT_WIN32_DND_NO_SEED`.
+fn seed_disabled_by_env() -> bool {
+    static DISABLED: OnceLock<bool> = OnceLock::new();
+    *DISABLED.get_or_init(|| {
+        let disabled = std::env::var_os("KDT_WIN32_DND_NO_SEED").is_some_and(|value| value == "1");
+        if disabled {
+            log::warn!("KDT_WIN32_DND_NO_SEED=1: not seeding the input queue before DoDragDrop; drags may stall for seconds");
+        }
+        disabled
+    })
+}
+
+/// Posts one `WM_MOUSEMOVE` to `window` so `DoDragDrop`'s modal loop has a mouse message to retrieve as soon
+/// as it starts.
+///
+/// `DoDragDrop` establishes no initial state of its own: it fills the cursor position and key state from each
+/// message it retrieves, so until one arrives it makes no progress. We call it synchronously from the handler
+/// for the message that started the drag, which by then has been retrieved and dispatched — so without this
+/// the queue is empty at exactly the wrong moment. The loop then spins at ~100% of a core without calling
+/// `IDropSource::QueryContinueDrag` at all, for as long as 8 seconds, and on a thread whose only input
+/// producer is itself (a UI-thread-driven test robot) it does not proceed until something else supplies
+/// input. With the seed the first callback arrives in single-digit milliseconds.
+///
+/// The payload is not incidental. `ole32` reads the pressed buttons out of the message, so a `wParam`
+/// claiming none makes `QueryContinueDrag` report a release and the drag ends immediately with a spurious
+/// drop. The state is therefore read live here rather than hardcoded or inherited from the triggering event,
+/// and no release is ever synthesised: reporting a button still down a moment after it was released costs one
+/// extra loop iteration before the real `WM_LBUTTONUP` arrives, whereas under-reporting ends the drag.
+///
+/// `lParam` carries the cursor position for anything that dispatches the message; the drag loop itself reads
+/// `MSG::pt`, which the system stamps with the real cursor position when the message is posted.
+fn seed_drag_input_queue(window: &Window) {
+    if seed_disabled_by_env() {
+        return;
+    }
+    let hwnd = window.hwnd();
+    let mut cursor = POINT::default();
+    let position = if unsafe { GetCursorPos(&raw mut cursor) }.is_ok() && unsafe { ScreenToClient(hwnd, &raw mut cursor) }.as_bool() {
+        LPARAM(((cursor.y & 0xffff) << 16) as isize | (cursor.x & 0xffff) as isize)
+    } else {
+        LPARAM(0)
+    };
+    let mut buttons = 0_u32;
+    for (key, flag) in [
+        (VK_LBUTTON, MK_LBUTTON),
+        (VK_RBUTTON, MK_RBUTTON),
+        (VK_MBUTTON, MK_MBUTTON),
+        (VK_XBUTTON1, MK_XBUTTON1),
+        (VK_XBUTTON2, MK_XBUTTON2),
+    ] {
+        // The high-order bit of GetKeyState is documented as "the key is down".
+        if unsafe { GetKeyState(i32::from(key.0)) } < 0 {
+            buttons |= flag.0;
+        }
+    }
+    if let Err(err) = unsafe { PostMessageW(Some(hwnd), WM_MOUSEMOVE, WPARAM(buttons as usize), position) } {
+        log::warn!("could not seed the drag input queue, the drag may not start until the mouse moves: {err}");
+    }
+}
+
 pub fn start_drag_drop(
+    window: &Window,
     data_object: &IDataObject,
     allowed_effects: u32,
     drag_image: Option<(&[u8], PhysicalPoint)>,
@@ -77,6 +143,9 @@ pub fn start_drag_drop(
     }
     let source: IDropSource = DragSource { callbacks }.into();
     let mut effect = DROPEFFECT_NONE;
+    // Required: `DoDragDrop`'s loop does not start until it retrieves an input message, and by this point
+    // the message that started the drag has already been dispatched. See `seed_drag_input_queue`.
+    seed_drag_input_queue(window);
     unsafe { DoDragDrop(data_object, &source, DROPEFFECT(allowed_effects), &raw mut effect).ok()? };
     Ok(effect.0)
 }
