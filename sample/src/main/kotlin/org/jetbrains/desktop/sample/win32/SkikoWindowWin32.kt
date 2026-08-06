@@ -260,24 +260,38 @@ abstract class SkikoWindowWin32(private val app: Application) : AutoCloseable {
                 if (counterButton.onPointerMove(locationInWindow, clientSize.height)) {
                     window.requestRedraw()
                 }
+                // Either button can start a drag. The right button matters for more than completeness: the
+                // toolkit has to report the *actual* pressed buttons to the drag loop, and a left-only
+                // sample cannot catch it reporting the left button unconditionally — such a drag would end
+                // instantly with a spurious drop instead of running.
+                val dragButton = when {
+                    state.pressedButtons.hasFlag(PointerButton.Left) -> PointerButton.Left
+                    state.pressedButtons.hasFlag(PointerButton.Right) -> PointerButton.Right
+                    else -> null
+                }
                 if (captionButtons.pressed == null &&
                     !counterButton.pressed &&
                     dragDropManager != null &&
                     !nonClientArea &&
-                    state.pressedButtons.hasFlag(PointerButton.Left)
+                    dragButton != null
                 ) {
                     val dragText = "Hello drag and drop!"
                     DataObject.build {
                         addHtmlFragment("<b>HTML</b> <i>fragment</i>")
                         addTextItem(dragText)
                     }.use { dataObject ->
+                        val heldModifier = when (dragButton) {
+                            PointerButton.Right -> DragDropModifier.RightButton
+                            else -> DragDropModifier.LeftButton
+                        }
                         val dragSource = object : DragSource {
                             override fun onQueryContinueDrag(escapePressed: Boolean, modifiers: DragDropModifiers): DragDropContinueResult {
                                 return when {
                                     escapePressed -> DragDropContinueResult.Cancel
 
-                                    !modifiers.hasFlag(DragDropModifier.LeftButton) -> {
-                                        Logger.debug { "Dropping (left button depressed)" }
+                                    // Drop when the button that started *this* drag is released.
+                                    !modifiers.hasFlag(heldModifier) -> {
+                                        Logger.debug { "Dropping ($dragButton released)" }
                                         DragDropContinueResult.Drop
                                     }
 

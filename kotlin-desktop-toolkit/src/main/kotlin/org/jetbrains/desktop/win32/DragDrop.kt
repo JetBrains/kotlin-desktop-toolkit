@@ -46,14 +46,17 @@ public class DragDropManager(private val window: Window) : AutoCloseable {
                 // "no image"; the offset is then unused.
                 val imageBytes = dragImage?.image?.toNative(arena) ?: NativeBorrowedArray_u8.allocate(arena)
                 val imageOffset = dragImage?.cursorOffset?.toNative(arena) ?: NativePhysicalPoint.allocate(arena)
-                ffiDownCall {
-                    desktop_win32_h.drag_drop_start(
-                        dataObject.toNative(),
-                        allowedEffects.value,
-                        imageBytes,
-                        imageOffset,
-                        callbacks.toNative(),
-                    )
+                window.withPointer { windowPtr ->
+                    ffiDownCall {
+                        desktop_win32_h.drag_drop_start(
+                            windowPtr,
+                            dataObject.toNative(),
+                            allowedEffects.value,
+                            imageBytes,
+                            imageOffset,
+                            callbacks.toNative(),
+                        )
+                    }
                 }
             }
         }
