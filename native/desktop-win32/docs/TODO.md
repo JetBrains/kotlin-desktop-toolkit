@@ -10,6 +10,12 @@ None currently tracked here.
 
 ## Likely bugs / suspect designs (verify before fixing)
 
+### `DoDragDrop` is entered from pointer messages, which the docs call out as a problem
+- **Where**: `drag_drop.rs` (`start_drag_drop`) plus `event_loop.rs` (`EnableMouseInPointer(true)` in `EventLoop::new`, and the `Some(_) => skip DefWindowProcW` tail of `window_proc`).
+- **What**: `ConvertPrimaryPointerToMouseDrag`'s Remarks state that apps handling pointer messages do not receive mouse messages, that this "can cause problems when calling APIs that expect mouse input, such as **DoDragDrop**", and that `DoDragDrop` "expects to be called while mouse input is active … exiting when it receives **WM_LBUTTONUP**". This crate enables mouse-in-pointer process-wide and starts drags from pointer handlers; when the client consumes the pointer event, `DefWindowProc` never runs and no legacy mouse message is synthesised. A Windows drag in the Fleet client wedges the UI thread for the whole gesture at a per-drag rate, which fits — but the causal link is **not yet proven**.
+- **Fix candidate**: call `ConvertPrimaryPointerToMouseDrag` immediately before `DoDragDrop` (Windows 11+, no SDK header, `User32.dll` ordinal 2811 — needs run-time resolution and a Windows 10 fallback story).
+- **Status**: under investigation on branch `win-dnd-pointer-input-starvation`; see `docs/investigations/2026-08-06-dodragdrop-pointer-input-starvation.md` for what is proven, what is not, and the experiment order. Do not act on the fix candidate before a red repro exists.
+
 ### `Window::drop` doesn't verify HWND destruction
 - **Where**: `window.rs` (`impl Drop for Window`).
 - **What**: Only logs a trace; doesn't check `hwnd.is_null()` or call `DestroyWindow`. If the `Rc<Window>` drops without a prior `window_destroy`, the HWND leaks (and the window stays visible).
