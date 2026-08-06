@@ -15,6 +15,7 @@ pub mod data_transfer_api;
 pub mod dispatcher;
 pub mod drag_drop;
 pub mod drag_drop_api;
+pub mod drag_drop_probe;
 pub mod event_loop;
 pub mod events;
 pub mod events_api;

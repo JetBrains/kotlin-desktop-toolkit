@@ -39,6 +39,7 @@ use windows::Win32::{
 
 use super::{
     appearance::{Appearance, HighContrast},
+    drag_drop_probe,
     events::{
         CharacterReceivedEvent, Event, EventHandler, InputLanguageChangedEvent, KeyEvent, NCCalcSizeEvent, NCHitTestEvent,
         PointerDownEvent, PointerEnteredEvent, PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent,
@@ -69,7 +70,16 @@ pub struct EventLoop {
 impl EventLoop {
     pub fn new(event_handler: EventHandler) -> windows_core::Result<Self> {
         unsafe { SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
-        unsafe { EnableMouseInPointer(true)? };
+        // Investigation escape hatch, see `docs/investigations/2026-08-06-dodragdrop-pointer-input-starvation.md`.
+        // EnableMouseInPointer is documented as callable only once per process lifetime, so the choice has
+        // to be made here and cannot be revisited per window or per drag.
+        if drag_drop_probe::mouse_in_pointer_disabled_by_env() {
+            log::warn!(
+                "KDT_WIN32_NO_MOUSE_IN_POINTER=1: skipping EnableMouseInPointer(true); this wndproc only handles the WM_POINTER* band, so the window will not react to mouse input"
+            );
+        } else {
+            unsafe { EnableMouseInPointer(true)? };
+        }
         Ok(Self { event_handler })
     }
 
@@ -121,6 +131,7 @@ impl EventLoop {
     }
 
     pub(crate) fn window_proc(&self, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+        drag_drop_probe::note_window_message(msg);
         let handled = match msg {
             WM_CREATE => on_create(window),
 

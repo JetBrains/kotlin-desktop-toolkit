@@ -132,7 +132,28 @@ abstract class SkikoWindowWin32(private val app: Application) : AutoCloseable {
         }
     }
 
+    /**
+     * Repro switch for the drag-and-drop wedge tracked on branch `win-dnd-pointer-input-starvation`;
+     * see `native/desktop-win32/docs/investigations/2026-08-06-dodragdrop-pointer-input-starvation.md`.
+     *
+     * With `KDT_SAMPLE_CONSUME_POINTER_EVENTS=1` the sample reports every pointer event as handled, the
+     * way a Compose scene does once it has recognised a gesture. `EventHandlerResult.Stop` skips
+     * `DefWindowProc`, and `DefWindowProc` is what promotes an unhandled primary contact to the legacy
+     * mouse stream — the stream `DoDragDrop` is documented to consume. This is the one structural
+     * difference between this sample (which drags fine by hand) and the Fleet client (which wedges), so
+     * it is the first thing to try when reproducing.
+     *
+     * Off by default: with the variable unset the sample behaves exactly as before.
+     */
+    private val consumePointerEvents: Boolean = System.getenv("KDT_SAMPLE_CONSUME_POINTER_EVENTS") == "1"
+
     open fun handleEvent(event: Event): EventHandlerResult {
+        val result = handleEventImpl(event)
+        val isPointerEvent = event is Event.PointerDown || event is Event.PointerUpdated || event is Event.PointerUp
+        return if (consumePointerEvents && isPointerEvent) EventHandlerResult.Stop else result
+    }
+
+    private fun handleEventImpl(event: Event): EventHandlerResult {
         return when (event) {
             is Event.WindowDraw -> with(event) {
                 performDrawing(size, scale)

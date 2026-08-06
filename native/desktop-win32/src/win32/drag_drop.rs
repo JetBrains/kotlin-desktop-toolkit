@@ -20,7 +20,7 @@ use windows::Win32::{
 };
 use windows_core::{BOOL, HRESULT, Ref as WinRef, Result as WinResult, implement};
 
-use super::{com::ComInterfaceRawPtr, geometry::PhysicalPoint, wic_image::WicBitmap, window::Window};
+use super::{com::ComInterfaceRawPtr, drag_drop_probe, geometry::PhysicalPoint, wic_image::WicBitmap, window::Window};
 
 #[allow(clippy::struct_field_names)]
 #[repr(C)]
@@ -77,7 +77,13 @@ pub fn start_drag_drop(
     }
     let source: IDropSource = DragSource { callbacks }.into();
     let mut effect = DROPEFFECT_NONE;
-    unsafe { DoDragDrop(data_object, &source, DROPEFFECT(allowed_effects), &raw mut effect).ok()? };
+    // Investigation probes, inert unless their environment variables are set. See
+    // `docs/investigations/2026-08-06-dodragdrop-pointer-input-starvation.md`.
+    drag_drop_probe::drag_entered();
+    drag_drop_probe::convert_primary_pointer_to_mouse_drag();
+    let result = unsafe { DoDragDrop(data_object, &source, DROPEFFECT(allowed_effects), &raw mut effect) };
+    drag_drop_probe::drag_returned(result, effect.0);
+    result.ok()?;
     Ok(effect.0)
 }
 
