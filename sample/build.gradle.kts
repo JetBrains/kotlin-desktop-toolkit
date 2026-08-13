@@ -10,11 +10,14 @@ import org.panteleyev.jpackage.ImageType
 
 plugins {
     kotlin("jvm")
+    id("org.jetbrains.kotlin.plugin.compose")
     id("org.jlleitschuh.gradle.ktlint")
     alias(libs.plugins.jpackage)
 }
 
 repositories {
+    // Compose Multiplatform depends on androidx artifacts that are only published to Google's repository.
+    google()
     mavenCentral()
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
 }
@@ -26,12 +29,21 @@ val skikoTargetArch = when (targetArch(project) ?: hostArch()) {
     Arch.x86_64 -> "x64"
 }
 
-val skikoVersion = "0.9.37.3"
+// Must stay in sync with the Skiko version Compose Multiplatform (`libs.versions.compose`) depends on:
+// Compose brings `org.jetbrains.skiko:skiko-awt` transitively, while this module supplies the matching
+// native library via `skiko-awt-runtime-$skikoTarget`. If the two drift apart, Gradle picks the newer
+// `skiko-awt` classes and pairs them with an older native library.
+val skikoVersion = "0.144.6"
 val skikoTarget = "$skikoTargetOs-$skikoTargetArch"
 dependencies {
     implementation(project(":kotlin-desktop-toolkit"))
     implementation("org.jetbrains.skiko:skiko-awt-runtime-$skikoTarget:$skikoVersion")
     implementation(kotlin("stdlib"))
+
+    implementation(libs.compose.runtime)
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.ui)
+    implementation(libs.compose.material3)
 }
 
 java {
@@ -111,6 +123,25 @@ tasks.register<JavaExec>("runApplicationMenuSampleMac") {
 
     environment("MTL_HUD_ENABLED", 1)
 //    environment("MallocStackLogging", "1")
+}
+
+tasks.register<JavaExec>("runComposeSampleMac") {
+    group = "application"
+    description = "Runs example of integration with Compose on MacOS"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.jetbrains.desktop.sample.compose.ComposeSampleMacKt")
+    javaLauncher.set(
+        javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(25))
+        },
+    )
+    jvmArgs = listOf(
+        "--enable-native-access=ALL-UNNAMED",
+        "-Djextract.trace.downcalls=false",
+    )
+    setUpLoggingAndLibraryPath()
+
+    environment("MTL_HUD_ENABLED", 1)
 }
 
 tasks.register<JavaExec>("runSkikoSampleLinux") {

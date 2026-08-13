@@ -21,7 +21,6 @@ import kotlin.concurrent.withLock
 import kotlin.test.assertTrue
 import kotlin.test.fail
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -41,7 +40,6 @@ class ImeWindowCloseTest : KDTApplicationTestBase() {
         lateinit var robot: Robot
 
         private val MARKED_TEXT_TIMEOUT = 5.seconds
-        private val RUNLOOP_PUMP_AFTER_CLOSE = 500.milliseconds
 
         @JvmStatic
         @BeforeAll
