@@ -89,6 +89,19 @@ impl Titlebar {
         }
     }
 
+    pub(crate) fn left_inset(&self) -> anyhow::Result<LogicalPixels> {
+        match &self.state {
+            TitlebarState::Regular => Ok(0.0),
+            TitlebarState::Custom(..) => {
+                if self.ns_window.styleMask().contains(NSWindowStyleMask::FullScreen) {
+                    return Ok(0.0);
+                }
+                let titlebar_views = unsafe { TitlebarViews::retrieve_from_window(&self.ns_window) }?;
+                Ok(titlebar_views.buttons_block_width())
+            }
+        }
+    }
+
     pub(crate) fn before_enter_fullscreen(&mut self) {
         if let TitlebarState::Custom(ref mut state) = self.state {
             state.deactivate_constraints(&self.ns_window).unwrap();
@@ -289,6 +302,24 @@ impl TitlebarViews {
 
         // theme frame should keep follow autoresizing mask to match window constraints
         // self.theme_frame.setTranslatesAutoresizingMaskIntoConstraints(value);
+    }
+
+    // Horizontal space taken by the whole traffic light button block, including
+    // padding. Button frames are relative to the titlebar view, whose left edge is
+    // pinned to the window's left edge, so the leading gap between the window edge
+    // and the first button is mirrored after the last button to keep the block
+    // symmetrically padded.
+    fn buttons_block_width(&self) -> LogicalPixels {
+        let buttons = [&self.close_button, &self.miniaturize_button, &self.zoom_button];
+        let leading_padding = buttons.iter().map(|button| button.frame().origin.x).fold(f64::INFINITY, f64::min);
+        let right_edge = buttons
+            .iter()
+            .map(|button| {
+                let frame = button.frame();
+                frame.origin.x + frame.size.width
+            })
+            .fold(0.0, f64::max);
+        right_edge + leading_padding
     }
 
     fn horizontal_button_offset(titlebar_height: LogicalPixels) -> LogicalPixels {

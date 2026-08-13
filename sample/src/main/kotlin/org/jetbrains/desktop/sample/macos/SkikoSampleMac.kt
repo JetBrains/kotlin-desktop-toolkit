@@ -60,6 +60,11 @@ class CustomTitlebar(
     var startWindowDrag: (() -> Unit)? = null,
     var zoomBoxClicked: (() -> Unit)? = null,
 ) {
+    // Horizontal space taken by the traffic light buttons, reported by the window.
+    // Updated before every frame so the marker rectangle stays in sync when the
+    // titlebar height changes or the window enters/exits full screen.
+    var leftInset: LogicalPixels = 0.0
+
     companion object {
         const val DEFAULT_CUSTOM_TITLEBAR_HEIGHT: LogicalPixels = 55.0
     }
@@ -124,6 +129,16 @@ class CustomTitlebar(
         Paint().use { paint ->
             paint.color = 0xFFAAAAAA.toInt()
             canvas.drawRect(Rect.makeXYWH(width * 0.75f, y, width * 0.25f, height), paint)
+        }
+
+        // Marker rectangle starting exactly at the left inset. Its left edge should
+        // line up with the right edge of the traffic light buttons, which visually
+        // verifies that the reported inset is correct.
+        Paint().use { paint ->
+            paint.color = 0xFFFF00FF.toInt()
+            val markerX = ((origin.x + leftInset) * scale).toFloat()
+            val markerWidth = (2.0 * scale).toFloat()
+            canvas.drawRect(Rect.makeXYWH(markerX, y, markerWidth, height), paint)
         }
 
         // Draw the color-changing square
@@ -432,6 +447,7 @@ class RotatingBallWindow(
     override fun Canvas.draw(size: PhysicalSize, time: Long) {
         val canvas = this
         // canvas.clear(Color.RED) // use RED to debug
+        windowContainer.customTitlebar?.leftInset = window.getTitlebarLeftInset()
         windowContainer.draw(canvas, time, window.scaleFactor())
         textInput.draw(canvas, window.scaleFactor())
         buttons.forEach { it.draw(canvas, window.scaleFactor()) }

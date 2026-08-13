@@ -1,12 +1,16 @@
 package org.jetbrains.desktop.macos.tests
 
+import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.LogicalSize
 import org.jetbrains.desktop.macos.TitlebarConfiguration
 import org.jetbrains.desktop.macos.Window
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 @EnabledOnOs(OS.MAC)
 class TitlebarTests : KDTApplicationTestBase() {
@@ -80,6 +84,78 @@ class TitlebarTests : KDTApplicationTestBase() {
             assertEquals(initialSize, window.size, "Window size should be preserved after switching to custom titlebar")
         }
         ui {
+            window.close()
+        }
+    }
+
+    @Test
+    fun `left inset is zero for regular titlebar`() {
+        val window = ui {
+            Window.create(titlebarConfiguration = TitlebarConfiguration.Regular)
+        }
+        ui {
+            assertEquals(0.0, window.getTitlebarLeftInset(), "Left inset should be zero for the regular titlebar")
+            window.close()
+        }
+    }
+
+    @Test
+    fun `left inset is positive for custom titlebar`() {
+        val window = ui {
+            Window.create(titlebarConfiguration = TitlebarConfiguration.Custom(titlebarHeight = 42.0))
+        }
+        ui {
+            val leftInset = window.getTitlebarLeftInset()
+            assertTrue(leftInset > 0.0, "Left inset should be positive for a custom titlebar, got $leftInset")
+            window.close()
+        }
+    }
+
+    @Test
+    fun `left inset updates on titlebar configuration switch`() {
+        val window = ui {
+            Window.create(titlebarConfiguration = TitlebarConfiguration.Regular)
+        }
+        ui {
+            assertEquals(0.0, window.getTitlebarLeftInset(), "Left inset should be zero before switching to custom titlebar")
+
+            window.setTitlebarConfiguration(TitlebarConfiguration.Custom(titlebarHeight = 42.0))
+            val leftInset = window.getTitlebarLeftInset()
+            assertTrue(leftInset > 0.0, "Left inset should be positive after switching to custom titlebar, got $leftInset")
+
+            window.setTitlebarConfiguration(TitlebarConfiguration.Regular)
+            assertEquals(0.0, window.getTitlebarLeftInset(), "Left inset should be zero after switching back to regular titlebar")
+
+            window.close()
+        }
+    }
+
+    @Timeout(value = 60, unit = TimeUnit.SECONDS)
+    @Test
+    fun `left inset is zero in full screen`() {
+        val window = ui {
+            Window.create(titlebarConfiguration = TitlebarConfiguration.Custom(titlebarHeight = 42.0))
+        }
+        ui {
+            window.makeKeyAndOrderFront()
+        }
+        awaitEventOfType<Event.WindowChangedOcclusionState> { it.windowId == window.windowId() && it.isVisible }
+
+        ui {
+            window.toggleFullScreen()
+        }
+        awaitEventOfType<Event.WindowFullScreenToggle> { it.windowId == window.windowId() && it.isFullScreen }
+        ui {
+            assertEquals(0.0, window.getTitlebarLeftInset(), "Left inset should be zero in full screen")
+        }
+
+        ui {
+            window.toggleFullScreen()
+        }
+        awaitEventOfType<Event.WindowFullScreenToggle> { it.windowId == window.windowId() && !it.isFullScreen }
+        ui {
+            val leftInset = window.getTitlebarLeftInset()
+            assertTrue(leftInset > 0.0, "Left inset should be positive after exiting full screen, got $leftInset")
             window.close()
         }
     }
