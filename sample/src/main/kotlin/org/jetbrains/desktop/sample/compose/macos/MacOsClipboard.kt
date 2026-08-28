@@ -1,17 +1,21 @@
 @file:OptIn(ExperimentalComposeUiApi::class)
 
-package org.jetbrains.desktop.sample.compose
+package org.jetbrains.desktop.sample.compose.macos
 
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.Clipboard
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.desktop.macos.Pasteboard
 import org.jetbrains.desktop.macos.PasteboardType
+import org.jetbrains.desktop.sample.compose.ClipboardEntry
+import org.jetbrains.desktop.sample.compose.ClipboardFormat
+import org.jetbrains.desktop.sample.compose.ClipboardItem
+import org.jetbrains.desktop.sample.compose.ClipboardItemsEntry
+import org.jetbrains.desktop.sample.compose.KdtImmediateDispatcher
 import java.nio.file.Path
 
-object MacOsClipboard : Clipboard {
+internal object MacOsClipboard : Clipboard {
 
     override suspend fun getClipEntry(): ClipEntry? = ClipEntry(MacOsClipboardEntry(PasteboardType.General))
 
@@ -35,13 +39,13 @@ internal fun List<ClipboardItem>.toPasteboardItems(): List<Pasteboard.Item> {
             when (it.format) {
                 ClipboardFormat.Utf8PlainText -> listOf(
                     Pasteboard.Element.ofString(
-                        UniformTypeIdentifiers.utf8PlainText,
+                        UniformTypeIdentifiers.UTF8_PLAIN_TEXT,
                         it.value as String,
                     ),
                 )
                 ClipboardFormat.Html -> listOf(
                     Pasteboard.Element.ofString(
-                        UniformTypeIdentifiers.html,
+                        UniformTypeIdentifiers.HTML,
                         it.value as String,
                     ),
                 )
@@ -49,7 +53,7 @@ internal fun List<ClipboardItem>.toPasteboardItems(): List<Pasteboard.Item> {
                     Pasteboard.Element.ofFilePath(Path.of(it.value as String)),
                 )
                 ClipboardFormat.Png -> listOf(
-                    Pasteboard.Element(UniformTypeIdentifiers.png, it.value as ByteArray),
+                    Pasteboard.Element(UniformTypeIdentifiers.PNG, it.value as ByteArray),
                 )
             }
         }
@@ -58,9 +62,9 @@ internal fun List<ClipboardItem>.toPasteboardItems(): List<Pasteboard.Item> {
     }
 }
 
-class MacOsClipboardEntry(private val pasteboardType: PasteboardType) : ClipboardEntry {
+internal class MacOsClipboardEntry(private val pasteboardType: PasteboardType) : ClipboardEntry {
     override suspend fun <T : Any> getForFormat(format: ClipboardFormat<T>): List<T> {
-        return withContext(Dispatchers.Main.immediate) {
+        return withContext(KdtImmediateDispatcher) {
             getForFormatSync(format)
         }
     }
@@ -81,27 +85,27 @@ private fun <T : Any> decodeClipboardData(
 ): List<T> {
     @Suppress("UNCHECKED_CAST")
     return when (format) {
-        ClipboardFormat.Utf8PlainText -> readBytesForType(UniformTypeIdentifiers.utf8PlainText)
+        ClipboardFormat.Utf8PlainText -> readBytesForType(UniformTypeIdentifiers.UTF8_PLAIN_TEXT)
             .map { String(it, charset = Charsets.UTF_8) }
-        ClipboardFormat.Html -> readBytesForType(UniformTypeIdentifiers.html)
+        ClipboardFormat.Html -> readBytesForType(UniformTypeIdentifiers.HTML)
             .map { String(it, charset = Charsets.UTF_8) }
-        ClipboardFormat.Png -> readBytesForType(UniformTypeIdentifiers.png)
+        ClipboardFormat.Png -> readBytesForType(UniformTypeIdentifiers.PNG)
         ClipboardFormat.File -> readFilePaths()
     } as List<T>
 }
 
 internal object UniformTypeIdentifiers {
-    const val utf8PlainText = Pasteboard.STRING_TYPE
-    const val html = Pasteboard.HTML_TYPE
-    const val file = Pasteboard.FILE_URL_TYPE
-    const val png = Pasteboard.PNG_IMAGE_TYPE
+    const val UTF8_PLAIN_TEXT = Pasteboard.STRING_TYPE
+    const val HTML = Pasteboard.HTML_TYPE
+    const val FILE = Pasteboard.FILE_URL_TYPE
+    const val PNG = Pasteboard.PNG_IMAGE_TYPE
 }
 
 internal fun <T : Any> ClipboardFormat<T>.toUniformTypeIdentifier(): String {
     return when (this) {
-        ClipboardFormat.Utf8PlainText -> UniformTypeIdentifiers.utf8PlainText
-        ClipboardFormat.Html -> UniformTypeIdentifiers.html
-        ClipboardFormat.File -> UniformTypeIdentifiers.file
-        ClipboardFormat.Png -> UniformTypeIdentifiers.png
+        ClipboardFormat.Utf8PlainText -> UniformTypeIdentifiers.UTF8_PLAIN_TEXT
+        ClipboardFormat.Html -> UniformTypeIdentifiers.HTML
+        ClipboardFormat.File -> UniformTypeIdentifiers.FILE
+        ClipboardFormat.Png -> UniformTypeIdentifiers.PNG
     }
 }

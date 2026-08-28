@@ -8,9 +8,9 @@ import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import kotlin.math.roundToInt
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
+import kotlin.math.roundToInt
 
 internal class DragAndDropImage(
     private val size: Size,
@@ -27,7 +27,7 @@ internal class DragAndDropImage(
     internal fun encodeToPng(canvasSize: Size = size): ByteArray? {
         val imageBitmap = ImageBitmap(
             width = canvasSize.width.roundToInt(),
-            height = canvasSize.height.roundToInt()
+            height = canvasSize.height.roundToInt(),
         )
         val canvas = Canvas(imageBitmap)
         val canvasScope = CanvasDrawScope()

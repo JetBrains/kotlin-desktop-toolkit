@@ -1,4 +1,4 @@
-package org.jetbrains.desktop.sample.compose
+package org.jetbrains.desktop.sample.compose.macos
 
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.input.key.Key

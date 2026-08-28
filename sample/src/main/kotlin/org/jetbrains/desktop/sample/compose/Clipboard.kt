@@ -1,7 +1,6 @@
 package org.jetbrains.desktop.sample.compose
 
-fun clipboardEntry(vararg items: ClipboardItem): ClipboardEntry =
-    ClipboardItemsEntry(items.toList())
+fun clipboardEntry(vararg items: ClipboardItem): ClipboardEntry = ClipboardItemsEntry(items.toList())
 
 fun clipboardEntry(block: ClipboardEntryBuilderScope.() -> Unit): ClipboardEntry {
     val builder = ClipboardEntryBuilderImpl().apply(block)
@@ -11,16 +10,13 @@ fun clipboardEntry(block: ClipboardEntryBuilderScope.() -> Unit): ClipboardEntry
 interface ClipboardEntry {
     suspend fun <T : Any> getForFormat(format: ClipboardFormat<T>): List<T>
     fun <T : Any> getForFormatSync(format: ClipboardFormat<T>): List<T>
-    fun <T : Any> getFirstOrNullForFormatSync(format: ClipboardFormat<T>): T? =
-        getForFormatSync(format).firstOrNull()
+    fun <T : Any> getFirstOrNullForFormatSync(format: ClipboardFormat<T>): T? = getForFormatSync(format).firstOrNull()
 
-    suspend fun <T : Any> getFirstOrNullForFormat(format: ClipboardFormat<T>): T? =
-        getForFormat(format).firstOrNull()
+    suspend fun <T : Any> getFirstOrNullForFormat(format: ClipboardFormat<T>): T? = getForFormat(format).firstOrNull()
 }
 
 internal class ClipboardItemsEntry(val items: List<ClipboardItem>) : ClipboardEntry {
-    override suspend fun <T : Any> getForFormat(format: ClipboardFormat<T>): List<T> =
-        getForFormatSync(format)
+    override suspend fun <T : Any> getForFormat(format: ClipboardFormat<T>): List<T> = getForFormatSync(format)
 
     override fun <T : Any> getForFormatSync(format: ClipboardFormat<T>): List<T> {
         @Suppress("UNCHECKED_CAST")
@@ -45,12 +41,15 @@ data class ClipboardItem(val elements: List<ClipboardElement<*>>) {
             ClipboardItem(listOf(ClipboardElement(value, format)))
     }
 }
-data class ClipboardElement<T : Any>(val value: T, val format: ClipboardFormat<T>)
+data class ClipboardElement<T : Any>(
+    val value: T,
+    val format: ClipboardFormat<T>,
+)
 
 interface ClipboardEntryBuilderScope {
     fun add(element: ClipboardElement<*>)
-    fun <T: Any> add(value: T, format: ClipboardFormat<T>)
-    fun <T: Any> add(values: List<T>, format: ClipboardFormat<T>)
+    fun <T : Any> add(value: T, format: ClipboardFormat<T>)
+    fun <T : Any> add(values: List<T>, format: ClipboardFormat<T>)
     fun add(elements: List<ClipboardElement<*>>)
 }
 
@@ -61,18 +60,11 @@ private class ClipboardEntryBuilderImpl : ClipboardEntryBuilderScope {
         sources.add(listOf(element))
     }
 
-    override fun <T : Any> add(
-        value: T,
-        format: ClipboardFormat<T>,
-    ) {
+    override fun <T : Any> add(value: T, format: ClipboardFormat<T>) {
         sources.add(listOf(ClipboardElement(value, format)))
     }
 
-
-    override fun <T : Any> add(
-        values: List<T>,
-        format: ClipboardFormat<T>,
-    ) {
+    override fun <T : Any> add(values: List<T>, format: ClipboardFormat<T>) {
         sources.add(values.map { value -> ClipboardElement(value, format) })
     }
 

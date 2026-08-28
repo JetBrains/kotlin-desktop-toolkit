@@ -8,16 +8,17 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.PlatformDragAndDropManager
 import androidx.compose.ui.platform.PlatformDragAndDropSource
 
+/**
+ * Turns Compose's request to start a drag into a platform drag session.
+ *
+ * Platform-agnostic on purpose: everything platform-specific lives behind [DragAndDropSourceWindow],
+ * so this class is shared by every backend.
+ */
 @OptIn(InternalComposeUiApi::class)
-internal class KdtDragAndDropManager(
-    private val window: KdtComposeWindow,
-) : PlatformDragAndDropManager {
+internal class KdtDragAndDropManager(private val window: DragAndDropSourceWindow) : PlatformDragAndDropManager {
     override val isRequestDragAndDropTransferRequired: Boolean = true
 
-    override fun requestDragAndDropTransfer(
-        source: PlatformDragAndDropSource,
-        offset: Offset,
-    ) {
+    override fun requestDragAndDropTransfer(source: PlatformDragAndDropSource, offset: Offset) {
         var isTransferStarted = false
         val startTransferScope = object : PlatformDragAndDropSource.StartTransferScope {
             override fun startDragAndDropTransfer(
@@ -26,7 +27,7 @@ internal class KdtDragAndDropManager(
                 drawDragDecoration: DrawScope.() -> Unit,
             ): Boolean {
                 isTransferStarted = true
-                startDrag(
+                window.startDragSession(
                     offset,
                     transferData,
                     decorationSize,
@@ -40,46 +41,5 @@ internal class KdtDragAndDropManager(
                 isTransferStarted
             }
         }
-    }
-
-    fun startDrag(
-        offset: Offset,
-        transferData: DragAndDropTransferData,
-        decorationSize: Size,
-        drawDragDecoration: DrawScope.() -> Unit,
-    ) {
-        window.startDragSession(
-            offset,
-            transferData,
-            decorationSize,
-            drawDragDecoration,
-        )
-//        when (window) {
-//            is MacOsWindow -> window.startDragSession(
-//                offset,
-//                transferData,
-//                decorationSize,
-//                drawDragDecoration,
-//            )
-//            is LinuxWindow -> window.startDragSession(
-//                offset,
-//                transferData,
-//                decorationSize,
-//                drawDragDecoration,
-//            )
-//            is GtkWindow -> window.startDragSession(
-//                offset,
-//                transferData,
-//                decorationSize,
-//                drawDragDecoration,
-//            )
-//            is WindowsWindow -> window.startDragSession(
-//                offset,
-//                transferData,
-//                decorationSize,
-//                drawDragDecoration,
-//            )
-//            else -> error("Unsupported drag source window: ${window::class.qualifiedName}")
-//        }
     }
 }

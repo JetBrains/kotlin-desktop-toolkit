@@ -1,4 +1,4 @@
-package org.jetbrains.desktop.sample.compose
+package org.jetbrains.desktop.sample.compose.macos
 
 import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.MetalCommandQueue

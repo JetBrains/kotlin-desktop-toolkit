@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalComposeUiApi::class, InternalComposeUiApi::class)
 
-package org.jetbrains.desktop.sample.compose
+package org.jetbrains.desktop.sample.compose.macos
 
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.InternalComposeUiApi
@@ -14,16 +14,15 @@ import org.jetbrains.desktop.macos.DragInfo
 import org.jetbrains.desktop.macos.DragOperation
 import org.jetbrains.desktop.macos.Pasteboard
 import org.jetbrains.desktop.macos.PasteboardType
+import org.jetbrains.desktop.sample.compose.ClipboardFormat
+import org.jetbrains.desktop.sample.compose.DragAndDropClipboardEntry
 
 private fun PasteboardType.containsUniformTypeIdentifier(target: String): Boolean {
     val itemCount = Pasteboard.itemCount(this).toInt()
     return (0 until itemCount).any { target in Pasteboard.readItemTypes(it, this) }
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
-internal class MacOsDragAndDropClipboardEntry(
-    private val dragInfo: DragInfo,
-) : ClipboardEntry {
+internal class MacOsDragAndDropClipboardEntry(private val dragInfo: DragInfo) : DragAndDropClipboardEntry {
     private val clipboardEntry = MacOsClipboardEntry(dragInfo.pasteboard)
     private val acceptedTargets = linkedMapOf<String, List<DragOperation>>()
 
@@ -35,7 +34,7 @@ internal class MacOsDragAndDropClipboardEntry(
         return clipboardEntry.getForFormatSync(format)
     }
 
-    internal fun containsFormat(format: ClipboardFormat<*>, actions: List<DragAndDropTransferAction>): Boolean {
+    override fun containsFormat(format: ClipboardFormat<*>, actions: List<DragAndDropTransferAction>): Boolean {
         val pasteboard = dragInfo.pasteboard
         if (!actions.any { dragInfo.allowedOperations.contains(it.toDragOperation()) }) {
             return false
@@ -44,7 +43,7 @@ internal class MacOsDragAndDropClipboardEntry(
         return pasteboard.containsUniformTypeIdentifier(target)
     }
 
-    internal fun acceptsFormat(format: ClipboardFormat<*>, actions: List<DragAndDropTransferAction>) {
+    override fun acceptsFormat(format: ClipboardFormat<*>, actions: List<DragAndDropTransferAction>) {
         if (containsFormat(format, actions)) {
             val target = format.toUniformTypeIdentifier()
             acceptedTargets[target] = actions.map(DragAndDropTransferAction::toDragOperation)
@@ -64,16 +63,16 @@ internal class MacOsDragAndDropManager(
         val dndEvent = info.toDragAndDropEvent()
         val node = rootDragAndDropNode()
 
-        val acceptedTransfer =
-            node.acceptDragAndDropTransfer(dndEvent)
+        val acceptedTransfer = node.acceptDragAndDropTransfer(dndEvent)
         if (acceptedTransfer) {
             previousAction = dndEvent.action
             node.onStarted(dndEvent)
             node.onEntered(dndEvent)
         }
 
-        return if (acceptedTransfer && dndEvent.action != null) {
-            dndEvent.action!!.toDragOperation()
+        val action = dndEvent.action
+        return if (acceptedTransfer && action != null) {
+            action.toDragOperation()
         } else {
             DragOperation.NONE
         }
@@ -113,7 +112,9 @@ internal class MacOsDragAndDropManager(
 
     fun onDragExited() {
         val dndEvent = DragAndDropEvent(
-            action = null, nativeEvent = null, positionInRootImpl = Offset.Zero,
+            action = null,
+            nativeEvent = null,
+            positionInRootImpl = Offset.Zero,
         )
         val node = rootDragAndDropNode()
 
@@ -133,7 +134,7 @@ internal class MacOsDragAndDropManager(
     }
 
     private fun DragInfo.toDragAndDropEvent(
-        nativeEvent: MacOsDragAndDropClipboardEntry = MacOsDragAndDropClipboardEntry(this)
+        nativeEvent: MacOsDragAndDropClipboardEntry = MacOsDragAndDropClipboardEntry(this),
     ): DragAndDropEvent {
         val selectedAction = when {
             DragOperation.MOVE in allowedOperations -> DragAndDropTransferAction.Move
@@ -149,9 +150,7 @@ internal class MacOsDragAndDropManager(
         )
     }
 
-    private fun DpOffset.toOffset() = with(density()) {
-        Offset(x.toPx(), y.toPx())
-    }
+    private fun DpOffset.toOffset() = toPxOffset(density())
 }
 
 internal fun DragAndDropTransferAction.toDragOperation(): DragOperation = when (this) {
@@ -166,50 +165,4 @@ internal fun DragOperation.toDragAndDropTransferAction(): DragAndDropTransferAct
     DragOperation.LINK -> DragAndDropTransferAction.Link
     DragOperation.MOVE -> DragAndDropTransferAction.Move
     else -> null
-}
-
-
-@OptIn(ExperimentalComposeUiApi::class)
-val DragAndDropEvent.clipboardEntry: ClipboardEntry
-    get() {
-        return nativeEvent as MacOsDragAndDropClipboardEntry
-//        return when (DesktopPlatform.Current) {
-//            DesktopPlatform.MacOS -> nativeEvent as MacOsDragAndDropClipboardEntry
-//            DesktopPlatform.Linux -> nativeEvent as LinuxDragAndDropClipboardEntry
-//            DesktopPlatform.Windows -> nativeEvent as WindowsDragAndDropClipboardEntry
-//            DesktopPlatform.Unknown -> error("Unsupported desktop platform: ${DesktopPlatform.Current}")
-//        }
-    }
-
-
-fun DragAndDropEvent.containsFormat(format: ClipboardFormat<*>, actions: List<DragAndDropTransferAction>): Boolean {
-    return (nativeEvent as MacOsDragAndDropClipboardEntry).containsFormat(format, actions)
-//    return when (DesktopPlatform.Current) {
-//        DesktopPlatform.MacOS -> {
-//            (nativeEvent as MacOsDragAndDropClipboardEntry).containsFormat(format, actions)
-//        }
-//        DesktopPlatform.Linux -> {
-//            (nativeEvent as LinuxDragAndDropClipboardEntry).containsFormat(format, actions)
-//        }
-//        DesktopPlatform.Windows -> {
-//            (nativeEvent as WindowsDragAndDropClipboardEntry).containsFormat(format, actions)
-//        }
-//        DesktopPlatform.Unknown -> false
-//    }
-}
-
-fun DragAndDropEvent.acceptsFormat(format: ClipboardFormat<*>, actions: List<DragAndDropTransferAction>) {
-    (nativeEvent as MacOsDragAndDropClipboardEntry).acceptsFormat(format, actions)
-//    when (DesktopPlatform.Current) {
-//        DesktopPlatform.MacOS -> {
-//            (nativeEvent as MacOsDragAndDropClipboardEntry).acceptsFormat(format, actions)
-//        }
-//        DesktopPlatform.Linux -> {
-//            (nativeEvent as LinuxDragAndDropClipboardEntry).acceptsFormat(format, actions)
-//        }
-//        DesktopPlatform.Windows -> {
-//            (nativeEvent as WindowsDragAndDropClipboardEntry).acceptsFormat(format, actions)
-//        }
-//        DesktopPlatform.Unknown -> {}
-//    }
 }
