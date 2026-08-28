@@ -1,9 +1,12 @@
 package org.jetbrains.desktop.sample.compose
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerButtons
 import androidx.compose.ui.input.pointer.PointerKeyboardModifiers
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -31,6 +34,34 @@ internal fun LogicalPoint.toOffset(scale: Double): Offset {
     val physical = toPhysical(scale)
     return Offset(physical.x.toFloat(), physical.y.toFloat())
 }
+
+internal fun DpOffset.toLogicalPoint(): LogicalPoint =
+    LogicalPoint(x.value.toDouble(), y.value.toDouble())
+
+internal fun Size.toLogicalSize(density: Density): LogicalSize {
+    return with(density) {
+        LogicalSize(
+            width.toDp().value.toDouble(),
+            height.toDp().value.toDouble(),
+        )
+    }
+}
+
+internal fun LogicalPoint.toDpOffset(): DpOffset {
+    return DpOffset(x.dp, y.dp)
+}
+
+internal fun Offset.toLogicalPoint(density: Density): LogicalPoint {
+    return with(density) {
+        LogicalPoint(x.toDp().value.toDouble(), y.toDp().value.toDouble())
+    }
+}
+
+internal operator fun LogicalPoint.plus(other: LogicalPoint): LogicalPoint =
+    LogicalPoint(x + other.x, y + other.y)
+
+internal operator fun LogicalPoint.minus(other: LogicalPoint): LogicalPoint =
+    LogicalPoint(x - other.x, y - other.y)
 
 internal fun MouseButton.toComposePointerButton(): PointerButton {
     return when (this) {

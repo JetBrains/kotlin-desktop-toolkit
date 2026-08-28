@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalComposeUiApi::class)
+
 package org.jetbrains.desktop.sample.compose
 
 import androidx.compose.runtime.Applier
@@ -7,6 +9,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.MonotonicFrameClock
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
@@ -16,6 +19,13 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import org.jetbrains.desktop.macos.Application
+import org.jetbrains.desktop.macos.DragAndDropHandler
+import org.jetbrains.desktop.macos.DragInfo
+import org.jetbrains.desktop.macos.DragOperation
+import org.jetbrains.desktop.macos.DragOperationsSet
+import org.jetbrains.desktop.macos.DragSourceCallbacks
+import org.jetbrains.desktop.macos.DragTargetCallbacks
+import org.jetbrains.desktop.macos.DraggingContext
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.GrandCentralDispatch
@@ -53,6 +63,66 @@ class ComposeApplication : AutoCloseable {
     private val eventLoopThread = thread(start = true, name = "KDT Event Loop") {
         GrandCentralDispatch.startOnMainThread {
             Application.init()
+
+            DragAndDropHandler.init(
+                object : DragTargetCallbacks {
+                    override fun onDragEntered(info: DragInfo): DragOperation {
+                        val windowId = info.destinationWindowId
+                        return windows[windowId]
+                            ?.macOsDragAndDropManager
+                            ?.onDragEntered(info) ?: DragOperation.NONE
+                    }
+
+                    override fun onDragExited(info: DragInfo?) {
+                        val windowId = info?.destinationWindowId ?: return
+                        windows[windowId]
+                            ?.macOsDragAndDropManager
+                            ?.onDragExited()
+                    }
+
+                    override fun onDragPerformed(info: DragInfo): Boolean {
+                        val windowId = info.destinationWindowId
+                        return windows[windowId]
+                            ?.macOsDragAndDropManager
+                            ?.onDragPerformed(info) ?: false
+                    }
+
+                    override fun onDragUpdated(info: DragInfo): DragOperation {
+                        val windowId = info.destinationWindowId
+                        return windows[windowId]
+                            ?.macOsDragAndDropManager
+                            ?.onDragUpdated(info) ?: DragOperation.NONE
+                    }
+                },
+                object : DragSourceCallbacks {
+                    override fun onDragSourceOperationMask(
+                        sourceWindowId: WindowId,
+                        sequenceNumber: Long,
+                        context: DraggingContext,
+                    ): DragOperationsSet {
+                        val data = windows[sourceWindowId]?.activeDragAndDropTransferData
+                            ?: return DragOperationsSet.NONE
+                        return data.supportedActions
+                            .map { action -> action.toDragOperation() }
+                            .map { dragOperation -> DragOperationsSet.of(dragOperation) }
+                            .fold(DragOperationsSet.NONE) { acc, set -> acc + set }
+                    }
+
+                    override fun onDragSourceSessionEndedAt(
+                        sourceWindowId: WindowId,
+                        sequenceNumber: Long,
+                        locationOnScreen: LogicalPoint,
+                        dragOperation: DragOperation,
+                    ) {
+                        val window = windows[sourceWindowId]
+                        window?.activeDragAndDropTransferData?.onTransferCompleted?.invoke(
+                            dragOperation.toDragAndDropTransferAction(),
+                        )
+                        window?.activeDragAndDropTransferData = null
+                    }
+                },
+            )
+
             Application.runEventLoop { event ->
                 when (event) {
                     is Event.ApplicationDidFinishLaunching -> applicationStarted.countDown()
