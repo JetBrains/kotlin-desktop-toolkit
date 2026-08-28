@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -61,7 +62,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -92,11 +95,19 @@ fun ComposeWindowScope.SampleContent() {
 }
 
 /**
- * Draws the window's titlebar when the window asked for a custom one.
+ * Draws the window's titlebar whenever the platform is not drawing one.
  *
- * The platform keeps its traffic-light buttons there, so the content has to leave room for them —
- * [ComposeWindow.customTitleBarInsets] says how much. Moving and maximizing are explicit: an empty area
- * of the bar starts the platform's own move loop on press, and a double click toggles maximized.
+ * That is either because a custom titlebar was asked for, or — on Wayland, where the compositor decides —
+ * because the compositor refused to decorate the window at all; the window reports both as a
+ * [WindowDecoration.CustomTitleBar], so the content does not have to know which it is.
+ *
+ * How much of the bar belongs to the content depends on the platform.
+ * [ComposeWindow.customTitleBarInsets] says how much room the platform's own buttons need, and `null`
+ * means it drew none at all — in which case a close affordance has to come from here, or the window could
+ * not be closed.
+ *
+ * Moving and maximizing are explicit: an empty area of the bar starts the platform's own move loop on
+ * press, and a double click toggles maximized.
  */
 @Composable
 private fun ComposeWindowScope.CustomTitleBar() {
@@ -104,40 +115,64 @@ private fun ComposeWindowScope.CustomTitleBar() {
     if (decoration !is WindowDecoration.CustomTitleBar) {
         return
     }
-    val (leadingInset, trailingInset) = window.customTitleBarInsets ?: (0.dp to 0.dp)
-    Box(
+    val insets = window.customTitleBarInsets
+    val (leadingInset, trailingInset) = insets ?: (0.dp to 0.dp)
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(decoration.height)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .pointerInput(window) {
-                // Initial pass: the bar claims the gesture before anything inside it, which is what a
-                // titlebar does. `startInteractiveMove` is only valid while handling the event, so it
-                // has to be called here rather than from a callback.
-                awaitPointerEventScope {
-                    while (true) {
-                        awaitPointerEvent(PointerEventPass.Initial)
-                        window.startInteractiveMove()
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .pointerInput(window) {
+                    // Initial pass: the draggable part of the bar claims the gesture before anything inside
+                    // it, which is what a titlebar does. `startInteractiveMove` is only valid while handling
+                    // the event, and the event itself is what the platform reads the drag origin from, so it
+                    // is passed along.
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            window.startInteractiveMove(event)
+                        }
                     }
                 }
+                .pointerInput(window) {
+                    detectTapGestures(
+                        onDoubleTap = {
+                            window.requestPlacement(
+                                if (window.placement == WindowPlacement.Maximized) {
+                                    WindowPlacement.Floating
+                                } else {
+                                    WindowPlacement.Maximized
+                                },
+                            )
+                        },
+                    )
+                }
+                .padding(start = leadingInset, end = trailingInset),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(window.title, style = MaterialTheme.typography.titleSmall)
+        }
+        if (insets == null) {
+            // The platform reserved no room, so it drew no buttons either, and this is the only way out.
+            // Deliberately a sibling of the draggable area rather than a child: the move gesture above runs
+            // on the initial pass and would otherwise claim the press before the button ever saw it.
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .pointerInput(window) {
+                        detectTapGestures(onTap = { window.requestClose() })
+                    }
+                    .padding(horizontal = 14.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("\u2715", style = MaterialTheme.typography.titleSmall)
             }
-            .pointerInput(window) {
-                detectTapGestures(
-                    onDoubleTap = {
-                        window.requestPlacement(
-                            if (window.placement == WindowPlacement.Maximized) {
-                                WindowPlacement.Floating
-                            } else {
-                                WindowPlacement.Maximized
-                            },
-                        )
-                    },
-                )
-            }
-            .padding(start = leadingInset, end = trailingInset),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(window.title, style = MaterialTheme.typography.titleSmall)
+        }
     }
 }
 
@@ -223,7 +258,7 @@ private fun ComposeWindowScope.WindowState() {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = "Window ${window.size.width.value.toInt()} x ${window.size.height.value.toInt()} dp " +
-                "at ${window.position.x.value.toInt()}, ${window.position.y.value.toInt()} " +
+                "${window.position.describe()} " +
                 "(content ${window.contentSize.width.value.toInt()} x ${window.contentSize.height.value.toInt()})",
             style = MaterialTheme.typography.bodySmall,
         )
@@ -272,8 +307,8 @@ private fun ComposeWindowScope.WindowControls() {
 }
 
 /**
- * Cursors. Compose's four built-in icons are recognised by the macOS backend; anything else has to be
- * asked for with a toolkit cursor, which is what [org.jetbrains.desktop.sample.compose.macos] exposes.
+ * Cursors. Compose's four built-in icons are recognised by every backend; anything else has to be asked
+ * for with a toolkit cursor — `MacOsPointerIcon` or `LinuxPointerIcon`, depending on the platform.
  */
 @Composable
 private fun PointerIcons() {
@@ -295,6 +330,9 @@ private fun PointerIcons() {
         }
     }
 }
+
+/** Wayland never tells a client where its window is, and says so with an unspecified offset. */
+private fun DpOffset.describe(): String = if (isSpecified) "at ${x.value.toInt()}, ${y.value.toInt()}" else "at an unknown position"
 
 private fun PointerKeyboardModifiers.describe(): String {
     val held = buildList {

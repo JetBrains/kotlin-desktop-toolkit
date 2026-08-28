@@ -129,7 +129,7 @@ tasks.register<JavaExec>("runComposeSampleMac") {
     group = "application"
     description = "Runs example of integration with Compose on MacOS"
     classpath = sourceSets["main"].runtimeClasspath
-    mainClass.set("org.jetbrains.desktop.sample.compose.ComposeSampleMacKt")
+    mainClass.set("org.jetbrains.desktop.sample.compose.macos.ComposeSampleMacKt")
     javaLauncher.set(
         javaToolchains.launcherFor {
             languageVersion.set(JavaLanguageVersion.of(25))
@@ -142,6 +142,27 @@ tasks.register<JavaExec>("runComposeSampleMac") {
     setUpLoggingAndLibraryPath()
 
     environment("MTL_HUD_ENABLED", 1)
+}
+
+tasks.register<JavaExec>("runComposeSampleLinux") {
+    doFirst {
+        // Fix gradle configuration cache remembering old environment variables (https://github.com/gradle/gradle/issues/30790)
+        System.getenv()
+    }
+    group = "application"
+    description = "Runs example of integration with Compose on Linux Wayland"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.jetbrains.desktop.sample.compose.linux.ComposeSampleLinuxKt")
+    javaLauncher.set(
+        javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(25))
+        },
+    )
+    jvmArgs = listOf(
+        "--enable-native-access=ALL-UNNAMED",
+        "-Djextract.trace.downcalls=false",
+    )
+    setUpLoggingAndLibraryPath("linux")
 }
 
 tasks.register<JavaExec>("runSkikoSampleLinux") {

@@ -16,6 +16,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
@@ -150,11 +151,18 @@ interface ComposeWindow {
 
     fun requestDecoration(decoration: WindowDecoration)
 
+    /** Asks this window's owner to close it, the same way the platform's own close button does. */
+    fun requestClose()
+
     /**
-     * Hands the window over to the platform's own move loop. Only valid from within a pointer event
-     * handler, which is what the platform reads the drag origin from.
+     * Hands the window over to the platform's own move loop.
+     *
+     * Only valid from within a pointer event handler: the platform starts the move from the press that
+     * originated it, so [pointerEvent] has to be the event currently being handled. macOS reads the current
+     * event and ignores the argument; Wayland needs the press's serial and ignores an event that is not a
+     * press, which is what makes this safe to call from a handler that sees every pointer event.
      */
-    fun startInteractiveMove()
+    fun startInteractiveMove(pointerEvent: PointerEvent)
 
     /**
      * Shows a modal file-open dialog and returns the chosen paths, empty if the user cancelled.

@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
+import org.jetbrains.desktop.sample.compose.linux.LinuxApplication
 import org.jetbrains.desktop.sample.compose.macos.MacOsApplication
 import java.util.concurrent.atomic.AtomicReference
 
@@ -92,7 +93,15 @@ interface ComposeApplication : AutoCloseable {
 }
 
 class ComposeApplicationParams(
-    /** Invoked when the OS hands the application URLs to open (`open -a`, a custom URL scheme, ...). */
+    /**
+     * Reverse-DNS name of the application, which the desktop matches its windows against a `.desktop` file
+     * with. Used as the Wayland app id on Linux; macOS takes it from the bundle instead and ignores this.
+     */
+    val identifier: String = "org.jetbrains.desktop.sample.compose",
+    /**
+     * Invoked when the OS hands the application URLs to open (`open -a`, a custom URL scheme, ...). Only
+     * macOS reports these; the toolkit's Wayland backend has no equivalent event.
+     */
     val onOpenUris: (List<String>) -> Unit = {},
 )
 
@@ -105,14 +114,14 @@ val LocalComposeApplication = staticCompositionLocalOf<ComposeApplication> {
  * that windows can be created straight away.
  *
  * This is the single point where the platform implementation is chosen; adding a platform means adding
- * a branch here plus a [ComposeApplication] implementation next to [MacOsApplication].
+ * a branch here plus a [ComposeApplication] implementation next to [MacOsApplication] and
+ * [LinuxApplication].
  */
 fun initApplication(params: ComposeApplicationParams = ComposeApplicationParams()): ComposeApplication {
     val application = when (DesktopPlatform.current) {
         DesktopPlatform.MacOs -> MacOsApplication(params)
-        DesktopPlatform.Linux,
-        DesktopPlatform.Windows,
-        -> error("Compose integration is only implemented for macOS so far, got ${DesktopPlatform.current}")
+        DesktopPlatform.Linux -> LinuxApplication(params)
+        DesktopPlatform.Windows -> error("Compose integration is not implemented for ${DesktopPlatform.current} yet")
     }
     ApplicationRegistry.register(application)
     return application

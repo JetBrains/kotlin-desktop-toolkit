@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.asComposeCanvas
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.platform.LocalClipboard
@@ -442,7 +443,14 @@ internal class MacOsWindow(
         }
     }
 
-    override fun startInteractiveMove() {
+    override fun requestClose() {
+        if (!isDisposed) {
+            onCloseRequest(WindowCloseRequestReason.UserRequest)
+        }
+    }
+
+    // AppKit starts the drag from the event it is currently handling, so `pointerEvent` is not needed here.
+    override fun startInteractiveMove(pointerEvent: PointerEvent) {
         if (isDisposed) return
         nativeWindow.startDragWindow()
     }
