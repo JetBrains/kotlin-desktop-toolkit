@@ -11,6 +11,9 @@ import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.sample.compose.ClipboardEntry
 import org.jetbrains.desktop.sample.compose.ClipboardFormat
 import org.jetbrains.desktop.sample.compose.ClipboardItemsEntry
+import org.jetbrains.desktop.sample.compose.dataForLinuxMimeType
+import org.jetbrains.desktop.sample.compose.decodeLinuxMimeData
+import org.jetbrains.desktop.sample.compose.linuxMimeTypes
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.resume

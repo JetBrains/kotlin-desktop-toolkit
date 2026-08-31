@@ -16,6 +16,8 @@ import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.SupportedActionsForMime
 import org.jetbrains.desktop.sample.compose.ClipboardFormat
 import org.jetbrains.desktop.sample.compose.DragAndDropClipboardEntry
+import org.jetbrains.desktop.sample.compose.decodeLinuxMimeData
+import org.jetbrains.desktop.sample.compose.linuxMimeTypes
 
 /**
  * The clipboard behind an in-flight drag over this window.

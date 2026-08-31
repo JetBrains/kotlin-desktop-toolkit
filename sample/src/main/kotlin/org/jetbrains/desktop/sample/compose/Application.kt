@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
+import org.jetbrains.desktop.sample.compose.gtk.GtkApplication
 import org.jetbrains.desktop.sample.compose.linux.LinuxApplication
 import org.jetbrains.desktop.sample.compose.macos.MacOsApplication
 import java.util.concurrent.atomic.AtomicReference
@@ -110,18 +111,22 @@ val LocalComposeApplication = staticCompositionLocalOf<ComposeApplication> {
 }
 
 /**
- * Boots the native application for the current platform and blocks until it has finished launching, so
- * that windows can be created straight away.
+ * Boots the native application for [backend] and blocks until it has finished launching, so that windows
+ * can be created straight away.
  *
- * This is the single point where the platform implementation is chosen; adding a platform means adding
- * a branch here plus a [ComposeApplication] implementation next to [MacOsApplication] and
- * [LinuxApplication].
+ * This is the single point where the backend implementation is chosen; adding a backend means adding a
+ * branch here plus a [ComposeApplication] implementation next to [MacOsApplication], [LinuxApplication]
+ * and [GtkApplication].
  */
-fun initApplication(params: ComposeApplicationParams = ComposeApplicationParams()): ComposeApplication {
-    val application = when (DesktopPlatform.current) {
-        DesktopPlatform.MacOs -> MacOsApplication(params)
-        DesktopPlatform.Linux -> LinuxApplication(params)
-        DesktopPlatform.Windows -> error("Compose integration is not implemented for ${DesktopPlatform.current} yet")
+fun initApplication(
+    params: ComposeApplicationParams = ComposeApplicationParams(),
+    backend: DesktopBackend = DesktopBackend.default,
+): ComposeApplication {
+    val application = when (backend) {
+        DesktopBackend.MacOs -> MacOsApplication(params)
+        DesktopBackend.Wayland -> LinuxApplication(params)
+        DesktopBackend.Gtk -> GtkApplication(params)
+        DesktopBackend.Windows -> error("Compose integration is not implemented for $backend yet")
     }
     ApplicationRegistry.register(application)
     return application

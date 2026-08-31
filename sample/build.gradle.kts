@@ -65,15 +65,8 @@ val nativeLib = configurations.resolvable("nativeParts") {
     }
 }
 
-fun JavaExec.setUpLoggingAndLibraryPath(backend: String? = null) {
+fun JavaExec.setUpLogging(nativeLibPath: Provider<String>) {
     val logFilePath = layout.buildDirectory.file("sample-logs/skiko_sample.log").map { it.asFile.absolutePath }
-    val nativeLibPath = nativeLib.map {
-        if (backend == null) {
-            it.singleFile
-        } else {
-            it.first { file -> file.name.startsWith("native-$backend-") }
-        }.absolutePath
-    }
     jvmArgumentProviders.add(
         CommandLineArgumentProvider {
             listOf(
@@ -83,6 +76,35 @@ fun JavaExec.setUpLoggingAndLibraryPath(backend: String? = null) {
             )
         },
     )
+}
+
+fun JavaExec.setUpLoggingAndLibraryPath(backend: String? = null) {
+    setUpLogging(
+        nativeLib.map {
+            if (backend == null) {
+                it.singleFile
+            } else {
+                it.first { file -> file.name.startsWith("native-$backend-") }
+            }.absolutePath
+        },
+    )
+}
+
+/**
+ * Both Linux backends' native libraries in one folder.
+ *
+ * `kdt.library.folder.path` names a single directory, so a process that only decides between the Wayland
+ * and GTK backends at runtime has to be able to find either one in it. The two libraries have distinct
+ * file names (`libdesktop_linux_*` and `libdesktop_gtk_*`), so merging the folders cannot collide, and only
+ * the backend that is actually chosen ever gets loaded.
+ */
+val prepareMergedLinuxNativeLibs = tasks.register<Copy>("prepareMergedLinuxNativeLibs") {
+    from(
+        nativeLib.map { files ->
+            files.filter { it.name.startsWith("native-linux-") || it.name.startsWith("native-gtk-linux-") }
+        },
+    )
+    into(layout.buildDirectory.dir("native-linux-merged"))
 }
 
 tasks.register<JavaExec>("runSkikoSampleMac") {
@@ -163,6 +185,50 @@ tasks.register<JavaExec>("runComposeSampleLinux") {
         "-Djextract.trace.downcalls=false",
     )
     setUpLoggingAndLibraryPath("linux")
+}
+
+tasks.register<JavaExec>("runComposeSampleLinuxAuto") {
+    doFirst {
+        // Fix gradle configuration cache remembering old environment variables (https://github.com/gradle/gradle/issues/30790)
+        System.getenv()
+    }
+    group = "application"
+    description = "Runs example of integration with Compose on Linux, picking Wayland or GTK to suit the session"
+    dependsOn(prepareMergedLinuxNativeLibs)
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.jetbrains.desktop.sample.compose.ComposeSampleLinuxAutoKt")
+    javaLauncher.set(
+        javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(25))
+        },
+    )
+    jvmArgs = listOf(
+        "--enable-native-access=ALL-UNNAMED",
+        "-Djextract.trace.downcalls=false",
+    )
+    // Both backends' libraries, because which one is loaded is not known until the process is running.
+    setUpLogging(prepareMergedLinuxNativeLibs.map { it.destinationDir.absolutePath })
+}
+
+tasks.register<JavaExec>("runComposeSampleGtk") {
+    doFirst {
+        // Fix gradle configuration cache remembering old environment variables (https://github.com/gradle/gradle/issues/30790)
+        System.getenv()
+    }
+    group = "application"
+    description = "Runs example of integration with Compose on GTK"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.jetbrains.desktop.sample.compose.gtk.ComposeSampleGtkKt")
+    javaLauncher.set(
+        javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(25))
+        },
+    )
+    jvmArgs = listOf(
+        "--enable-native-access=ALL-UNNAMED",
+        "-Djextract.trace.downcalls=false",
+    )
+    setUpLoggingAndLibraryPath("gtk")
 }
 
 tasks.register<JavaExec>("runSkikoSampleLinux") {

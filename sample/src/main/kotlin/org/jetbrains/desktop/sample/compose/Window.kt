@@ -121,6 +121,19 @@ interface ComposeWindow {
      */
     val customTitleBarInsets: Pair<Dp, Dp>?
 
+    /**
+     * Whether the platform itself runs the move and maximize gestures of a
+     * [WindowDecoration.CustomTitleBar].
+     *
+     * `false` on macOS and Wayland: the titlebar is drawn by the content and nothing happens unless the
+     * content asks for it, which is what [startInteractiveMove] and [requestPlacement] are for.
+     *
+     * `true` on GTK, where a custom titlebar is still a real GTK titlebar that the application only draws
+     * into — GTK keeps the drag and the double-click. Content must then add no gestures of its own, or
+     * both would fire and, in the case of maximize, cancel each other out.
+     */
+    val handlesCustomTitleBarGestures: Boolean get() = false
+
     /** The platform object behind this window, for code that needs to reach past this abstraction. */
     val nativeWindow: Any
 

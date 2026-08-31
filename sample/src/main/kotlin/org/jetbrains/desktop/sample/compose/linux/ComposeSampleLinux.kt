@@ -13,7 +13,8 @@ import org.jetbrains.desktop.sample.compose.runApplication
  * The twin of the macOS entry point, and deliberately as thin: the whole difference between the two
  * backends is behind `initApplication`, and the composition — [SampleWindows] — is shared verbatim.
  *
- * Requires a Wayland session. The toolkit has a separate GTK backend for X11, which this sample does not use.
+ * Names its backend, so it requires a Wayland session. `ComposeSampleGtk` is the same sample against the
+ * toolkit's GTK backend, and `ComposeSampleLinuxAuto` picks between the two to suit the session.
  */
 fun main() {
     Logger.info { runtimeInfo() }

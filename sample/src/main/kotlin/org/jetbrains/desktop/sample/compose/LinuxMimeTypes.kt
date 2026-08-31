@@ -1,7 +1,5 @@
-package org.jetbrains.desktop.sample.compose.linux
+package org.jetbrains.desktop.sample.compose
 
-import org.jetbrains.desktop.sample.compose.ClipboardFormat
-import org.jetbrains.desktop.sample.compose.ClipboardItemsEntry
 import java.net.URI
 import java.nio.file.Path
 
@@ -11,6 +9,9 @@ import java.nio.file.Path
  * Where macOS has one uniform type identifier per format, the freedesktop world has an ordered list of
  * MIME types per format: the first is the one to advertise, the rest are the aliases older applications
  * offer. Reading accepts any of them, writing offers all of them.
+ *
+ * Shared by both Linux backends: the MIME types are the desktop's, not Wayland's or GTK's, so the
+ * Wayland and GTK clipboards speak exactly the same ones.
  */
 internal object LinuxMimeTypes {
     const val UTF8_PLAIN_TEXT = "text/plain;charset=utf-8"

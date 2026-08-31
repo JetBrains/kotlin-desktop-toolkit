@@ -106,8 +106,10 @@ fun ComposeWindowScope.SampleContent() {
  * means it drew none at all — in which case a close affordance has to come from here, or the window could
  * not be closed.
  *
- * Moving and maximizing are explicit: an empty area of the bar starts the platform's own move loop on
- * press, and a double click toggles maximized.
+ * Moving and maximizing are explicit on most platforms: an empty area of the bar starts the platform's own
+ * move loop on press, and a double click toggles maximized. GTK is the exception — it keeps those gestures
+ * for itself even over a custom titlebar — so [ComposeWindow.handlesCustomTitleBarGestures] is what decides
+ * whether the content adds them.
  */
 @Composable
 private fun ComposeWindowScope.CustomTitleBar() {
@@ -127,31 +129,9 @@ private fun ComposeWindowScope.CustomTitleBar() {
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .pointerInput(window) {
-                    // Initial pass: the draggable part of the bar claims the gesture before anything inside
-                    // it, which is what a titlebar does. `startInteractiveMove` is only valid while handling
-                    // the event, and the event itself is what the platform reads the drag origin from, so it
-                    // is passed along.
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            window.startInteractiveMove(event)
-                        }
-                    }
-                }
-                .pointerInput(window) {
-                    detectTapGestures(
-                        onDoubleTap = {
-                            window.requestPlacement(
-                                if (window.placement == WindowPlacement.Maximized) {
-                                    WindowPlacement.Floating
-                                } else {
-                                    WindowPlacement.Maximized
-                                },
-                            )
-                        },
-                    )
-                }
+                // On a platform that runs these gestures itself, adding them here would double them up:
+                // two move loops, and a maximize toggled twice back to where it started.
+                .then(if (window.handlesCustomTitleBarGestures) Modifier else Modifier.titleBarGestures(window))
                 .padding(start = leadingInset, end = trailingInset),
             contentAlignment = Alignment.Center,
         ) {
@@ -434,3 +414,33 @@ private fun DragAndDropSource() {
         Text(dragSourceText)
     }
 }
+
+/**
+ * Dragging moves the window and a double click toggles maximized — for the platforms where the titlebar is
+ * inert until the content says otherwise. See [ComposeWindow.handlesCustomTitleBarGestures].
+ */
+private fun Modifier.titleBarGestures(window: ComposeWindow): Modifier = this
+    .pointerInput(window) {
+        // Initial pass: the draggable part of the bar claims the gesture before anything inside it, which
+        // is what a titlebar does. `startInteractiveMove` is only valid while handling the event, and the
+        // event itself is what the platform reads the drag origin from, so it is passed along.
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                window.startInteractiveMove(event)
+            }
+        }
+    }
+    .pointerInput(window) {
+        detectTapGestures(
+            onDoubleTap = {
+                window.requestPlacement(
+                    if (window.placement == WindowPlacement.Maximized) {
+                        WindowPlacement.Floating
+                    } else {
+                        WindowPlacement.Maximized
+                    },
+                )
+            },
+        )
+    }

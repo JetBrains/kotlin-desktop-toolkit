@@ -37,6 +37,7 @@ import org.jetbrains.desktop.sample.compose.ComposeApplicationParams
 import org.jetbrains.desktop.sample.compose.ComposeWindow
 import org.jetbrains.desktop.sample.compose.ComposeWindowParams
 import org.jetbrains.desktop.sample.compose.WindowCloseRequestReason
+import org.jetbrains.desktop.sample.compose.dataForLinuxMimeType
 import org.jetbrains.desktop.sample.compose.forgetApplication
 import org.jetbrains.skia.ColorSpace
 import org.jetbrains.skia.Image
