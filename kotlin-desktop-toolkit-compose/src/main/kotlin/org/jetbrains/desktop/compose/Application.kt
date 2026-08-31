@@ -265,7 +265,9 @@ fun currentApplication(): ComposeApplication = ApplicationRegistry.current()
  */
 fun runApplication(application: ComposeApplication, content: @Composable () -> Unit) {
     runBlocking(KdtDispatcher) {
-        withContext(YieldFrameClock) {
+        // The application composition drives no pixels of its own, so nothing rate-limits it: an
+        // infinite animation outside any `Window` would spin `YieldFrameClock` at 100% CPU.
+        withContext(YieldFrameClock + noWindowAnimationCoroutineContext { application.windows.isNotEmpty() }) {
             // Before the first composition, so that state written from an event handler invalidates it,
             // and undone at the very end: the observer it installs is global and outlives this call
             // otherwise.

@@ -247,7 +247,10 @@ thread the composition runs on.
 18. **`InfiniteAnimationPolicy`/`MotionDurationScale` on the app composition.** `YieldFrameClock`
     (`Application.kt:274-279`) will spin the event loop at 100% CPU for an infinite animation
     outside a `Window`. Compose supplies both context elements; Noria installs
-    `noWindowAnimationCoroutineContext` into every scene.
+    `noWindowAnimationCoroutineContext` into every scene. — **done**: Noria's
+    `NoWindowAnimationPolicy.kt` copied as-is, installed on the application composition rather than
+    per scene, since here it is `YieldFrameClock` that has no display to pace against; each window's
+    scene already runs off its own frame pump.
 19. **`LinuxInputMethodCommon.kt`** — the target duplicates ~110 lines of IME arithmetic between
     `gtk/` and `linux/`, and `GtkKeys.kt` / `LinuxKeys.kt` are byte-identical modulo the package
     token.
