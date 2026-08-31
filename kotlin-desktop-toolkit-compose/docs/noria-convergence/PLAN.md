@@ -31,7 +31,7 @@ and object lifetime. Everything else is refactor-grade.
 
 # Workstreams, in recommended order
 
-## WS1 — Application termination (P0, spans all four backends)
+## WS1 — Application termination (P0, spans all four backends) — **done**
 
 The single most coherent piece of work. Same defect shape in four places.
 
@@ -60,6 +60,27 @@ and always answer the native side with the non-vetoing result. Noria's
 
 **Risk:** medium — touches exit paths on every platform. Needs manual verification per OS:
 quit with no windows, quit with a vetoing handler, then quit again.
+
+**Landed** as `ApplicationQuit` + `QuitTarget` in the shared layer, with two deliberate departures
+from the reference shape:
+
+- **The in-progress flag became a scoped re-entrancy guard**, set and cleared inside one round of
+  `request()` under a `try`/`finally`, rather than a latch cleared when termination proceeds.
+  Noria's `structuredQuitInProgress` is *also* never cleared on a veto (`GtkApplication.kt:565`,
+  `LinuxApplication.kt:757` — only `continueTerminationAsync` clears it), so porting its lifetime
+  verbatim would have carried finding 1 across rather than fixing it. The guard now only does the
+  job it is needed for: a window's own `onCloseRequest` runs inline in the loop below and may call
+  `quit()` again.
+- **No backend tells its native side "yes, terminate" any more.** AppKit's `TerminateNow` halts the
+  process where it stands and GTK's `gtk_app.quit()` drops the GLib queue the Compose dispatcher
+  runs on, so both are answered with the cancel result unconditionally and the exit is driven
+  through the composition on all four platforms. Linux's terminate event, being teardown-only,
+  answers `Continue` unconditionally for the same reason read from the other side.
+
+Finding 4 needed one new seam: with no window to negotiate with there is no `onCloseRequest` to
+make the decision, so `application()` now installs its `exitApplication` in a process-wide slot
+(`Application.kt`, `requestApplicationExit`) that the quit sequence reaches for in that case. A
+composition driven by a bare `runApplication` has no such lever and gets a warning instead.
 
 ## WS2 — Linux focus and activation (1 P0 + 1 P1)
 

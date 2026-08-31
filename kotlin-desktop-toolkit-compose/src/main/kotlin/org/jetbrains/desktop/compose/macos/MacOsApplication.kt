@@ -17,10 +17,12 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.unit.LayoutDirection
+import org.jetbrains.desktop.compose.ApplicationQuit
 import org.jetbrains.desktop.compose.ComposeApplication
 import org.jetbrains.desktop.compose.ComposeApplicationParams
 import org.jetbrains.desktop.compose.ComposeWindow
 import org.jetbrains.desktop.compose.ComposeWindowParams
+import org.jetbrains.desktop.compose.DesktopBackend
 import org.jetbrains.desktop.compose.KdtInputModeManager
 import org.jetbrains.desktop.compose.WindowCloseRequestReason
 import org.jetbrains.desktop.compose.forgetApplication
@@ -44,7 +46,6 @@ import org.jetbrains.desktop.macos.Screen
 import org.jetbrains.desktop.macos.TextDirection
 import org.jetbrains.desktop.macos.WindowEvent
 import org.jetbrains.desktop.macos.WindowId
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import kotlin.concurrent.thread
 
@@ -66,10 +67,7 @@ internal class MacOsApplication(private val params: ComposeApplicationParams) : 
     private val windowsById = mutableMapOf<WindowId, MacOsWindow>()
     private val windowList = mutableStateListOf<MacOsWindow>()
     private val applicationStarted = CountDownLatch(1)
-    private val quitHandlers = ConcurrentHashMap<String, () -> Boolean>()
-
-    @Volatile
-    private var isQuitInProgress = false
+    private val quit = ApplicationQuit(DesktopBackend.MacOs) { windowList.toList() }
 
     // Deferred so the Metal device is created on the main thread, once the event loop is up.
     private val lazyGpuContext = lazy { GpuContext() }
@@ -186,25 +184,13 @@ internal class MacOsApplication(private val params: ComposeApplicationParams) : 
     /**
      * Runs when the user chooses Quit (or something calls [quit]).
      *
-     * Returning `false` cancels AppKit's own termination, which is what we want in every branch: either
-     * a handler vetoed, or there are windows to close first. Closing them goes through each window's
-     * `onCloseRequest`, so the application decides — and the composition, once it stops emitting those
-     * windows, is what ends `runApplication` and unwinds the process from `main`.
+     * Always answers `false`, which is `NSApplicationTerminateCancel`: AppKit's own `TerminateNow` halts
+     * the process where it stands, taking the composition and every JVM shutdown hook with it. What ends
+     * the application instead is [ApplicationQuit] — the windows it asks to close leave the composition,
+     * and that is what ends `runApplication` and unwinds the process from `main`.
      */
     private fun onQuitRequested(): Boolean {
-        // Every handler is consulted, not just up to the first veto: a handler may be showing a dialog
-        // and needs to know a quit was attempted even if another handler already said no.
-        val isSafeToQuit = quitHandlers.values.fold(true) { acc, handler -> handler() and acc }
-        if (!isSafeToQuit || isQuitInProgress) {
-            return false
-        }
-        val openWindows = windowList.toList()
-        if (openWindows.isEmpty()) {
-            return true
-        }
-        isQuitInProgress = true
-        Logger.info { "Quit approved, asking ${openWindows.size} window(s) to close" }
-        openWindows.forEach { it.requestCloseFromQuit() }
+        quit.request()
         return false
     }
 
@@ -287,11 +273,11 @@ internal class MacOsApplication(private val params: ComposeApplicationParams) : 
     }
 
     override fun putQuitHandler(id: String, isSafeToQuit: () -> Boolean) {
-        quitHandlers[id] = isSafeToQuit
+        quit.putHandler(id, isSafeToQuit)
     }
 
     override fun removeQuitHandler(id: String) {
-        quitHandlers.remove(id)
+        quit.removeHandler(id)
     }
 
     override fun openUri(uri: String) {

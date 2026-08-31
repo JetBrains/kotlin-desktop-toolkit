@@ -54,6 +54,7 @@ import org.jetbrains.desktop.compose.KdtDragAndDropManager
 import org.jetbrains.desktop.compose.KdtDragAndDropTransferable
 import org.jetbrains.desktop.compose.KdtInputModeManager
 import org.jetbrains.desktop.compose.LocalComposeWindow
+import org.jetbrains.desktop.compose.QuitTarget
 import org.jetbrains.desktop.compose.WindowCloseRequestReason
 import org.jetbrains.desktop.compose.WindowDecoration
 import org.jetbrains.desktop.compose.WindowPlacement
@@ -113,7 +114,8 @@ internal class GtkWindow(
     params: ComposeWindowParams,
     private val onCloseRequest: (WindowCloseRequestReason) -> Unit,
 ) : ComposeWindow,
-    DragAndDropSourceWindow {
+    DragAndDropSourceWindow,
+    QuitTarget {
     override val nativeWindow: Window = application.nativeApplication.createWindow(
         WindowParams(
             windowId = application.allocateWindowId(),
@@ -403,7 +405,7 @@ internal class GtkWindow(
      * Asks the application's owner to close this window because the application is quitting. Separate from
      * the user-driven path only in the reason it reports.
      */
-    internal fun requestCloseFromQuit() {
+    override fun requestCloseFromQuit() {
         if (!isDisposed) {
             onCloseRequest(WindowCloseRequestReason.ApplicationQuit)
         }

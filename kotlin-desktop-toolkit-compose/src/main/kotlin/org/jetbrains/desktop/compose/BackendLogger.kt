@@ -23,3 +23,12 @@ internal fun logInfo(backend: DesktopBackend, message: () -> String) {
         DesktopBackend.Windows -> WindowsLogger.info(message)
     }
 }
+
+internal fun logWarn(backend: DesktopBackend, message: () -> String) {
+    when (backend) {
+        DesktopBackend.MacOs -> MacOsLogger.warn(message)
+        DesktopBackend.Wayland -> LinuxLogger.warn(message)
+        DesktopBackend.Gtk -> GtkLogger.warn(message)
+        DesktopBackend.Windows -> WindowsLogger.warn(message)
+    }
+}

@@ -17,11 +17,13 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.unit.LayoutDirection
+import org.jetbrains.desktop.compose.ApplicationQuit
 import org.jetbrains.desktop.compose.ClipboardItemsEntry
 import org.jetbrains.desktop.compose.ComposeApplication
 import org.jetbrains.desktop.compose.ComposeApplicationParams
 import org.jetbrains.desktop.compose.ComposeWindow
 import org.jetbrains.desktop.compose.ComposeWindowParams
+import org.jetbrains.desktop.compose.DesktopBackend
 import org.jetbrains.desktop.compose.WindowCloseRequestReason
 import org.jetbrains.desktop.compose.dataForLinuxMimeType
 import org.jetbrains.desktop.compose.forgetApplication
@@ -82,14 +84,11 @@ internal class LinuxApplication(private val params: ComposeApplicationParams) : 
     private val windowsById = mutableMapOf<WindowId, LinuxWindow>()
     private val windowList = mutableStateListOf<LinuxWindow>()
     private val applicationStarted = CountDownLatch(1)
-    private val quitHandlers = ConcurrentHashMap<String, () -> Boolean>()
+    private val quit = ApplicationQuit(DesktopBackend.Wayland) { windowList.toList() }
     private val pendingActivations = ConcurrentHashMap<RequestId, WindowId>()
 
     /** Window ids are ours to hand out, and the toolkit refuses a duplicate, so they only ever go up. */
     private val nextWindowId = AtomicLong(1L)
-
-    @Volatile
-    private var isQuitInProgress = false
 
     /** Set when the event loop never got off the ground — no compositor, no EGL, a missing library. */
     @Volatile
@@ -179,10 +178,12 @@ internal class LinuxApplication(private val params: ComposeApplicationParams) : 
                     EventHandlerResult.Stop
                 }
 
-                Event.ApplicationWantsToTerminate ->
-                    // Stop means "do not terminate", which is what we want whenever there is still a
-                    // handler vetoing or a window to close first.
-                    if (onQuitRequested()) EventHandlerResult.Continue else EventHandlerResult.Stop
+                // Not a user gesture, despite the name: the toolkit raises this only once
+                // `stopEventLoop` has set its exit flag, which nothing but [close] does. It is the loop
+                // asking permission to finish unwinding, and it re-asks every frame until it gets it, so
+                // answering anything but Continue — Stop is the veto — hangs [close] forever. The user's
+                // Quit arrives through [quit] instead.
+                Event.ApplicationWantsToTerminate -> EventHandlerResult.Continue
 
                 Event.ApplicationWillTerminate -> EventHandlerResult.Continue
 
@@ -342,31 +343,6 @@ internal class LinuxApplication(private val params: ComposeApplicationParams) : 
     }
 
     private fun readScreens(): List<LinuxScreen> = nativeApplication.allScreens().screens.map(::LinuxScreen)
-
-    /**
-     * Runs when the user chooses Quit (or something calls [quit]).
-     *
-     * Returns whether the application may terminate right now, which is only the case when nothing vetoed
-     * *and* there is no window left. Closing the windows goes through each one's `onCloseRequest`, so the
-     * application decides — and the composition, once it stops emitting those windows, is what ends
-     * `runApplication` and unwinds the process from `main`.
-     */
-    private fun onQuitRequested(): Boolean {
-        // Every handler is consulted, not just up to the first veto: a handler may be showing a dialog and
-        // needs to know a quit was attempted even if another handler already said no.
-        val isSafeToQuit = quitHandlers.values.fold(true) { acc, handler -> handler() and acc }
-        if (!isSafeToQuit || isQuitInProgress) {
-            return false
-        }
-        val openWindows = windowList.toList()
-        if (openWindows.isEmpty()) {
-            return true
-        }
-        isQuitInProgress = true
-        Logger.info { "Quit approved, asking ${openWindows.size} window(s) to close" }
-        openWindows.forEach { it.requestCloseFromQuit() }
-        return false
-    }
 
     // ----- Text input -----
     //
@@ -534,15 +510,15 @@ internal class LinuxApplication(private val params: ComposeApplicationParams) : 
     }
 
     override fun quit() {
-        onEventLoop { onQuitRequested() }
+        onEventLoop { quit.request() }
     }
 
     override fun putQuitHandler(id: String, isSafeToQuit: () -> Boolean) {
-        quitHandlers[id] = isSafeToQuit
+        quit.putHandler(id, isSafeToQuit)
     }
 
     override fun removeQuitHandler(id: String) {
-        quitHandlers.remove(id)
+        quit.removeHandler(id)
     }
 
     override fun openUri(uri: String) {

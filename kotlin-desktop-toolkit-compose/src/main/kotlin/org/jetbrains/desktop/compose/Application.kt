@@ -165,12 +165,55 @@ fun application(
     logInfo(backend) { startupInfo(backend) }
     initApplication(params, backend).use { application ->
         val scope = ApplicationScopeImpl(application)
-        runApplication(application) {
-            // Reading `isRunning` inside the composition is what makes `exitApplication` work: flipping it
-            // recomposes this, the content leaves, and its windows go with it.
-            if (scope.isRunning) {
-                scope.content()
+        ApplicationExit.installedWhile(scope::exitApplication) {
+            runApplication(application) {
+                // Reading `isRunning` inside the composition is what makes `exitApplication` work: flipping
+                // it recomposes this, the content leaves, and its windows go with it.
+                if (scope.isRunning) {
+                    scope.content()
+                }
             }
+        }
+    }
+}
+
+/**
+ * Ends the application the way [ApplicationScope.exitApplication] does, for code that has no scope in
+ * hand — the quit sequence, which reaches this point only when there is no window whose `onCloseRequest`
+ * could make the decision instead.
+ *
+ * Does nothing but warn when [application] is not what is running: a caller driving [initApplication] and
+ * [runApplication] itself owns the composition, and only it knows what would make that composition finish.
+ */
+internal fun requestApplicationExit(backend: DesktopBackend) {
+    val exit = ApplicationExit.current
+    if (exit == null) {
+        logWarn(backend) {
+            "Nothing to quit: the composition is not run by application(), so only its own caller can end it"
+        }
+        return
+    }
+    exit()
+}
+
+/**
+ * The exit lever [application] holds open for the duration of its composition.
+ *
+ * A process-wide slot rather than something threaded through [ComposeApplication], for the same reason
+ * [ApplicationRegistry] is one: there is at most one live application, and the code that needs the lever
+ * sits under an interface that cannot carry an internal member.
+ */
+private object ApplicationExit {
+    private val exit = AtomicReference<(() -> Unit)?>(null)
+
+    val current: (() -> Unit)? get() = exit.get()
+
+    fun <T> installedWhile(exit: () -> Unit, block: () -> T): T {
+        check(this.exit.compareAndSet(null, exit)) { "Another application composition is already running" }
+        try {
+            return block()
+        } finally {
+            this.exit.compareAndSet(exit, null)
         }
     }
 }

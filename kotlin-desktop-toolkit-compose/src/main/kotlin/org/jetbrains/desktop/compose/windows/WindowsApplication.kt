@@ -16,10 +16,12 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.unit.LayoutDirection
+import org.jetbrains.desktop.compose.ApplicationQuit
 import org.jetbrains.desktop.compose.ComposeApplication
 import org.jetbrains.desktop.compose.ComposeApplicationParams
 import org.jetbrains.desktop.compose.ComposeWindow
 import org.jetbrains.desktop.compose.ComposeWindowParams
+import org.jetbrains.desktop.compose.DesktopBackend
 import org.jetbrains.desktop.compose.WindowCloseRequestReason
 import org.jetbrains.desktop.compose.forgetApplication
 import org.jetbrains.desktop.win32.Appearance
@@ -31,7 +33,6 @@ import org.jetbrains.desktop.win32.Logger
 import org.jetbrains.desktop.win32.Screen
 import org.jetbrains.desktop.win32.WindowId
 import org.jetbrains.desktop.win32.openURL
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import kotlin.concurrent.thread
 
@@ -65,10 +66,7 @@ internal class WindowsApplication(params: ComposeApplicationParams) : ComposeApp
     private val windowsById = mutableMapOf<WindowId, WindowsWindow>()
     private val windowList = mutableStateListOf<WindowsWindow>()
     private val applicationStarted = CountDownLatch(1)
-    private val quitHandlers = ConcurrentHashMap<String, () -> Boolean>()
-
-    @Volatile
-    private var isQuitInProgress = false
+    private val quit = ApplicationQuit(DesktopBackend.Windows) { windowList.toList() }
 
     private var hasShownAWindow = false
 
@@ -210,30 +208,15 @@ internal class WindowsApplication(params: ComposeApplicationParams) : ComposeApp
      * no windows left to emit and `runApplication` returns.
      */
     override fun quit() {
-        if (isQuitInProgress) {
-            return
-        }
-        // Every handler is consulted, not just up to the first veto: a handler may be showing a dialog
-        // and needs to know a quit was attempted even if another handler already said no.
-        val isSafeToQuit = quitHandlers.values.fold(true) { acc, handler -> handler() and acc }
-        if (!isSafeToQuit) {
-            return
-        }
-        val openWindows = windowList.toList()
-        if (openWindows.isEmpty()) {
-            return
-        }
-        isQuitInProgress = true
-        Logger.info { "Quit approved, asking ${openWindows.size} window(s) to close" }
-        openWindows.forEach { it.requestCloseFromQuit() }
+        quit.request()
     }
 
     override fun putQuitHandler(id: String, isSafeToQuit: () -> Boolean) {
-        quitHandlers[id] = isSafeToQuit
+        quit.putHandler(id, isSafeToQuit)
     }
 
     override fun removeQuitHandler(id: String) {
-        quitHandlers.remove(id)
+        quit.removeHandler(id)
     }
 
     override fun openUri(uri: String) {
