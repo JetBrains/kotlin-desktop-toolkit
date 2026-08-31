@@ -17,6 +17,9 @@ The project uses Rust for native implementations and requires platform-specific 
 - Enable cross-compilation via gradle.properties flags like `enableCrossCompileToLinuxX86_64=true`
 
 ### Sample Applications
+- `./gradlew :sample:runComposeSample` - Run the Compose sample on any host; it picks the backend that suits
+  the system (Wayland or GTK on Linux, where `GDK_BACKEND` forces GTK). The IDE run configuration
+  `Compose Sample` (`.run/`) is this task.
 - `./gradlew :sample:runSkikoSampleMac` - Run macOS Skiko sample app
 - `./gradlew :sample:runApplicationMenuSampleMac` - Run macOS Application Menu sample
 - `./gradlew :sample:runSkikoSampleLinux` - Run Linux Wayland sample app

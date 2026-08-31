@@ -147,90 +147,6 @@ tasks.register<JavaExec>("runApplicationMenuSampleMac") {
 //    environment("MallocStackLogging", "1")
 }
 
-tasks.register<JavaExec>("runComposeSampleMac") {
-    group = "application"
-    description = "Runs example of integration with Compose on MacOS"
-    classpath = sourceSets["main"].runtimeClasspath
-    mainClass.set("org.jetbrains.desktop.sample.compose.macos.ComposeSampleMacKt")
-    javaLauncher.set(
-        javaToolchains.launcherFor {
-            languageVersion.set(JavaLanguageVersion.of(25))
-        },
-    )
-    jvmArgs = listOf(
-        "--enable-native-access=ALL-UNNAMED",
-        "-Djextract.trace.downcalls=false",
-    )
-    setUpLoggingAndLibraryPath()
-
-    environment("MTL_HUD_ENABLED", 1)
-}
-
-tasks.register<JavaExec>("runComposeSampleLinux") {
-    doFirst {
-        // Fix gradle configuration cache remembering old environment variables (https://github.com/gradle/gradle/issues/30790)
-        System.getenv()
-    }
-    group = "application"
-    description = "Runs example of integration with Compose on Linux Wayland"
-    classpath = sourceSets["main"].runtimeClasspath
-    mainClass.set("org.jetbrains.desktop.sample.compose.linux.ComposeSampleLinuxKt")
-    javaLauncher.set(
-        javaToolchains.launcherFor {
-            languageVersion.set(JavaLanguageVersion.of(25))
-        },
-    )
-    jvmArgs = listOf(
-        "--enable-native-access=ALL-UNNAMED",
-        "-Djextract.trace.downcalls=false",
-    )
-    setUpLoggingAndLibraryPath("linux")
-}
-
-tasks.register<JavaExec>("runComposeSampleLinuxAuto") {
-    doFirst {
-        // Fix gradle configuration cache remembering old environment variables (https://github.com/gradle/gradle/issues/30790)
-        System.getenv()
-    }
-    group = "application"
-    description = "Runs example of integration with Compose on Linux, picking Wayland or GTK to suit the session"
-    dependsOn(prepareMergedLinuxNativeLibs)
-    classpath = sourceSets["main"].runtimeClasspath
-    mainClass.set("org.jetbrains.desktop.sample.compose.ComposeSampleLinuxAutoKt")
-    javaLauncher.set(
-        javaToolchains.launcherFor {
-            languageVersion.set(JavaLanguageVersion.of(25))
-        },
-    )
-    jvmArgs = listOf(
-        "--enable-native-access=ALL-UNNAMED",
-        "-Djextract.trace.downcalls=false",
-    )
-    // Both backends' libraries, because which one is loaded is not known until the process is running.
-    setUpLogging(prepareMergedLinuxNativeLibs.map { it.destinationDir.absolutePath })
-}
-
-tasks.register<JavaExec>("runComposeSampleGtk") {
-    doFirst {
-        // Fix gradle configuration cache remembering old environment variables (https://github.com/gradle/gradle/issues/30790)
-        System.getenv()
-    }
-    group = "application"
-    description = "Runs example of integration with Compose on GTK"
-    classpath = sourceSets["main"].runtimeClasspath
-    mainClass.set("org.jetbrains.desktop.sample.compose.gtk.ComposeSampleGtkKt")
-    javaLauncher.set(
-        javaToolchains.launcherFor {
-            languageVersion.set(JavaLanguageVersion.of(25))
-        },
-    )
-    jvmArgs = listOf(
-        "--enable-native-access=ALL-UNNAMED",
-        "-Djextract.trace.downcalls=false",
-    )
-    setUpLoggingAndLibraryPath("gtk")
-}
-
 tasks.register<JavaExec>("runSkikoSampleLinux") {
     doFirst {
         // Fix gradle configuration cache remembering old environment variables (https://github.com/gradle/gradle/issues/30790)
@@ -288,24 +204,51 @@ fun JavaExec.setUpCrashDumpPath() {
     )
 }
 
-tasks.register<JavaExec>("runComposeSampleWin32") {
+/**
+ * The one task that runs the Compose sample, on every host.
+ *
+ * The entry point picks the backend at runtime (`DesktopBackend.default`), so this task only has to supply
+ * what differs per host: the JVM flags, the crash dump on Windows, and the native library folder — which on
+ * Linux has to hold *both* backends' libraries, since the choice is not made until the process is running.
+ */
+tasks.register<JavaExec>("runComposeSample") {
+    doFirst {
+        // Fix gradle configuration cache remembering old environment variables (https://github.com/gradle/gradle/issues/30790)
+        System.getenv()
+    }
     group = "application"
-    description = "Runs example of integration with Compose on Windows (Win32)"
+    description = "Runs the Compose sample, choosing the backend that suits this system"
     classpath = sourceSets["main"].runtimeClasspath
-    mainClass.set("org.jetbrains.desktop.sample.compose.windows.ComposeSampleWindowsKt")
+    mainClass.set("org.jetbrains.desktop.sample.compose.ComposeSampleKt")
     javaLauncher.set(
         javaToolchains.launcherFor {
             languageVersion.set(JavaLanguageVersion.of(25))
         },
     )
-    jvmArgs = listOf(
-        "--enable-native-access=ALL-UNNAMED",
-        "-Djextract.trace.downcalls=false",
-        "-Dstdout.encoding=UTF-8",
-        "-Dstderr.encoding=UTF-8",
-    )
-    setUpLoggingAndLibraryPath()
-    setUpCrashDumpPath()
+    jvmArgs = buildList {
+        add("--enable-native-access=ALL-UNNAMED")
+        add("-Djextract.trace.downcalls=false")
+        if (hostOs() == Os.WINDOWS) {
+            add("-Dstdout.encoding=UTF-8")
+            add("-Dstderr.encoding=UTF-8")
+        }
+    }
+
+    when (hostOs()) {
+        Os.LINUX -> {
+            // Both backends' libraries, because which one is loaded is not known until the process is running.
+            dependsOn(prepareMergedLinuxNativeLibs)
+            setUpLogging(prepareMergedLinuxNativeLibs.map { it.destinationDir.absolutePath })
+        }
+        Os.MACOS -> {
+            setUpLoggingAndLibraryPath()
+            environment("MTL_HUD_ENABLED", 1)
+        }
+        Os.WINDOWS -> {
+            setUpLoggingAndLibraryPath()
+            setUpCrashDumpPath()
+        }
+    }
 }
 
 tasks.register<JavaExec>("runSkikoSampleWin32") {

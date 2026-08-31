@@ -48,7 +48,7 @@ enum class DesktopBackend {
 
     companion object {
         /**
-         * The backend to use on this system.
+         * The backend to use on this system, and what [application] runs on unless its caller names one.
          *
          * Only Linux has a decision to make, and only half of it is forced: X11 leaves [Gtk] as the sole
          * option, while a Wayland session could run either, so preferring [Wayland] there is this sample's

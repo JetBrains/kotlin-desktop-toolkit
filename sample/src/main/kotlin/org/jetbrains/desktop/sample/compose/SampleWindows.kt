@@ -12,8 +12,8 @@ import androidx.compose.ui.unit.dp
 /**
  * The windows the sample opens.
  *
- * Nothing here is platform-specific — [initApplication] is where the backend was chosen — which is the
- * point: the same composition runs against AppKit and against Wayland, and the only difference the content
+ * Nothing here is platform-specific — [application] is where the backend was chosen — which is the point:
+ * the same composition runs against AppKit, Wayland, GTK and Win32, and the only difference the content
  * sees is what the window reports back about itself.
  */
 @Composable

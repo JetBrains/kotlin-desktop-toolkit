@@ -6,6 +6,9 @@ import androidx.compose.runtime.Composition
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.MonotonicFrameClock
 import androidx.compose.runtime.Recomposer
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.SystemTheme
 import androidx.compose.ui.platform.LocalDensity
@@ -109,6 +112,90 @@ class ComposeApplicationParams(
 
 val LocalComposeApplication = staticCompositionLocalOf<ComposeApplication> {
     error("No ComposeApplication provided")
+}
+
+/**
+ * What the application composition can do to the application as a whole.
+ *
+ * Deliberately the same shape as Compose Desktop's `ApplicationScope`, so that `onCloseRequest =
+ * ::exitApplication` means here what it means there and content can move between the two.
+ */
+interface ApplicationScope {
+    /**
+     * The running application: screens, theme, quit handlers — everything that is not per-window.
+     *
+     * Also reachable as [LocalComposeApplication] from anywhere in the composition; this is for the
+     * content function itself, which has the scope in hand before it has provided any locals.
+     */
+    val application: ComposeApplication
+
+    /**
+     * Ends the application: the content leaves the composition, every window it opened is disposed, and
+     * the [application] call returns.
+     *
+     * Not the same as [ComposeApplication.quit], which asks the *platform* to terminate and therefore
+     * runs the quit handlers and each window's `onCloseRequest` first. This one is the decision those
+     * handlers eventually lead to.
+     */
+    fun exitApplication()
+}
+
+/**
+ * Runs a Compose application: boots the toolkit, opens the composition, and blocks until it is done.
+ *
+ * This is the whole entry point — the equivalent of Compose Desktop's `application { }`, and the reason
+ * a `main` needs to know nothing about the platform it is on:
+ *
+ * ```
+ * fun main() = application {
+ *     Window(onCloseRequest = ::exitApplication) { ... }
+ * }
+ * ```
+ *
+ * Which native backend serves the windows is [DesktopBackend.default]'s decision, unless the caller has a
+ * policy of its own and passes [backend]; the toolkit is torn down on the way out whether the composition
+ * ended or threw. Returns when nothing is left to keep the application alive: the last window closed, or
+ * [ApplicationScope.exitApplication] was called.
+ */
+fun application(
+    params: ComposeApplicationParams = ComposeApplicationParams(),
+    backend: DesktopBackend = DesktopBackend.default,
+    content: @Composable ApplicationScope.() -> Unit,
+) {
+    logInfo(backend) { startupInfo(backend) }
+    initApplication(params, backend).use { application ->
+        val scope = ApplicationScopeImpl(application)
+        runApplication(application) {
+            // Reading `isRunning` inside the composition is what makes `exitApplication` work: flipping it
+            // recomposes this, the content leaves, and its windows go with it.
+            if (scope.isRunning) {
+                scope.content()
+            }
+        }
+    }
+}
+
+private class ApplicationScopeImpl(override val application: ComposeApplication) : ApplicationScope {
+    var isRunning by mutableStateOf(true)
+        private set
+
+    override fun exitApplication() {
+        isRunning = false
+    }
+}
+
+/**
+ * The one line worth logging before the first window: which backend was picked, and on what.
+ *
+ * The JVM identity is in here because the toolkit needs a recent one — the FFI it is built on is only
+ * available from Java 22 — so a mismatch is a likely first suspect when a run fails early.
+ */
+private fun startupInfo(backend: DesktopBackend): String {
+    val platform = DesktopPlatform.current
+    val windowSystem = if (platform == DesktopPlatform.Linux) ", window system: ${currentLinuxWindowSystem()}" else ""
+    val javaVersion = System.getProperty("java.runtime.version", System.getProperty("java.version", "unknown"))
+    return "Starting Compose application on $platform$windowSystem, backend: $backend " +
+        "(Java $javaVersion, ${System.getProperty("java.vendor")})"
 }
 
 /**
