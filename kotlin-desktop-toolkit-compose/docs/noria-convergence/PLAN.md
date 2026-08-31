@@ -86,7 +86,7 @@ quit with no windows, quit with a vetoing handler, then quit again.
 on each of the four `*Application` classes, as in Noria. Two deliberate departures:
 
 - **The in-progress flag became a scoped re-entrancy guard**, set and cleared inside one round of
-  `request()` under a `try`/`finally`, rather than a latch cleared when termination proceeds.
+  `requestStructuredQuit()` under a `try`/`finally`, rather than a latch cleared when termination proceeds.
   Noria's `structuredQuitInProgress` is *also* never cleared on a veto (`GtkApplication.kt:565`,
   `LinuxApplication.kt:757` — only `continueTerminationAsync` clears it), so porting its lifetime
   verbatim would have carried finding 1 across rather than fixing it. The guard now only does the

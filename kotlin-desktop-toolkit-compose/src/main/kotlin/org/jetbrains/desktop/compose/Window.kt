@@ -2,8 +2,8 @@ package org.jetbrains.desktop.compose
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.RememberObserver
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.currentCompositionLocalContext
 import androidx.compose.runtime.getValue
@@ -271,24 +271,34 @@ fun Window(
     val currentOnCloseRequest by rememberUpdatedState(onCloseRequest)
     val currentOnPreviewKeyEvent by rememberUpdatedState(onPreviewKeyEvent)
     val currentOnKeyEvent by rememberUpdatedState(onKeyEvent)
+    // A RememberObserver rather than a DisposableEffect: `createWindow` opens a real native window as soon
+    // as it is remembered, and a composition that is abandoned before it is applied never runs `onDispose`
+    // — the window would stay on screen, hold its GPU surface, and keep the application from quitting.
     val window = remember {
-        application.createWindow(
-            params = ComposeWindowParams(
-                title = title,
-                position = position,
-                size = size,
-                minSize = minSize,
-                isResizable = isResizable,
-                decoration = decoration,
-            ),
-            onCloseRequest = { reason -> currentOnCloseRequest(reason) },
-        )
-    }
-    DisposableEffect(Unit) {
-        onDispose {
-            window.dispose()
+        object : RememberObserver {
+            val window = application.createWindow(
+                params = ComposeWindowParams(
+                    title = title,
+                    position = position,
+                    size = size,
+                    minSize = minSize,
+                    isResizable = isResizable,
+                    decoration = decoration,
+                ),
+                onCloseRequest = { reason -> currentOnCloseRequest(reason) },
+            )
+
+            override fun onRemembered() {}
+
+            override fun onAbandoned() {
+                window.dispose()
+            }
+
+            override fun onForgotten() {
+                window.dispose()
+            }
         }
-    }
+    }.window
     SideEffect {
         window.title = title
         window.requestDecoration(decoration)
