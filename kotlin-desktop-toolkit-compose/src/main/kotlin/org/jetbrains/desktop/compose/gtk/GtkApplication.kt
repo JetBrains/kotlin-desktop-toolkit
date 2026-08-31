@@ -92,6 +92,14 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
 
     private var structuredQuitInProgress = false
 
+    /**
+     * Guards teardown, which `AutoCloseable` invites a caller to run twice: `application` closes through
+     * `use`, but nothing stops a caller who drove [initApplication] itself from calling [close] again.
+     * A second `stopEventLoop` reaches an already torn-down native application.
+     */
+    @Volatile
+    private var terminationInProgress = false
+
     /** Window ids are ours to hand out, and the toolkit refuses a duplicate, so they only ever go up. */
     private val nextWindowId = AtomicLong(1L)
 
@@ -548,6 +556,10 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
     }
 
     override fun close() {
+        if (terminationInProgress) {
+            return
+        }
+        terminationInProgress = true
         nativeApplicationOrNull?.stopEventLoop()
         eventLoopThread.join()
         forgetApplication(this)

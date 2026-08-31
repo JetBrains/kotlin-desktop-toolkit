@@ -72,6 +72,14 @@ internal class MacOsApplication(private val params: ComposeApplicationParams) : 
 
     private var structuredQuitInProgress = false
 
+    /**
+     * Guards teardown, which `AutoCloseable` invites a caller to run twice: `application` closes through
+     * `use`, but nothing stops a caller who drove [initApplication] itself from calling [close] again.
+     * A second `stopEventLoop` reaches an already torn-down native application.
+     */
+    @Volatile
+    private var terminationInProgress = false
+
     // Deferred so the Metal device is created on the main thread, once the event loop is up.
     private val lazyGpuContext = lazy { GpuContext() }
     internal val gpuContext: GpuContext get() = lazyGpuContext.value
@@ -339,6 +347,10 @@ internal class MacOsApplication(private val params: ComposeApplicationParams) : 
     }
 
     override fun close() {
+        if (terminationInProgress) {
+            return
+        }
+        terminationInProgress = true
         GrandCentralDispatch.dispatchOnMain {
             Application.stopEventLoop()
         }

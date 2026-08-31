@@ -71,6 +71,14 @@ internal class WindowsApplication(params: ComposeApplicationParams) : ComposeApp
 
     private var structuredQuitInProgress = false
 
+    /**
+     * Guards teardown, which `AutoCloseable` invites a caller to run twice: `application` closes through
+     * `use`, but nothing stops a caller who drove [initApplication] itself from calling [close] again.
+     * A second `stopEventLoop` reaches an already torn-down native application.
+     */
+    @Volatile
+    private var terminationInProgress = false
+
     private var hasShownAWindow = false
 
     override var systemTheme: SystemTheme by mutableStateOf(SystemTheme.Unknown)
@@ -269,6 +277,10 @@ internal class WindowsApplication(params: ComposeApplicationParams) : ComposeApp
     }
 
     override fun close() {
+        if (terminationInProgress) {
+            return
+        }
+        terminationInProgress = true
         // Posted rather than called: `stopEventLoop` has to run on the thread whose message queue it is
         // stopping.
         nativeApplication.invokeOnDispatcher { nativeApplication.stopEventLoop() }

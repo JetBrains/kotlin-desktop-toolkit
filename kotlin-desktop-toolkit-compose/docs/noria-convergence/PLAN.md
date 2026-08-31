@@ -390,6 +390,15 @@ Picked up after the ten workstreams; the report's P2/P3 backlog is otherwise unt
   occlusion handler keeps a non-null but *stopped* link, which is the main case, so visibility is the
   load-bearing half.
 
+- **`linux.md` 10 / `windows.md` 5 / `shared.md` 6 — `close()` is now idempotent.** The same defect in
+  three reports. `ComposeApplication` is public and `AutoCloseable`: `application()` closes it through
+  `use`, but a caller who drove `initApplication` themselves could call `close()` again, and the second
+  `stopEventLoop` reaches an already torn-down native application — on Windows it enqueues a block on a
+  stopped message loop that never runs, and `forgetApplication` runs twice. A `terminationInProgress`
+  guard, Noria's name, on each of the four. Noria's second guard — an `eventLoopStopped` CAS *inside*
+  `stopAndJoin` (AIR-5478) — has no counterpart: it exists because its teardown is reachable from a
+  structured quit, a shutdown hook and dock cleanup, and here `close()` is the only path.
+
 - **`gtk.md` 4 and 6** — see the commit; routing by the event's own window id, and keeping the stack
   trace in the two event-handler catches.
 - **`linux.md` 5 / `gtk.md` 7** — `WAYLAND_SOCKET`, recorded as finding 23 above.

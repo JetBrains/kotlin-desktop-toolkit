@@ -85,6 +85,15 @@ internal class LinuxApplication(private val params: ComposeApplicationParams) : 
     private val quitHandlers = ConcurrentHashMap<String, () -> Boolean>()
 
     private var structuredQuitInProgress = false
+
+    /**
+     * Guards teardown, which `AutoCloseable` invites a caller to run twice: `application` closes through
+     * `use`, but nothing stops a caller who drove [initApplication] itself from calling [close] again.
+     * A second `stopEventLoop` reaches an already torn-down native application.
+     */
+    @Volatile
+    private var terminationInProgress = false
+
     private val pendingActivations = ConcurrentHashMap<RequestId, WindowId>()
 
     /** Window ids are ours to hand out, and the toolkit refuses a duplicate, so they only ever go up. */
@@ -582,6 +591,10 @@ internal class LinuxApplication(private val params: ComposeApplicationParams) : 
     }
 
     override fun close() {
+        if (terminationInProgress) {
+            return
+        }
+        terminationInProgress = true
         nativeApplication.stopEventLoop()
         eventLoopThread.join()
         nativeApplication.close()
