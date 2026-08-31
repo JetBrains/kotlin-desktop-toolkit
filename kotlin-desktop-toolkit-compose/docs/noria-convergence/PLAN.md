@@ -214,11 +214,18 @@ only the Wayland one (`7ec5af76e8605`, WS2 finding 6) and left GTK's alone, and 
 reasoning: on GTK the OR above means the scan can still match two windows during a switch. Worth
 revisiting on its own evidence, not as part of this port.
 
-## WS8 — Windows caption buttons (P1)
+## WS8 — Windows caption buttons (P1) — **done**
 
 14. Every claimed title-bar rect maps to `HTCLIENT`, so a Compose-drawn maximize button never
     triggers the Win11 Snap Layouts flyout. `NCHitTestResult.MinButton/MaxButton/Close` already
     exist in KDT. AIR-5600, `a644825176abe`.
+
+**Landed** with Noria's names — `CaptionButtonKind`, `setCaptionButtonBounds(kind, bounds)`, checked
+first in `hitTestTitleBar` — but as a defaulted member on `ComposeWindow` rather than Noria's
+`CaptionButtonsHostWindow` capability interface, which is this module's existing choice for
+`setCustomTitleBarInteractiveAreas` and everything else in that seam. `@Volatile`/`@Synchronized`
+dropped: Noria needs them because it reads the map from the WndProc thread, and here that is the same
+thread the composition runs on.
 
 ## WS9 — Linux CSD frame (P1, staged — do not treat as a drop-in)
 

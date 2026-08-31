@@ -47,6 +47,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jetbrains.desktop.compose.CaptionButtonKind
 import org.jetbrains.desktop.compose.ClipboardItemsEntry
 import org.jetbrains.desktop.compose.ComposeWindow
 import org.jetbrains.desktop.compose.ComposeWindowParams
@@ -211,6 +212,15 @@ internal class WindowsWindow(
 
     override fun setCustomTitleBarInteractiveAreas(areas: List<DpRect>) {
         customTitleBarInteractiveAreas = areas
+    }
+
+    /** Where the content laid out each caption button, in logical client coordinates. */
+    private var captionButtonBounds: Map<CaptionButtonKind, DpRect> = emptyMap()
+
+    override fun setCaptionButtonBounds(kind: CaptionButtonKind, bounds: DpRect?) {
+        captionButtonBounds = captionButtonBounds.toMutableMap().apply {
+            if (bounds == null) remove(kind) else put(kind, bounds)
+        }
     }
 
     // ----- Compose scene wiring -----
@@ -754,7 +764,8 @@ internal class WindowsWindow(
      *
      * The band is a native drag region, which is what gives the window Windows' own move, double-click
      * maximize, Aero Snap and right-click system menu; the areas the content claimed
-     * ([setCustomTitleBarInteractiveAreas]) stay client, so what is drawn there stays clickable.
+     * ([setCustomTitleBarInteractiveAreas]) stay client, so what is drawn there stays clickable, and a
+     * caption button ([setCaptionButtonBounds]) reports the button's own non-client code.
      */
     private fun hitTestTitleBar(event: Event.NCHitTest): NCHitTestResult? {
         val titleBar = decoration as? WindowDecoration.CustomTitleBar ?: return null
@@ -762,6 +773,17 @@ internal class WindowsWindow(
         // logical client space.
         val scale = nativeWindow.getScaleFactor()
         val clientPoint = Screen.mapToClient(nativeWindow, PhysicalPoint(event.mouseX, event.mouseY)).toLogical(scale)
+        // A caption button claims its area first: its `HT*` code is what hands the button's behaviour to
+        // Windows, and the Snap Layouts flyout on the maximize button with it.
+        captionButtonBounds.forEach { (kind, bounds) ->
+            if (clientPoint in bounds) {
+                return when (kind) {
+                    CaptionButtonKind.Minimize -> NCHitTestResult.MinButton
+                    CaptionButtonKind.Maximize -> NCHitTestResult.MaxButton
+                    CaptionButtonKind.Close -> NCHitTestResult.Close
+                }
+            }
+        }
         val clientSize = nativeWindow.getClientSize()
         val isInsideTitleBar = clientPoint.x in 0f..clientSize.width && clientPoint.y in 0f..titleBar.height.value
         if (!isInsideTitleBar) {

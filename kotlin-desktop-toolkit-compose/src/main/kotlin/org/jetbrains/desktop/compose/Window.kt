@@ -55,6 +55,9 @@ sealed interface WindowDecoration {
     ) : WindowDecoration
 }
 
+/** A window-management button the content draws into a [WindowDecoration.CustomTitleBar] itself. */
+enum class CaptionButtonKind { Minimize, Maximize, Close }
+
 /** Everything a window needs at creation time; the rest is settable afterwards through [ComposeWindow]. */
 class ComposeWindowParams(
     val title: String = "Untitled",
@@ -150,6 +153,21 @@ interface ComposeWindow {
      * The last call wins, so a content that draws several buttons has to report all of them at once.
      */
     fun setCustomTitleBarInteractiveAreas(areas: List<DpRect>) = Unit
+
+    /**
+     * Reports where a caption button is laid out, in window coordinates, so that the platform can route
+     * native non-client hit-testing to it. `null` clears it again, for a button that is disabled or has
+     * left the composition.
+     *
+     * Only Windows acts on this, and it is the only way to opt into Windows 11's Snap Layouts flyout: the
+     * OS shows it when hovering a point that hit-tests as the maximize button, and nothing a Compose-drawn
+     * button does can stand in for that. Reporting the real areas also hands the system hover highlight,
+     * press-and-cancel and Close semantics to Windows rather than reimplementing them.
+     *
+     * Distinct from [setCustomTitleBarInteractiveAreas], which is for everything in the bar that is *not*
+     * a caption button — a menu button, say — and which wants its pointer events in Compose.
+     */
+    fun setCaptionButtonBounds(kind: CaptionButtonKind, bounds: DpRect?) = Unit
 
     fun requestPosition(position: DpOffset)
 
