@@ -55,7 +55,6 @@ import org.jetbrains.desktop.compose.DragAndDropSourceWindow
 import org.jetbrains.desktop.compose.KdtDispatcher
 import org.jetbrains.desktop.compose.KdtDragAndDropManager
 import org.jetbrains.desktop.compose.KdtDragAndDropTransferable
-import org.jetbrains.desktop.compose.KdtImmediateDispatcher
 import org.jetbrains.desktop.compose.LocalComposeWindow
 import org.jetbrains.desktop.compose.WindowCloseRequestReason
 import org.jetbrains.desktop.compose.WindowDecoration
@@ -461,7 +460,12 @@ internal class MacOsWindow(
         canChooseFiles: Boolean,
         canChooseDirectories: Boolean,
     ): List<Path> {
-        return withContext(KdtImmediateDispatcher) {
+        // KdtDispatcher, not KdtImmediateDispatcher: the immediate one runs inline when it is already on
+        // the event loop thread, which puts `runModal`'s nested run loop on the stack of whatever was
+        // running — for a dialog opened from a click that is the scene's own `FlushCoroutineDispatcher`,
+        // mid-resume of this very coroutine. Anything the nested loop then resumes corrupts that
+        // continuation. Dispatching hands the dialog a clean stack once the flush has unwound.
+        return withContext(KdtDispatcher) {
             runModal {
                 FileDialog.showOpenFileDialog(
                     FileDialog.CommonDialogParams(title = title),
@@ -476,7 +480,8 @@ internal class MacOsWindow(
     }
 
     override suspend fun showSaveFileDialog(title: String, nameFieldStringValue: String?): Path? {
-        return withContext(KdtImmediateDispatcher) {
+        // Dispatched rather than immediate, for the reason spelled out in `showOpenFileDialog`.
+        return withContext(KdtDispatcher) {
             runModal {
                 FileDialog.showSaveFileDialog(
                     FileDialog.CommonDialogParams(
@@ -727,16 +732,19 @@ internal class MacOsWindow(
     /**
      * Runs a modal dialog with frame production suspended; see [isModalDialogRunning].
      *
-     * Nothing is lost by skipping those frames: the dialog is covering the window, and the pump treats a
-     * null frame as "nothing to show yet" and asks again.
+     * Nothing is lost by skipping those frames: the dialog is covering the window. Asking for one on the
+     * way out is load-bearing rather than tidiness — the caller's coroutine resumes on the scene's
+     * dispatcher, which only runs from `performScheduledEffects`, which only runs from a frame.
      */
     private fun <T> runModal(block: () -> T): T {
+        Logger.info { "Modal dialog opening" }
         isModalDialogRunning = true
         try {
             return block()
         } finally {
             isModalDialogRunning = false
             isFrameRequested = true
+            Logger.info { "Modal dialog closed" }
         }
     }
 
