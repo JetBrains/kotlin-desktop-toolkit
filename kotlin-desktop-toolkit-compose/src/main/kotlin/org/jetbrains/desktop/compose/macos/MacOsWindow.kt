@@ -462,26 +462,30 @@ internal class MacOsWindow(
         canChooseDirectories: Boolean,
     ): List<Path> {
         return withContext(KdtImmediateDispatcher) {
-            FileDialog.showOpenFileDialog(
-                FileDialog.CommonDialogParams(title = title),
-                FileDialog.OpenDialogParams(
-                    canChooseFiles = canChooseFiles,
-                    canChooseDirectories = canChooseDirectories,
-                    allowsMultipleSelections = allowsMultipleSelections,
-                ),
-            ).map(Path::of)
+            runModal {
+                FileDialog.showOpenFileDialog(
+                    FileDialog.CommonDialogParams(title = title),
+                    FileDialog.OpenDialogParams(
+                        canChooseFiles = canChooseFiles,
+                        canChooseDirectories = canChooseDirectories,
+                        allowsMultipleSelections = allowsMultipleSelections,
+                    ),
+                ).map(Path::of)
+            }
         }
     }
 
     override suspend fun showSaveFileDialog(title: String, nameFieldStringValue: String?): Path? {
         return withContext(KdtImmediateDispatcher) {
-            FileDialog.showSaveFileDialog(
-                FileDialog.CommonDialogParams(
-                    title = title,
-                    nameFieldStringValue = nameFieldStringValue,
-                    canCreateDirectories = true,
-                ),
-            )?.let(Path::of)
+            runModal {
+                FileDialog.showSaveFileDialog(
+                    FileDialog.CommonDialogParams(
+                        title = title,
+                        nameFieldStringValue = nameFieldStringValue,
+                        canCreateDirectories = true,
+                    ),
+                )?.let(Path::of)
+            }
         }
     }
 
@@ -709,8 +713,35 @@ internal class MacOsWindow(
         link.setRunning(true)
     }
 
+    /**
+     * Set while a modal file dialog owns the event loop thread.
+     *
+     * `runModal` spins a *nested* run loop, so the display link keeps ticking and Grand Central keeps
+     * delivering the frame block — inside the coroutine that opened the dialog, which the scene's own
+     * `FlushCoroutineDispatcher` is still in the middle of resuming. Rendering there re-enters that
+     * dispatcher and resumes an already-completed continuation, which fails as
+     * `CompletedContinuation cannot be cast to DispatchedContinuation`.
+     */
+    private var isModalDialogRunning = false
+
+    /**
+     * Runs a modal dialog with frame production suspended; see [isModalDialogRunning].
+     *
+     * Nothing is lost by skipping those frames: the dialog is covering the window, and the pump treats a
+     * null frame as "nothing to show yet" and asks again.
+     */
+    private fun <T> runModal(block: () -> T): T {
+        isModalDialogRunning = true
+        try {
+            return block()
+        } finally {
+            isModalDialogRunning = false
+            isFrameRequested = true
+        }
+    }
+
     private fun recordFrame(): PresentablePicture? {
-        if (isDisposed) return null
+        if (isDisposed || isModalDialogRunning) return null
         val size = viewContext.view.size()
         val canvas = pictureRecorder.beginRecording(Rect.makeWH(size.width.toFloat(), size.height.toFloat()))
         canvas.clear(Color.White.toArgb())

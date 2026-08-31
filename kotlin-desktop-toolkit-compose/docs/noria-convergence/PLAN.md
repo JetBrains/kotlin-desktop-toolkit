@@ -332,12 +332,25 @@ target toward Noria.
 
 ---
 
-# One finding that is not a Noria port
+# Findings that are not Noria ports
 
 21. Compose's desktop `ScrollConfig` reads `awtEventOrNull`, which is always `null` for KDT events,
     so precise-wheel detection never fires and trackpad scrolling gets Compose's stepping-wheel
     animation stacked on top of macOS inertia. Fix mirrors the target's own `MacOsTypedEvents`
     trick. Fell out of the comparison; see [macos.md](macos.md) finding 15.
+
+22. **macOS: a modal file dialog crashed the scene's dispatcher** — **fixed**. Found in use, not by the
+    comparison. `NSOpenPanel`/`NSSavePanel`'s `runModal` spins a *nested* run loop, so the display link
+    keeps ticking and Grand Central keeps delivering the frame block — inside the coroutine that opened
+    the dialog, which the scene's `FlushCoroutineDispatcher` is still resuming after
+    `sendPointerEvent`. The nested `scene.render` re-entered that dispatcher and resumed an
+    already-completed continuation: `CompletedContinuation cannot be cast to DispatchedContinuation`,
+    followed by the calling coroutine getting a coroutines-internal `Symbol` as its result.
+
+    `MacOsWindow.recordFrame` now returns null while a modal dialog owns the thread, which is the frame
+    pump's existing "nothing to show yet" path, so the frame is simply re-requested afterwards. Only
+    macOS runs its dialogs modally on the loop thread; Wayland and GTK go through the portal, and the
+    Windows ones do not re-enter the scene.
 
 ---
 
