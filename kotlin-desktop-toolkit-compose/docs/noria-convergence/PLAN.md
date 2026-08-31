@@ -369,6 +369,27 @@ Picked up after the ten workstreams; the report's P2/P3 backlog is otherwise unt
   explicitly. The report's suggested reordering of `activeClient = null` was **not** adopted: the
   ordering hazard it describes does not exist, because `clearTextInputClient` swaps the recipient to
   `Noop` only after the downcall.
+- **`macos.md` 2 — an invisible window stopped recomposing** (P1, the other one the workstreams
+  missed). `CanvasLayersComposeScene`'s frame clock only ticks inside `ComposeScene.render`, and the
+  only caller of that is `recordFrame`, driven by the window's `DisplayLink` — which is not created
+  while the window is invisible and is stopped when it becomes so. An occluded window therefore had no
+  clock at all: `withFrameNanos` awaiters, animations and state written from a timer all stalled. It
+  stopped being a state machine, not merely a set of pixels.
+
+  Landed per window rather than per scene, because there is no `Scene`/`RenderLoopRegistry` here — each
+  window owns its scene and pump, so Noria's `windows.filter { it.scene == scene && it.isVisible }`
+  collapses to this window's own `canDeliverFrames()`. `ComposeScene` exposes no clock-tick entry
+  point, so the fallback renders into a 1x1 recording and throws it away: recording is what ticks the
+  clock, presenting is the part that needs a visible window. Throttled to 60 Hz with Noria's
+  arithmetic.
+
+  Two departures worth keeping: the dedup flag is an `AtomicBoolean` and visibility is a mirrored
+  `@Volatile` rather than Noria's plain fields, because `invalidate` can fire off the event loop thread
+  and KDT's `window_is_visible` does `MainThreadMarker::new().unwrap()` — copying Noria verbatim would
+  have carried a native panic across. And the report's gate of `displayLink == null` is wrong: the
+  occlusion handler keeps a non-null but *stopped* link, which is the main case, so visibility is the
+  load-bearing half.
+
 - **`gtk.md` 4 and 6** — see the commit; routing by the event's own window id, and keeping the stack
   trace in the two event-handler catches.
 - **`linux.md` 5 / `gtk.md` 7** — `WAYLAND_SOCKET`, recorded as finding 23 above.
