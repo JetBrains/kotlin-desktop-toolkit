@@ -181,12 +181,16 @@ the first composition. They are inside a `coroutineScope` now.
 `lastEventTimeMillis` by hand where GTK and Linux call `startPointerEvent`, which does that *and*
 requests `InputMode.Touch`. Not a Noria port — an internal inconsistency the comparison surfaced.
 
-## WS6 — Windows clipboard serialization (P1, trivial)
+## WS6 — Windows clipboard serialization (P1, trivial) — **done**
 
 11. `windows/WindowsClipboard.kt:62-65` suspends between `set` and `flush` with no mutex, so two
     coroutines can interleave and publish the wrong data object. Noria's `clipboardMutex`
     (AIR-5558, `79a633bee12d2`) copies in directly. The retry ladder, the `Cleaner` and AIR-6051
     are already ported here.
+
+**Landed** as Noria has it: a file-level `private val clipboardMutex = Mutex()` held across `get`, and
+across `set`+`flush` together. Noria's `getClipEntrySync` `tryLock` check has no counterpart — this
+module's `Clipboard` has no synchronous read to guard.
 
 ## WS7 — GTK input routing and focus (2 × P1)
 

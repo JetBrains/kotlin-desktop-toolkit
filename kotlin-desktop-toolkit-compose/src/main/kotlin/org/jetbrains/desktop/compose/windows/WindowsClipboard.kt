@@ -6,6 +6,8 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.Clipboard
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.jetbrains.desktop.compose.ClipboardEntry
 import org.jetbrains.desktop.compose.ClipboardFormat
@@ -34,11 +36,14 @@ import org.jetbrains.desktop.win32.DataFormat as Win32DataFormat
  *  - any process can hold it open for a moment, which OLE reports as a plain failure. The toolkit
  *    deliberately leaves retrying to the caller, so every access here goes through [withBusyRetry].
  *
- * Every call must run on the event loop thread, because that is the process's OLE apartment.
+ * Every call must run on the event loop thread, because that is the process's OLE apartment. That is not
+ * enough on its own: [withBusyRetry] suspends between attempts, so two coroutines can interleave on that
+ * one thread, and [clipboardMutex] is what keeps a publish atomic across its `set` and `flush`.
  */
 internal class WindowsClipboard(private val application: ComposeApplication) : Clipboard {
     override suspend fun getClipEntry(): ClipEntry = withContext(KdtImmediateDispatcher) {
-        ClipEntry(WindowsClipboardEntry(withBusyRetry { Win32Clipboard.get() }, application))
+        val dataObject = clipboardMutex.withLock { withBusyRetry { Win32Clipboard.get() } }
+        ClipEntry(WindowsClipboardEntry(dataObject, application))
     }
 
     override suspend fun setClipEntry(clipEntry: ClipEntry?) {
@@ -59,7 +64,7 @@ internal class WindowsClipboard(private val application: ComposeApplication) : C
      * for each format when something pastes it — and `flush` then renders every format into the
      * clipboard itself, which is what keeps the data available after this process exits.
      */
-    private suspend fun publish(dataObject: DataObject) {
+    private suspend fun publish(dataObject: DataObject) = clipboardMutex.withLock {
         withBusyRetry { Win32Clipboard.set(dataObject) }
         withBusyRetry { Win32Clipboard.flush() }
     }
@@ -178,6 +183,13 @@ private suspend fun <T> withBusyRetry(operation: () -> ClipboardResult<T>): T {
     }
     error("Clipboard stayed busy, last failure: $lastFailure")
 }
+
+/**
+ * Serializes clipboard access. Holding the event loop thread is not enough: `set` publishes the data
+ * object with delayed rendering and `flush` renders it, and a second publish that lands between the two
+ * leaves `flush` rendering the *other* coroutine's data object.
+ */
+private val clipboardMutex = Mutex()
 
 private val retryDelays = listOf(
     10.milliseconds,
