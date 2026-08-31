@@ -55,6 +55,10 @@ internal class MacOsTextInput(
         withContext(KdtImmediateDispatcher) {
             val client = MacOsTextInputClient(request, nativeWindow, density)
             nativeWindow.setTextInputClient(client)
+            // AppKit activates the first responder's context by itself when the window becomes key, but
+            // not when focus moves between fields inside one window, and not for a context this code
+            // deactivated when the previous session ended.
+            nativeWindow.textInputContext.activate()
             activeClient = client
         }
         try {
@@ -63,15 +67,22 @@ internal class MacOsTextInput(
             // NonCancellable: the coroutine is already cancelled by the time we get here, so a plain
             // withContext would refuse to run and the native client would stay installed.
             withContext(NonCancellable + KdtImmediateDispatcher) {
+                val client = activeClient
                 activeClient = null
                 // Closing the window ends the session, but cancellation reaches this coroutine through
                 // the scene's dispatcher, so it can land after `Window.close` — which already discards
                 // the composition and drops the client itself.
                 if (!isWindowGone) {
-                    nativeWindow.setTextInputClient(TextInputClient.Noop)
-                    // An in-flight composition would otherwise outlive the text field that owns it, and
-                    // the cached character coordinates point into a field that is gone.
                     nativeWindow.textInputContext.discardMarkedText()
+                    // `discardMarkedText` abandons the composition on AppKit's side only: without this the
+                    // Compose field keeps its composing range, so the underline outlives the focus and the
+                    // next edit works against a stale range.
+                    client?.unmarkText()
+                    // Otherwise this window's context stays the application's active one, leaving a CJK
+                    // input method armed with nothing editable under it.
+                    nativeWindow.textInputContext.deactivate()
+                    nativeWindow.setTextInputClient(TextInputClient.Noop)
+                    // The cached character coordinates point into a field that is gone.
                     nativeWindow.textInputContext.invalidateCharacterCoordinates()
                 }
             }

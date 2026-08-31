@@ -124,7 +124,7 @@ now empty. Keyboard enter/leave no longer write `isFocused`, so `xdg_toplevel.co
 is its only writer — needs a caret-blink check on GNOME, where a CSD window keeps `activated` across a
 menu grab.
 
-## WS3 — macOS IME teardown (P0)
+## WS3 — macOS IME teardown (P0) — **done**
 
 7. The target calls only native `discardMarkedText()`; it never tells Compose to
    `finishComposingText()` nor toggles `textInputContext.activate()/deactivate()`. The composing
@@ -133,6 +133,13 @@ menu grab.
 
 Note this is **macOS-only**: the agents confirmed the Linux IME activate/deactivate and
 preedit-discard behaviour already matches Noria line for line, and AIR-6619 never touched GTK.
+
+**Landed** as Noria's four lines in Noria's order, with the target's existing
+`invalidateCharacterCoordinates()` kept after them and the whole block still behind `isWindowGone`
+(`Window.close` already discards and deactivates). Noria's comment weighing `insertText` against
+`unmarkText` was **not** copied: it records that its action context is stale at teardown, which is a
+Noria problem — for Compose `finishComposingText()`, which is what `unmarkText()` calls here, is the
+right call.
 
 ## WS4 — Object lifetime and teardown (2 P1, shared layer)
 
