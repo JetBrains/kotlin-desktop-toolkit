@@ -40,6 +40,9 @@ This is a Kotlin/Rust hybrid project providing desktop window management APIs fo
   with per-backend implementations in `.{macos,linux,gtk,windows}`). Publishes as `kotlin-desktop-toolkit-compose`;
   built against released Compose artifacts, so it is a library rather than a Compose fork. `application { }` and
   `Window { }` are the whole public entry point, and `DesktopBackend.default` picks the backend
+- **kotlin-desktop-toolkit-compose-dispatcher/** - Opt-in artifact that makes `Dispatchers.Main` the toolkit's
+  event loop thread, via a `kotlinx.coroutines` `MainDispatcherFactory` registered in `META-INF/services`.
+  Separate from the facade because it changes a process-wide setting just by being on the classpath
 - **native/** - Rust workspace with platform-specific crates:
   - `desktop-common/` - Shared Rust utilities
   - `desktop-macos/` - macOS native implementation

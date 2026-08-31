@@ -39,6 +39,9 @@ dependencies {
     implementation(project(":kotlin-desktop-toolkit"))
     // Brings the toolkit and the Compose artifacts with it, since both are part of its API.
     implementation(project(":kotlin-desktop-toolkit-compose"))
+    // Points `Dispatchers.Main` at the toolkit's event loop. Runtime-only, because nothing in the sample
+    // names the factory — being on the classpath is the whole opt-in.
+    runtimeOnly(project(":kotlin-desktop-toolkit-compose-dispatcher"))
     // The Skiko *native* library. Its classes arrive transitively with Compose; the matching native
     // library is the application's to supply, because it is the only module that knows the host it runs on.
     implementation("org.jetbrains.skiko:skiko-awt-runtime-$skikoTarget:$skikoVersion")

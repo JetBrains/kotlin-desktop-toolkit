@@ -23,4 +23,5 @@ rootProject.name = "kotlin-desktop-toolkit"
 
 include("kotlin-desktop-toolkit")
 include("kotlin-desktop-toolkit-compose")
+include("kotlin-desktop-toolkit-compose-dispatcher")
 include("sample")

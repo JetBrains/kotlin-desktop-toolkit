@@ -11,6 +11,10 @@ import kotlin.coroutines.CoroutineContext
  * run on the same thread that receives the window events. Which thread that is depends on the platform,
  * so the dispatcher asks the live [ComposeApplication] instead of talking to a platform API — that is
  * also what keeps a single dispatcher working for every backend.
+ *
+ * This layer always dispatches through here explicitly. Code that instead reaches for `Dispatchers.Main` —
+ * a library that knows nothing about this toolkit — needs the separate `kotlin-desktop-toolkit-compose-dispatcher`
+ * artifact on the classpath, which registers this dispatcher as the process's main one.
  */
 sealed class KdtDispatcherBase : MainCoroutineDispatcher() {
     override fun dispatch(context: CoroutineContext, block: Runnable) {
