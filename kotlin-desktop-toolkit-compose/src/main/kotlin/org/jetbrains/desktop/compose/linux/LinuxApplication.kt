@@ -17,7 +17,6 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.unit.LayoutDirection
-import org.jetbrains.desktop.compose.ApplicationQuit
 import org.jetbrains.desktop.compose.ClipboardItemsEntry
 import org.jetbrains.desktop.compose.ComposeApplication
 import org.jetbrains.desktop.compose.ComposeApplicationParams
@@ -27,6 +26,7 @@ import org.jetbrains.desktop.compose.DesktopBackend
 import org.jetbrains.desktop.compose.WindowCloseRequestReason
 import org.jetbrains.desktop.compose.dataForLinuxMimeType
 import org.jetbrains.desktop.compose.forgetApplication
+import org.jetbrains.desktop.compose.requestApplicationExit
 import org.jetbrains.desktop.linux.Application
 import org.jetbrains.desktop.linux.ApplicationConfig
 import org.jetbrains.desktop.linux.ColorSchemeValue
@@ -84,7 +84,9 @@ internal class LinuxApplication(private val params: ComposeApplicationParams) : 
     private val windowsById = mutableMapOf<WindowId, LinuxWindow>()
     private val windowList = mutableStateListOf<LinuxWindow>()
     private val applicationStarted = CountDownLatch(1)
-    private val quit = ApplicationQuit(DesktopBackend.Wayland) { windowList.toList() }
+    private val quitHandlers = ConcurrentHashMap<String, () -> Boolean>()
+
+    private var structuredQuitInProgress = false
     private val pendingActivations = ConcurrentHashMap<RequestId, WindowId>()
 
     /** Window ids are ours to hand out, and the toolkit refuses a duplicate, so they only ever go up. */
@@ -510,15 +512,40 @@ internal class LinuxApplication(private val params: ComposeApplicationParams) : 
     override fun requestActivation() = Unit
 
     override fun quit() {
-        onEventLoop { quit.requestStructuredQuit() }
+        onEventLoop { requestStructuredQuit() }
+    }
+
+    private fun requestStructuredQuit() {
+        // Every handler is consulted, not just up to the first veto: a handler may be showing a dialog and
+        // needs to know a quit was attempted even if another handler already said no.
+        if (!quitHandlers.values.fold(true) { acc, quitHandler -> quitHandler() and acc }) {
+            return
+        }
+        // Re-entered from a window's own `onCloseRequest`, which runs inline below.
+        if (structuredQuitInProgress) {
+            return
+        }
+        val windowsToClose = windowList.toList()
+        if (windowsToClose.isEmpty()) {
+            requestApplicationExit(DesktopBackend.Wayland)
+            return
+        }
+        Logger.info { "Quit approved, asking ${windowsToClose.size} window(s) to close" }
+        // Cleared again whatever the windows do, so a quit the application declined leaves nothing behind.
+        structuredQuitInProgress = true
+        try {
+            windowsToClose.forEach { it.requestCloseFromQuit() }
+        } finally {
+            structuredQuitInProgress = false
+        }
     }
 
     override fun putQuitHandler(id: String, isSafeToQuit: () -> Boolean) {
-        quit.putQuitHandler(id, isSafeToQuit)
+        quitHandlers[id] = isSafeToQuit
     }
 
     override fun removeQuitHandler(id: String) {
-        quit.removeQuitHandler(id)
+        quitHandlers.remove(id)
     }
 
     override fun openUri(uri: String) {

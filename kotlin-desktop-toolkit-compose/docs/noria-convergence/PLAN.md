@@ -13,6 +13,25 @@ commit archaeology live in the sibling reports:
 
 **Total: 64 findings — 3 P0, 17 P1, 28 P2, 16 P3.**
 
+## Porting principle
+
+**Resemble Noria as closely as the difference between the two runtimes allows.** The same people
+maintain both, so a fix that reads the same on both sides is worth more than a tidier one that does
+not. In practice:
+
+- Keep Noria's **names** — `requestStructuredQuit`, `structuredQuitInProgress`, `quitHandlers`,
+  `finishStructuredQuitIfNeeded` — even where this module arrives at them differently.
+- Keep Noria's **structure**, including duplication. Noria carries the quit state on each of its four
+  `*Application` classes rather than in a shared type; so do we. Lifting something into the shared
+  layer that Noria has not lifted needs a reason beyond "it is the same four times".
+- **Do not add commentary Noria does not have.** Match the density of the file being edited.
+  Reasoning that belongs to the convergence rather than to the code goes in this document.
+- Diverge only where copying would carry a bug across, or where this module's architecture makes the
+  Noria shape meaningless — and **say so here**, per workstream, with the reason.
+
+This supersedes the selective-adoption advice in *Architectural verdict* below wherever the two
+conflict: that section still records which side is better factored, but it is no longer the tie-breaker.
+
 ## Preconditions established
 
 - **No KDT version skew.** Noria pins `kotlin-desktop-toolkit-common/0.0.89`; this repo is
@@ -52,18 +71,19 @@ The single most coherent piece of work. Same defect shape in four places.
 4. **Quit with zero open windows is a no-op** on Windows (`WindowsApplication.kt:223-225`) and GTK.
    Linux returns `true` correctly. Windows and GTK cannot quit in that state at all.
 
-**Approach:** lift a single structured-quit state machine into the shared layer — consult handlers,
-mark in-progress, ask windows to close, **reset the flag on any veto or completion**, and quit
-directly when the window list is empty. Then have each backend's terminate callback delegate to it
-and always answer the native side with the non-vetoing result. Noria's
-`handleApplicationWantsToTerminate` / `requestStructuredQuit` pair is the reference shape.
+**Approach:** mirror Noria's `requestStructuredQuit` on each of the four `*Application` classes —
+consult handlers, mark in-progress, ask windows to close, **reset the flag on any veto or
+completion**, and quit directly when the window list is empty. Then have each backend's terminate
+callback delegate to it and always answer the native side with the non-vetoing result.
+
+*(An earlier revision of this item lifted the state machine into a shared `ApplicationQuit` class.
+Reverted: Noria keeps the state per backend, and the Porting principle above makes that the tie-breaker.)*
 
 **Risk:** medium — touches exit paths on every platform. Needs manual verification per OS:
 quit with no windows, quit with a vetoing handler, then quit again.
 
-**Landed** as `ApplicationQuit` + `QuitTarget` in the shared layer, keeping Noria's vocabulary
-(`requestStructuredQuit`, `structuredQuitInProgress`, `quitHandlers`) so the two read alike, with two
-deliberate departures from the reference shape:
+**Landed** as a private `requestStructuredQuit()` plus `quitHandlers` and `structuredQuitInProgress`
+on each of the four `*Application` classes, as in Noria. Two deliberate departures:
 
 - **The in-progress flag became a scoped re-entrancy guard**, set and cleared inside one round of
   `request()` under a `try`/`finally`, rather than a latch cleared when termination proceeds.
@@ -78,10 +98,14 @@ deliberate departures from the reference shape:
   through the composition on all four platforms. Linux's terminate event, being teardown-only,
   answers `Continue` unconditionally for the same reason read from the other side.
 
-Finding 4 needed one new seam: with no window to negotiate with there is no `onCloseRequest` to
-make the decision, so `application()` now installs its `exitApplication` in a process-wide slot
-(`Application.kt`, `requestApplicationExit`) that the quit sequence reaches for in that case. A
-composition driven by a bare `runApplication` has no such lever and gets a warning instead.
+Noria's `terminationInProgress`, `continueTerminationAsync()` and `finishStructuredQuitIfNeeded()`
+have **no counterpart here** and were not ported: they exist because Noria terminates itself from an
+off-loop thread once its window map empties, whereas here the composition ends `runApplication` and
+`application()`'s `use` calls `close()` exactly once. Their one job that does survive — deciding to
+terminate when there is no window to negotiate with — is finding 4, and it needed a new seam:
+`application()` installs its `exitApplication` in a process-wide slot (`Application.kt`,
+`requestApplicationExit`) that `requestStructuredQuit` reaches for in that case. A composition driven
+by a bare `runApplication` has no such lever and gets a warning instead.
 
 ## WS2 — Linux focus and activation (1 P0 + 1 P1) — **done**
 

@@ -17,7 +17,6 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.unit.LayoutDirection
-import org.jetbrains.desktop.compose.ApplicationQuit
 import org.jetbrains.desktop.compose.ClipboardItemsEntry
 import org.jetbrains.desktop.compose.ComposeApplication
 import org.jetbrains.desktop.compose.ComposeApplicationParams
@@ -27,6 +26,7 @@ import org.jetbrains.desktop.compose.DesktopBackend
 import org.jetbrains.desktop.compose.WindowCloseRequestReason
 import org.jetbrains.desktop.compose.dataForLinuxMimeType
 import org.jetbrains.desktop.compose.forgetApplication
+import org.jetbrains.desktop.compose.requestApplicationExit
 import org.jetbrains.desktop.gtk.Application
 import org.jetbrains.desktop.gtk.ApplicationConfig
 import org.jetbrains.desktop.gtk.ColorSchemeValue
@@ -53,6 +53,7 @@ import org.jetbrains.skia.SurfaceOrigin
 import org.jetbrains.skia.makeGLWithInterface
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
@@ -89,7 +90,9 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
     private val windowsById = mutableMapOf<WindowId, GtkWindow>()
     private val windowList = mutableStateListOf<GtkWindow>()
     private val applicationStarted = CountDownLatch(1)
-    private val quit = ApplicationQuit(DesktopBackend.Gtk) { windowList.toList() }
+    private val quitHandlers = ConcurrentHashMap<String, () -> Boolean>()
+
+    private var structuredQuitInProgress = false
 
     /** Window ids are ours to hand out, and the toolkit refuses a duplicate, so they only ever go up. */
     private val nextWindowId = AtomicLong(1L)
@@ -362,11 +365,36 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
      * Always answers `false`, which keeps GTK from calling `gtk_app.quit()`: that tears the GLib main loop
      * down where it stands, and `runOnEventLoopAsync` — the whole Compose dispatcher — is
      * `glib::idle_add_once` on that loop, so everything queued on it is dropped, `runApplication`'s own
-     * continuation included. [ApplicationQuit] drives the exit through the composition instead.
+     * continuation included. [requestStructuredQuit] drives the exit through the composition instead.
      */
     private fun onQuitRequested(): Boolean {
-        quit.requestStructuredQuit()
+        requestStructuredQuit()
         return false
+    }
+
+    private fun requestStructuredQuit() {
+        // Every handler is consulted, not just up to the first veto: a handler may be showing a dialog and
+        // needs to know a quit was attempted even if another handler already said no.
+        if (!quitHandlers.values.fold(true) { acc, quitHandler -> quitHandler() and acc }) {
+            return
+        }
+        // Re-entered from a window's own `onCloseRequest`, which runs inline below.
+        if (structuredQuitInProgress) {
+            return
+        }
+        val windowsToClose = windowList.toList()
+        if (windowsToClose.isEmpty()) {
+            requestApplicationExit(DesktopBackend.Gtk)
+            return
+        }
+        Logger.info { "Quit approved, asking ${windowsToClose.size} window(s) to close" }
+        // Cleared again whatever the windows do, so a quit the application declined leaves nothing behind.
+        structuredQuitInProgress = true
+        try {
+            windowsToClose.forEach { it.requestCloseFromQuit() }
+        } finally {
+            structuredQuitInProgress = false
+        }
     }
 
     // ----- Text input -----
@@ -494,15 +522,15 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
     }
 
     override fun quit() {
-        onEventLoop { quit.requestStructuredQuit() }
+        onEventLoop { requestStructuredQuit() }
     }
 
     override fun putQuitHandler(id: String, isSafeToQuit: () -> Boolean) {
-        quit.putQuitHandler(id, isSafeToQuit)
+        quitHandlers[id] = isSafeToQuit
     }
 
     override fun removeQuitHandler(id: String) {
-        quit.removeQuitHandler(id)
+        quitHandlers.remove(id)
     }
 
     override fun openUri(uri: String) {

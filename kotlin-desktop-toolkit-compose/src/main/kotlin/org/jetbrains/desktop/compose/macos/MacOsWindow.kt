@@ -57,7 +57,6 @@ import org.jetbrains.desktop.compose.KdtDragAndDropManager
 import org.jetbrains.desktop.compose.KdtDragAndDropTransferable
 import org.jetbrains.desktop.compose.KdtImmediateDispatcher
 import org.jetbrains.desktop.compose.LocalComposeWindow
-import org.jetbrains.desktop.compose.QuitTarget
 import org.jetbrains.desktop.compose.WindowCloseRequestReason
 import org.jetbrains.desktop.compose.WindowDecoration
 import org.jetbrains.desktop.compose.WindowPlacement
@@ -103,8 +102,7 @@ internal class MacOsWindow(
     params: ComposeWindowParams,
     private val onCloseRequest: (WindowCloseRequestReason) -> Unit,
 ) : ComposeWindow,
-    DragAndDropSourceWindow,
-    QuitTarget {
+    DragAndDropSourceWindow {
     override val nativeWindow: Window = Window.create(
         Window.WindowParams(
             origin = (if (params.position.isSpecified) params.position else DpOffset.Zero).toLogicalPoint(),
@@ -439,7 +437,7 @@ internal class MacOsWindow(
      * Asks the application's owner to close this window because the application is quitting. Separate
      * from the user-driven path only in the reason it reports.
      */
-    override fun requestCloseFromQuit() {
+    internal fun requestCloseFromQuit() {
         if (!isDisposed) {
             onCloseRequest(WindowCloseRequestReason.ApplicationQuit)
         }
