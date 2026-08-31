@@ -399,6 +399,28 @@ Picked up after the ten workstreams; the report's P2/P3 backlog is otherwise unt
   `stopAndJoin` (AIR-5478) — has no counterpart: it exists because its teardown is reachable from a
   structured quit, a shutdown hook and dock cleanup, and here `close()` is the only path.
 
+- **Window content was laid out for the *primary* screen, not its own** — **fixed**, found in use.
+  Reported as "content is very small after changing screen" on macOS; not in any report, and not
+  macOS-specific — it is in the shared `Window.kt`.
+
+  `Window` carries the application composition's locals into the window's scene with
+  `CompositionLocalProvider(parentLocals)`, so that a theme or repository provided around `Window`
+  reaches the content. Those locals include `LocalDensity provides application.mainScreen.density`
+  (`Application.kt`), which re-provided *over* the correct per-window density the scene had already
+  established. Content therefore laid itself out for the primary display for the whole life of the
+  window, while the scene was sized for the display the window was actually on: on a 2x screen with a
+  1x primary, a 1640x1280 scene with content measured at density 1.0 — half size.
+
+  Not only a screen-*change* bug: a window opening on a non-primary screen of a different scale was
+  wrong from its first frame. `LocalLayoutDirection` was pinned the same way. Both are now re-provided
+  from the window inside `parentLocals`.
+
+  Worth noting how it was found: instrumentation showed density, `scene.size` and the drawable all
+  agreeing perfectly, which is what sent two earlier guesses at the scene machinery astray. The value
+  nobody had looked at was the one the *content* sees. Noria does not have this bug because it provides
+  `LocalDensity provides density` from the window itself and never blanket-re-provides an
+  application-level context over it.
+
 - **`macos.md` 5 — stale window position after hiding.** AppKit's origin is only reliable while the
   window is on screen; re-read on the visible transition, as Noria does. Noria refreshes only
   `position`, so neither does this.

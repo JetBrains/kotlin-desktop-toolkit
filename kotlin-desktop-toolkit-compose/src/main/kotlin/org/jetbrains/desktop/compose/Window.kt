@@ -17,6 +17,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.pointer.PointerEvent
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
@@ -353,7 +355,16 @@ fun Window(
             onKeyEvent = { currentOnKeyEvent(it) },
         ) {
             CompositionLocalProvider(parentLocals) {
-                content()
+                // The application composition's locals include a density and a reading order, and those
+                // describe the *main* screen — it has no window of its own to describe. Re-provided from
+                // this window, or content on a second screen with a different scale would lay itself out
+                // for the main one while the scene is sized for this one: same window, half-size content.
+                CompositionLocalProvider(
+                    LocalDensity provides window.density,
+                    LocalLayoutDirection provides window.layoutDirection,
+                ) {
+                    content()
+                }
             }
         }
         awaitCancellation()

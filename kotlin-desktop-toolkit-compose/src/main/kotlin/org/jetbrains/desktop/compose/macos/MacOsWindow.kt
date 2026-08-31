@@ -556,6 +556,8 @@ internal class MacOsWindow(
                 density = Density(nativeWindow.scaleFactor().toFloat())
                 scene.density = density
                 scene.size = contentSizeInPx()
+                // The only one of the three branches that changes the scale and did not ask for a frame.
+                requestFrame()
                 setUpDisplayLink()
                 EventHandlerResult.Stop
             }
