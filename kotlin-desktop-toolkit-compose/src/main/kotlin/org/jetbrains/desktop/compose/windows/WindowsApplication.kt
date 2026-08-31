@@ -208,15 +208,15 @@ internal class WindowsApplication(params: ComposeApplicationParams) : ComposeApp
      * no windows left to emit and `runApplication` returns.
      */
     override fun quit() {
-        quit.request()
+        quit.requestStructuredQuit()
     }
 
     override fun putQuitHandler(id: String, isSafeToQuit: () -> Boolean) {
-        quit.putHandler(id, isSafeToQuit)
+        quit.putQuitHandler(id, isSafeToQuit)
     }
 
     override fun removeQuitHandler(id: String) {
-        quit.removeHandler(id)
+        quit.removeQuitHandler(id)
     }
 
     override fun openUri(uri: String) {

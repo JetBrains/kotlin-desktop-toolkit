@@ -178,11 +178,9 @@ internal class LinuxApplication(private val params: ComposeApplicationParams) : 
                     EventHandlerResult.Stop
                 }
 
-                // Not a user gesture, despite the name: the toolkit raises this only once
-                // `stopEventLoop` has set its exit flag, which nothing but [close] does. It is the loop
-                // asking permission to finish unwinding, and it re-asks every frame until it gets it, so
-                // answering anything but Continue — Stop is the veto — hangs [close] forever. The user's
-                // Quit arrives through [quit] instead.
+                // Not a user gesture, despite the name: the toolkit raises this only once `stopEventLoop`
+                // has set its exit flag, and re-raises it every frame until the handler concedes, so Stop
+                // — the veto — hangs [close] forever. The user's Quit arrives through [quit] instead.
                 Event.ApplicationWantsToTerminate -> EventHandlerResult.Continue
 
                 Event.ApplicationWillTerminate -> EventHandlerResult.Continue
@@ -512,15 +510,15 @@ internal class LinuxApplication(private val params: ComposeApplicationParams) : 
     override fun requestActivation() = Unit
 
     override fun quit() {
-        onEventLoop { quit.request() }
+        onEventLoop { quit.requestStructuredQuit() }
     }
 
     override fun putQuitHandler(id: String, isSafeToQuit: () -> Boolean) {
-        quit.putHandler(id, isSafeToQuit)
+        quit.putQuitHandler(id, isSafeToQuit)
     }
 
     override fun removeQuitHandler(id: String) {
-        quit.removeHandler(id)
+        quit.removeQuitHandler(id)
     }
 
     override fun openUri(uri: String) {

@@ -359,15 +359,13 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
     /**
      * Runs when GTK's `quit` action is activated, or the process is sent `SIGTERM`.
      *
-     * Always answers `false`, which is what keeps GTK from calling `gtk_app.quit()` itself: that tears the
-     * GLib main loop down where it stands, and `runOnEventLoopAsync` — the whole Compose dispatcher — is
-     * `glib::idle_add_once` on that loop, so everything still queued on it is dropped, `runApplication`'s
-     * own continuation included. What ends the application instead is [ApplicationQuit] — the windows it
-     * asks to close leave the composition, and that is what ends `runApplication` and lets [close] stop
-     * the loop in an order the dispatcher survives.
+     * Always answers `false`, which keeps GTK from calling `gtk_app.quit()`: that tears the GLib main loop
+     * down where it stands, and `runOnEventLoopAsync` — the whole Compose dispatcher — is
+     * `glib::idle_add_once` on that loop, so everything queued on it is dropped, `runApplication`'s own
+     * continuation included. [ApplicationQuit] drives the exit through the composition instead.
      */
     private fun onQuitRequested(): Boolean {
-        quit.request()
+        quit.requestStructuredQuit()
         return false
     }
 
@@ -496,15 +494,15 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
     }
 
     override fun quit() {
-        onEventLoop { quit.request() }
+        onEventLoop { quit.requestStructuredQuit() }
     }
 
     override fun putQuitHandler(id: String, isSafeToQuit: () -> Boolean) {
-        quit.putHandler(id, isSafeToQuit)
+        quit.putQuitHandler(id, isSafeToQuit)
     }
 
     override fun removeQuitHandler(id: String) {
-        quit.removeHandler(id)
+        quit.removeQuitHandler(id)
     }
 
     override fun openUri(uri: String) {

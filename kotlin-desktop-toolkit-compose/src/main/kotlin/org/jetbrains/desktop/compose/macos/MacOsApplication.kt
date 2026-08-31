@@ -182,15 +182,11 @@ internal class MacOsApplication(private val params: ComposeApplicationParams) : 
     }
 
     /**
-     * Runs when the user chooses Quit (or something calls [quit]).
-     *
-     * Always answers `false`, which is `NSApplicationTerminateCancel`: AppKit's own `TerminateNow` halts
-     * the process where it stands, taking the composition and every JVM shutdown hook with it. What ends
-     * the application instead is [ApplicationQuit] — the windows it asks to close leave the composition,
-     * and that is what ends `runApplication` and unwinds the process from `main`.
+     * Runs when the user chooses Quit (or something calls [quit]). Always answers
+     * `NSApplicationTerminateCancel`: [ApplicationQuit] drives the exit through the composition instead.
      */
     private fun onQuitRequested(): Boolean {
-        quit.request()
+        quit.requestStructuredQuit()
         return false
     }
 
@@ -273,11 +269,11 @@ internal class MacOsApplication(private val params: ComposeApplicationParams) : 
     }
 
     override fun putQuitHandler(id: String, isSafeToQuit: () -> Boolean) {
-        quit.putHandler(id, isSafeToQuit)
+        quit.putQuitHandler(id, isSafeToQuit)
     }
 
     override fun removeQuitHandler(id: String) {
-        quit.removeHandler(id)
+        quit.removeQuitHandler(id)
     }
 
     override fun openUri(uri: String) {

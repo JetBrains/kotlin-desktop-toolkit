@@ -61,8 +61,9 @@ and always answer the native side with the non-vetoing result. Noria's
 **Risk:** medium — touches exit paths on every platform. Needs manual verification per OS:
 quit with no windows, quit with a vetoing handler, then quit again.
 
-**Landed** as `ApplicationQuit` + `QuitTarget` in the shared layer, with two deliberate departures
-from the reference shape:
+**Landed** as `ApplicationQuit` + `QuitTarget` in the shared layer, keeping Noria's vocabulary
+(`requestStructuredQuit`, `structuredQuitInProgress`, `quitHandlers`) so the two read alike, with two
+deliberate departures from the reference shape:
 
 - **The in-progress flag became a scoped re-entrancy guard**, set and cleared inside one round of
   `request()` under a `try`/`finally`, rather than a latch cleared when termination proceeds.

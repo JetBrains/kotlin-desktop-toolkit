@@ -178,31 +178,20 @@ fun application(
 }
 
 /**
- * Ends the application the way [ApplicationScope.exitApplication] does, for code that has no scope in
- * hand — the quit sequence, which reaches this point only when there is no window whose `onCloseRequest`
- * could make the decision instead.
- *
- * Does nothing but warn when [application] is not what is running: a caller driving [initApplication] and
- * [runApplication] itself owns the composition, and only it knows what would make that composition finish.
+ * Ends the application the way [ApplicationScope.exitApplication] does, for the quit sequence, which has
+ * no scope in hand and reaches this only when there is no window left to decide instead. A composition
+ * driven by a bare [runApplication] has no such lever, and only its own caller can end it.
  */
 internal fun requestApplicationExit(backend: DesktopBackend) {
     val exit = ApplicationExit.current
     if (exit == null) {
-        logWarn(backend) {
-            "Nothing to quit: the composition is not run by application(), so only its own caller can end it"
-        }
+        logWarn(backend) { "Nothing to quit: this composition is not run by application()" }
         return
     }
     exit()
 }
 
-/**
- * The exit lever [application] holds open for the duration of its composition.
- *
- * A process-wide slot rather than something threaded through [ComposeApplication], for the same reason
- * [ApplicationRegistry] is one: there is at most one live application, and the code that needs the lever
- * sits under an interface that cannot carry an internal member.
- */
+/** The exit lever [application] holds open for the duration of its composition. */
 private object ApplicationExit {
     private val exit = AtomicReference<(() -> Unit)?>(null)
 
