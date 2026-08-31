@@ -22,6 +22,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.desktop.compose.KdtImmediateDispatcher
+import org.jetbrains.desktop.compose.LinuxTextInputSurroundingText
 import org.jetbrains.desktop.gtk.Event
 import org.jetbrains.desktop.gtk.KeyCode
 import org.jetbrains.desktop.gtk.TextInputContentPurpose
@@ -67,7 +68,7 @@ internal class GtkTextInput(
      * The text around the cursor as last handed to the input method, needed to interpret the byte offsets
      * it sends back. Set by [surroundingTextForInputMethod], never guessed.
      */
-    private var publishedSurroundingText: SurroundingText? = null
+    private var publishedSurroundingText: LinuxTextInputSurroundingText? = null
 
     /** Whether the input method currently has a provisional string in the field. */
     var hasPreeditString: Boolean = false
@@ -229,10 +230,10 @@ internal class GtkTextInput(
         )
     }
 
-    private fun PlatformTextInputMethodRequest.surroundingText(): SurroundingText {
+    private fun PlatformTextInputMethodRequest.surroundingText(): LinuxTextInputSurroundingText {
         val text = state.toString()
         val selection = state.selection
-        return SurroundingText(
+        return LinuxTextInputSurroundingText(
             text = text,
             cursorOffset = selection.end.coerceIn(0, text.length),
             selectionStartOffset = selection.start.coerceIn(0, text.length),
@@ -266,60 +267,6 @@ internal class GtkTextInput(
             )
         }
     }
-}
-
-/**
- * The text around the cursor as published to the input method.
- *
- * The input method addresses it in UTF-8 bytes, Compose's edit commands in code points and the string
- * itself in UTF-16 chars, so all three have to be kept apart; the conversions below are the only place
- * that has to know about it.
- */
-private data class SurroundingText(
-    val text: String,
-    /** UTF-16 offset of the caret, i.e. the selection's end. */
-    val cursorOffset: Int,
-    /** UTF-16 offset of the selection's other end. */
-    val selectionStartOffset: Int,
-) {
-    fun cursorCodePointOffset(): UShort = text.codePointCount(0, cursorOffset).toUShort()
-
-    fun selectionStartCodePointOffset(): UShort = text.codePointCount(0, selectionStartOffset).toUShort()
-
-    /** How many code points before the caret the given number of UTF-8 bytes covers. */
-    fun codePointsBefore(byteLength: Int): Int {
-        var remainingBytes = byteLength
-        var index = cursorOffset
-        var codePoints = 0
-        while (remainingBytes > 0 && index > 0) {
-            val codePoint = text.codePointBefore(index)
-            remainingBytes -= codePoint.utf8Length()
-            index -= Character.charCount(codePoint)
-            codePoints++
-        }
-        return codePoints
-    }
-
-    /** How many code points after the caret the given number of UTF-8 bytes covers. */
-    fun codePointsAfter(byteLength: Int): Int {
-        var remainingBytes = byteLength
-        var index = cursorOffset
-        var codePoints = 0
-        while (remainingBytes > 0 && index < text.length) {
-            val codePoint = text.codePointAt(index)
-            remainingBytes -= codePoint.utf8Length()
-            index += Character.charCount(codePoint)
-            codePoints++
-        }
-        return codePoints
-    }
-}
-
-private fun Int.utf8Length(): Int = when {
-    this < 0x80 -> 1
-    this < 0x800 -> 2
-    this < 0x10000 -> 3
-    else -> 4
 }
 
 private fun KeyboardType.toTextInputContentPurpose(): TextInputContentPurpose = when (this) {

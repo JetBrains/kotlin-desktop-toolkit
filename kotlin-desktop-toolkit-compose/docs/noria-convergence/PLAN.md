@@ -253,7 +253,13 @@ thread the composition runs on.
     scene already runs off its own frame pump.
 19. **`LinuxInputMethodCommon.kt`** — the target duplicates ~110 lines of IME arithmetic between
     `gtk/` and `linux/`, and `GtkKeys.kt` / `LinuxKeys.kt` are byte-identical modulo the package
-    token.
+    token. — **done, in part**: the arithmetic is hoisted under Noria's class name,
+    `LinuxTextInputSurroundingText`. Two forced departures. The *file* is named after the class rather
+    than Noria's `LinuxInputMethodCommon.kt`, because ktlint's `standard:filename` rule requires it of a
+    file holding one class, and ktlint is this repo's verification bar. `toTextInputContentPurpose`
+    stays duplicated, as it is in Noria: the `TextInputContentPurpose` enum it maps onto is per-backend.
+    **`GtkKeys.kt` / `LinuxKeys.kt` are deliberately left duplicated** — Noria duplicates them too
+    (`gtk/Key.kt`, `linux/Key.kt`), so merging them would diverge rather than converge.
 20. Build hygiene: the module lacks `maven-publish` and `explicitApi()`, both of which the base
     `kotlin-desktop-toolkit` module has.
 
