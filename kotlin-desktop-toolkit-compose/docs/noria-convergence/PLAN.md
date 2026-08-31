@@ -40,11 +40,12 @@ The single most coherent piece of work. Same defect shape in four places.
    `gtk/GtkApplication.kt:380`, `windows/WindowsApplication.kt:226`; there is no assignment back
    to `false` anywhere in the module. Any declined window close permanently wedges quit.
    *This was reported as a Windows-local issue; it is universal.*
-2. **Linux: terminate handshake inverted → hang on exit** (P0).
-   `linux/LinuxApplication.kt:182-185` returns `EventHandlerResult.Stop` to veto, but KDT's `exit`
-   flag stays set (`native/desktop-linux/src/linux/application.rs:237`) and the event refires every
-   16 ms; with (1) above, `close()`'s `eventLoopThread.join()` blocks forever after any
-   `application.quit()`. Noria always returns `Continue` and drives a structured quit from Kotlin.
+2. **Linux: hang on exit after any `quit()`** (P0). *Mechanism re-verified against KDT's own
+   sources — see the investigation log below; the polarity is fine, the stuck flag is the cause.*
+   `linux/LinuxApplication.kt:182-185` returns `Stop` to veto, KDT's `exit` flag stays set
+   (`application.rs:237`) and re-sends `ApplicationWantsToTerminate` every 16 ms. Because
+   `onQuitRequested()` short-circuits on `isQuitInProgress` from (1) it answers `Stop` forever, the
+   loop never returns `Ok(false)`, and `close()`'s `eventLoopThread.join()` blocks permanently.
 3. **GTK: answering the terminate callback with `true` hard-hangs.** It calls `gtk_app.quit()`, and
    since `runOnEventLoopAsync` is `glib::idle_add_once`, that drops the whole Compose dispatcher
    queue including `runApplication`'s `runBlocking`.
@@ -202,3 +203,42 @@ target toward Noria.
     so precise-wheel detection never fires and trackpad scrolling gets Compose's stepping-wheel
     animation stacked on top of macOS inertia. Fix mirrors the target's own `MacOsTypedEvents`
     trick. Fell out of the comparison; see [macos.md](macos.md) finding 15.
+
+---
+
+# Investigation log — WS1 (Linux terminate)
+
+Traced directly in this repo's sources while starting WS1. Records facts that are not obvious from
+either Kotlin side alone, and corrects the "inverted handshake" framing in [linux.md](linux.md).
+
+**The FFI polarity, pinned down:**
+
+- `linux/Application.kt:146-148` — Kotlin `Continue` → native `false`, `Stop` → native `true`.
+- `application.rs:237` — `if exit.load() && !send_event(ApplicationWantsToTerminate)`, so the loop
+  terminates when the handler returns **`Continue`**, and `Stop` **vetoes**.
+- The target's `if (onQuitRequested()) Continue else Stop` is therefore **the right way round**.
+  `linux.md` finding 1 calls this an inverted handshake; that part of the diagnosis is wrong. The
+  hang it describes is real, but the cause is the stuck flag, not the polarity.
+
+**Why it hangs anyway:**
+
+`exit` has exactly one writer — `application_stop_event_loop` (`application_api.rs:119-125`), reached
+only from `close()`. So on Linux `ApplicationWantsToTerminate` **never** originates from a user
+gesture; it is purely the teardown signal, refiring every 16 ms until the handler concedes.
+
+    quit()  → onQuitRequested() sets isQuitInProgress = true, asks windows to close, returns false
+            → windows close, composition stops emitting, runApplication returns
+    close() → stopEventLoop() sets exit
+            → loop sends WantsToTerminate every 16 ms
+            → onQuitRequested() short-circuits on isQuitInProgress, returns false, forever
+            → event_loop_iteration never returns Ok(false) → join() hangs
+
+A second hang path needs no `quit()` at all: if `close()` runs while any window is still open,
+the first terminate event sets the flag and every later one is short-circuited by it.
+
+**Design that follows from this:** on Linux the two paths should stop sharing a predicate.
+`quit()` is the user-initiated request — consult handlers, ask windows to close, and reset the flag
+whenever the attempt concludes without terminating, so a declined close does not wedge the next
+attempt. The terminate event belongs to unconditional teardown and must never veto. Confirm the
+equivalent flag lifetime on macOS, GTK and Windows before mirroring, since only Linux has been
+traced end-to-end so far.
