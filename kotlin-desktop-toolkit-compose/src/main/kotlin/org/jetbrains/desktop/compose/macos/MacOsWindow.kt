@@ -461,36 +461,32 @@ internal class MacOsWindow(
         canChooseDirectories: Boolean,
     ): List<Path> {
         // KdtDispatcher, not KdtImmediateDispatcher: the immediate one runs inline when it is already on
-        // the event loop thread, which puts `runModal`'s nested run loop on the stack of whatever was
-        // running — for a dialog opened from a click that is the scene's own `FlushCoroutineDispatcher`,
-        // mid-resume of this very coroutine. Anything the nested loop then resumes corrupts that
-        // continuation. Dispatching hands the dialog a clean stack once the flush has unwound.
+        // the event loop thread, and `runModal` spins a nested run loop, so the dialog would sit on the
+        // stack of whatever was running. For a dialog opened from a click that is the scene's own
+        // `FlushCoroutineDispatcher`, mid-resume of this very coroutine, and anything the nested loop
+        // resumes then corrupts that continuation. Dispatching lets the flush unwind first.
         return withContext(KdtDispatcher) {
-            runModal {
-                FileDialog.showOpenFileDialog(
-                    FileDialog.CommonDialogParams(title = title),
-                    FileDialog.OpenDialogParams(
-                        canChooseFiles = canChooseFiles,
-                        canChooseDirectories = canChooseDirectories,
-                        allowsMultipleSelections = allowsMultipleSelections,
-                    ),
-                ).map(Path::of)
-            }
+            FileDialog.showOpenFileDialog(
+                FileDialog.CommonDialogParams(title = title),
+                FileDialog.OpenDialogParams(
+                    canChooseFiles = canChooseFiles,
+                    canChooseDirectories = canChooseDirectories,
+                    allowsMultipleSelections = allowsMultipleSelections,
+                ),
+            ).map(Path::of)
         }
     }
 
     override suspend fun showSaveFileDialog(title: String, nameFieldStringValue: String?): Path? {
         // Dispatched rather than immediate, for the reason spelled out in `showOpenFileDialog`.
         return withContext(KdtDispatcher) {
-            runModal {
-                FileDialog.showSaveFileDialog(
-                    FileDialog.CommonDialogParams(
-                        title = title,
-                        nameFieldStringValue = nameFieldStringValue,
-                        canCreateDirectories = true,
-                    ),
-                )?.let(Path::of)
-            }
+            FileDialog.showSaveFileDialog(
+                FileDialog.CommonDialogParams(
+                    title = title,
+                    nameFieldStringValue = nameFieldStringValue,
+                    canCreateDirectories = true,
+                ),
+            )?.let(Path::of)
         }
     }
 
@@ -718,38 +714,8 @@ internal class MacOsWindow(
         link.setRunning(true)
     }
 
-    /**
-     * Set while a modal file dialog owns the event loop thread.
-     *
-     * `runModal` spins a *nested* run loop, so the display link keeps ticking and Grand Central keeps
-     * delivering the frame block — inside the coroutine that opened the dialog, which the scene's own
-     * `FlushCoroutineDispatcher` is still in the middle of resuming. Rendering there re-enters that
-     * dispatcher and resumes an already-completed continuation, which fails as
-     * `CompletedContinuation cannot be cast to DispatchedContinuation`.
-     */
-    private var isModalDialogRunning = false
-
-    /**
-     * Runs a modal dialog with frame production suspended; see [isModalDialogRunning].
-     *
-     * Nothing is lost by skipping those frames: the dialog is covering the window. Asking for one on the
-     * way out is load-bearing rather than tidiness — the caller's coroutine resumes on the scene's
-     * dispatcher, which only runs from `performScheduledEffects`, which only runs from a frame.
-     */
-    private fun <T> runModal(block: () -> T): T {
-        Logger.info { "Modal dialog opening" }
-        isModalDialogRunning = true
-        try {
-            return block()
-        } finally {
-            isModalDialogRunning = false
-            isFrameRequested = true
-            Logger.info { "Modal dialog closed" }
-        }
-    }
-
     private fun recordFrame(): PresentablePicture? {
-        if (isDisposed || isModalDialogRunning) return null
+        if (isDisposed) return null
         val size = viewContext.view.size()
         val canvas = pictureRecorder.beginRecording(Rect.makeWH(size.width.toFloat(), size.height.toFloat()))
         canvas.clear(Color.White.toArgb())
