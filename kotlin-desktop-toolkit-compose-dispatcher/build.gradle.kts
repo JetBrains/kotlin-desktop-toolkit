@@ -1,10 +1,6 @@
-import org.gradle.kotlin.dsl.kotlin
-import org.gradle.kotlin.dsl.`maven-publish`
-
 plugins {
     kotlin("jvm")
     id("org.jlleitschuh.gradle.ktlint")
-
 }
 
 group = "org.jetbrains.kotlin-desktop-toolkit"
