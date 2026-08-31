@@ -258,6 +258,64 @@ reconcile (AIR-6275, AIR-5036, AIR-5022).
 **Requires a surface-vs-content coordinate split** before it can land. Staged plan in
 [linux.md](linux.md). Highest risk item in this document; sequence it last among the P1s.
 
+### Deferred, deliberately — 2026-08-31
+
+Not started. Not a defect anyone will see as a crash, so it loses to work that can be verified: a
+zero frame degrades a Wayland window rather than breaking it. What is actually lost today, and only
+when the compositor answers `Client` (always on GNOME, never on a server-decorated KDE window):
+
+- no drop shadow, and nowhere to draw rounded corners — `padding` is the only area outside the xdg
+  window geometry a client may paint into;
+- a 6 dp strip inside each edge eats presses (`resizeEdgeIfClientSideDecorated` at
+  `linux/LinuxWindow.kt`, gated on `CustomTitleBar && isResizable && placement == Floating`), so an
+  edge-flush scrollbar, split-pane divider or full-bleed button is unclickable there and the forced
+  resize cursor beats `Modifier.pointerHoverIcon`;
+- `tiled` never reaches the application, so a half-snapped window cannot stop drawing its shadow and
+  rounded corners on the snapped sides.
+
+### Why it is not a one-liner
+
+Today **surface, window and scene are one rectangle** — `contentSize` is literally `get() = size` —
+so a compositor coordinate can go straight to the scene untranslated. `window.rs:229-282` is what
+changes that:
+
+    surface_size = content_size + left.padding + right.padding      // the surface grows
+    geometry     = (left.padding, top.padding, content_size)        // the window is inset into it
+    input_region = geometry expanded by resizer_thickness           // grab area, inside the padding
+
+With Noria's 24 dp the surface becomes 48 dp wider and taller than the window, the scene sits at an
+offset inside it, and `WindowConfigure.size` starts reporting the *surface*. Pointer positions arrive
+surface-relative and need the padding subtracted; caret rectangles and drag positions need it added.
+
+**The report's "step 1 + 4 alone" shortcut is not safe.** Enabling the frame without the coordinate
+split leaves the scene laid out against the surface while the visible geometry is inset — everything
+is misaligned. It is steps 1-4 or nothing.
+
+### Sites to change, when someone picks this up
+
+| Site | Change |
+|---|---|
+| `LinuxWindow.size` / `contentSize` | stop being the same value; `size` should stay *window* (geometry), not surface |
+| `scene.size = contentSizeInPx()` | 3 call sites |
+| pointer input → `sendPointerEvent` | subtract the top-left padding |
+| `PlatformContext.convertLocalToWindowPosition` | add it back |
+| `LinuxTextInput` caret rect | add it back |
+| `LinuxDragAndDropManager` positions | add it back |
+| `recordFrame` | clear `TRANSPARENT` rather than `WHITE`, translate the scene by the padding |
+| `LinuxWindowBorders.kt` | delete; test the padding band instead, `startResize(serial, edge)` unchanged |
+| `WindowDecoration` | **API decision** — whether the frame and per-side `tiled` are surfaced to content at all |
+
+Note KDT already zeroes the frame itself when maximized, fullscreen or server-decorated
+(`application_state.rs:536-545`), which lines up with the existing `placement == Floating` guard.
+
+### Recommended approach
+
+Behind an opt-in in `ComposeWindowParams` defaulting to today's zero frame, so the two can be
+compared side by side on one build and nothing regresses for callers who do not ask for it. Needs
+GNOME (always CSD), KDE and Sway. Verify: shadow present; edge-flush controls clickable; resize from
+all four edges and corners; caret position inside a text field; drag-and-drop drop coordinates;
+half-snap and check `tiled`.
+
 ## WS10 — Enablers (P1/P2, unblocks everything above)
 
 16. **No tests, no headless path.** The compose module has zero tests. Every P1 above is exactly
