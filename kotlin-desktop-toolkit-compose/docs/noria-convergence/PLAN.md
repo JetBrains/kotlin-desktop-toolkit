@@ -449,11 +449,25 @@ Picked up after the ten workstreams; the report's P2/P3 backlog is otherwise unt
   `ViewConfiguration.touchSlop`, and that is wrong twice over. Noria does **not** do it — it keeps
   `touchSlop` at 18 dp and applies the threshold to the mouse alone, inside its *forked*
   `DragGestureDetector`. This module is on upstream Compose, where `touchSlop` is pointer-agnostic, so
-  wiring it there would halve touch slop as well, and only on GTK — leaving GTK at 8 dp while macOS,
-  Windows and Wayland stay at 18 dp. Needs either a shared `ComposeApplication.dragThreshold` that
-  content applies to its own mouse gestures, or Noria's fork. `DoubleClickDistancePixels` is blocked on
-  the same missing shared property, and `MiddleClickPaste` gates a primary-selection API this module
-  does not have.
+  wiring it there would halve touch slop as well, and only on GTK.
+
+  **Do not retry this behind a shared `ComposeApplication.dragThreshold` either — there is nothing for
+  it to drive.** `DragGestureDetector.kt:1141,1147` derives mouse slop as
+  `touchSlop * (mouseSlop / defaultTouchSlop)`, and `mouseSlop`, `defaultTouchSlop`, the ratio and
+  `pointerSlop` are all private or internal. `touchSlop` is the only reachable knob and it is *not* the
+  mouse value. The adjacent TODO pins the numbers — `defaultTouchSlop = 18.dp`, `mouseSlop = 0.125.dp`,
+  ratio `1/144` — so `touchSlop = 8.dp` would have given a mouse slop of `0.056 dp`: a hair trigger,
+  less than half the current value and nothing like the 8 dp intended. Matching the desktop would need
+  `touchSlop = dragThreshold * 144`, which destroys touch.
+
+  The finding is also arguably misconceived. `dnd-drag-threshold` is about not starting a
+  drag-and-drop on jitter, whereas Compose's mouse slop is deliberately near-zero so mouse drags begin
+  at once. In this module drag-and-drop initiation is content's own business — content calls
+  `startDragSession` — so `ViewConfiguration` was never the right consumer.
+
+  `DoubleClickDistancePixels` is blocked harder: `ViewConfiguration` has no distance field of any kind.
+  `MiddleClickPaste` gates a primary-selection API this module does not have. **All three are blocked
+  upstream, not on this module's API.**
 
 - **`windows.md` 7 — `WindowStyle` flags: nothing to do.** The report is overstated, verified against
   KDT: `WindowStyle` already defaults `isMinimizable` and `isMaximizable` to `true`
