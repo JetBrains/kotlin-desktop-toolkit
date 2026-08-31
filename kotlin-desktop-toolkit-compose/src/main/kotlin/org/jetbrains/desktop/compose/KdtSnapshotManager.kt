@@ -1,7 +1,9 @@
 package org.jetbrains.desktop.compose
 
+import androidx.compose.runtime.snapshots.ObserverHandle
 import androidx.compose.runtime.snapshots.Snapshot
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.launch
@@ -24,27 +26,35 @@ import java.util.concurrent.atomic.AtomicBoolean
  * rather than what makes notification happen at all.
  */
 internal object KdtSnapshotManager {
-    private val started = AtomicBoolean(false)
-    private val pending = AtomicBoolean(false)
-
-    fun ensureStarted() {
-        if (!started.compareAndSet(false, true)) {
-            return
-        }
+    /**
+     * Starts flushing, and returns the handle that stops it again. Dispose it once the composition is
+     * over and from the event loop thread: until then the write observer is global, so a `mutableStateOf`
+     * written anywhere in the process — by a library that has never heard of this toolkit, on a thread of
+     * its own — resumes the consumer below through [KdtDispatcher], which needs a live application to
+     * resolve a thread to run on.
+     */
+    fun activateSnapshots(): ObserverHandle {
+        val pending = AtomicBoolean(false)
         val channel = Channel<Unit>(capacity = 1)
-        // A standalone scope on purpose: this loop never finishes, so making it a child of the
-        // application's scope would stop `runApplication` from ever returning.
-        CoroutineScope(KdtDispatcher).launch {
+        // A standalone scope on purpose: this loop only ends when the handle is disposed, so making it a
+        // child of the application's scope would stop `runApplication` from ever returning.
+        val scope = CoroutineScope(KdtDispatcher)
+        scope.launch {
             channel.consumeEach {
                 pending.set(false)
                 Snapshot.sendApplyNotifications()
             }
         }
-        Snapshot.registerGlobalWriteObserver {
+        val writeObserver = Snapshot.registerGlobalWriteObserver {
             // Coalesce: one notification is enough no matter how many states were written.
             if (pending.compareAndSet(false, true)) {
                 channel.trySend(Unit)
             }
+        }
+        return ObserverHandle {
+            writeObserver.dispose()
+            channel.close()
+            scope.cancel()
         }
     }
 }

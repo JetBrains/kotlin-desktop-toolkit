@@ -14,6 +14,7 @@ import androidx.compose.ui.SystemTheme
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -265,33 +266,42 @@ fun currentApplication(): ComposeApplication = ApplicationRegistry.current()
 fun runApplication(application: ComposeApplication, content: @Composable () -> Unit) {
     runBlocking(KdtDispatcher) {
         withContext(YieldFrameClock) {
-            // Before the first composition, so that state written from an event handler invalidates it.
-            KdtSnapshotManager.ensureStarted()
-
-            val recomposer = Recomposer(coroutineContext)
-            launch {
-                recomposer.runRecomposeAndApplyChanges()
-            }
-            launch {
-                val composition = Composition(ApplicationApplier(), recomposer)
-                try {
-                    composition.setContent {
-                        application.ProvideCompositionLocals {
-                            CompositionLocalProvider(
-                                LocalComposeApplication provides application,
-                                LocalDensity provides application.mainScreen.density,
-                                LocalLayoutDirection provides application.layoutDirection,
-                            ) {
-                                content()
+            // Before the first composition, so that state written from an event handler invalidates it,
+            // and undone at the very end: the observer it installs is global and outlives this call
+            // otherwise.
+            val snapshots = KdtSnapshotManager.activateSnapshots()
+            try {
+                // `coroutineScope` and not the two bare `launch`es: they return the moment they are
+                // started, and the flush has to stay installed until they have both finished.
+                coroutineScope {
+                    val recomposer = Recomposer(coroutineContext)
+                    launch {
+                        recomposer.runRecomposeAndApplyChanges()
+                    }
+                    launch {
+                        val composition = Composition(ApplicationApplier(), recomposer)
+                        try {
+                            composition.setContent {
+                                application.ProvideCompositionLocals {
+                                    CompositionLocalProvider(
+                                        LocalComposeApplication provides application,
+                                        LocalDensity provides application.mainScreen.density,
+                                        LocalLayoutDirection provides application.layoutDirection,
+                                    ) {
+                                        content()
+                                    }
+                                }
                             }
+                            recomposer.close()
+                            // Returns only once nothing is keeping the composition alive.
+                            recomposer.join()
+                        } finally {
+                            composition.dispose()
                         }
                     }
-                    recomposer.close()
-                    // Returns only once nothing is keeping the composition alive.
-                    recomposer.join()
-                } finally {
-                    composition.dispose()
                 }
+            } finally {
+                snapshots.dispose()
             }
         }
     }

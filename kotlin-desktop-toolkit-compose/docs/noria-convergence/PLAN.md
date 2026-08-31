@@ -141,7 +141,7 @@ preedit-discard behaviour already matches Noria line for line, and AIR-6619 neve
 Noria problem — for Compose `finishComposingText()`, which is what `unmarkText()` calls here, is the
 right call.
 
-## WS4 — Object lifetime and teardown (2 P1, shared layer)
+## WS4 — Object lifetime and teardown (2 P1, shared layer) — **done**
 
 8. **Native window leaks on abandoned composition.** `Window.kt:286-291` uses
    `remember { application.createWindow(...) }` + `DisposableEffect`; if the composition is
@@ -155,6 +155,21 @@ right call.
    the scene job (AIR-6084, `7e8e349d602e5`).
 
 (9) is the blocker for any second `runApplication` in one process, which is why it also blocks WS10.
+
+**Landed.** (8) is Noria's `RememberObserver` block verbatim. (9) has no literal Noria shape to copy —
+its `activateSnapshots` is built on `snapshotHolder`, `DrainableCoroutineDispatcher` and the data-source
+context, none of which exist here — so only the lesson was taken: keep the `ObserverHandle`, and dispose
+it last of all, on the event loop thread. The name is Noria's; the handle is disposed in
+`runApplication`'s `finally`, which is this module's equivalent of the scene job's.
+
+The report's suggested belt-and-braces — make `KdtDispatcherBase.dispatch` tolerate a missing
+application — was **not** added. Noria's four dispatchers call `GrandCentralDispatch` and friends
+directly and cannot have the problem, so there is nothing to mirror, and disposing the handle removes
+the cause rather than swallowing the symptom.
+
+A bug found while writing (9), not in either codebase: the two `launch`es in `runApplication` return
+immediately, so a `try`/`finally` wrapped straight around them would have torn the flush down before
+the first composition. They are inside a `coroutineScope` now.
 
 ## WS5 — Input mode on scroll (2 × P1, trivial)
 
