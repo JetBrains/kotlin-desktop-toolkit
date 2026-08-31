@@ -282,7 +282,10 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
                     windowsById[event.windowId]?.handleEvent(event) ?: EventHandlerResult.Continue
                 }
 
-                is Event.MouseEntered, is Event.MouseExited ->
+                is Event.MouseEntered ->
+                    windowsById[event.windowId]?.handleEvent(event) ?: EventHandlerResult.Continue
+
+                is Event.MouseExited ->
                     windowsById[event.windowId]?.handleEvent(event) ?: EventHandlerResult.Continue
 
                 is Event.WindowClosed -> {
