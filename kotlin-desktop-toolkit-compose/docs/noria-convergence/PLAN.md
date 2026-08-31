@@ -399,6 +399,23 @@ Picked up after the ten workstreams; the report's P2/P3 backlog is otherwise unt
   `stopAndJoin` (AIR-5478) — has no counterpart: it exists because its teardown is reachable from a
   structured quit, a shutdown hook and dock cleanup, and here `close()` is the only path.
 
+- **`linux.md` 7 — titlebar click actions.** The desktop configures what a double, middle or right
+  click on a client-side-decorated titlebar does, and those settings arrived as `DesktopSettingChange`
+  events the layer dropped. Consumed now, and exposed the way Noria exposes them:
+  `requestTitleBarDoubleClickAction` / `Tertiary` / `Secondary` on the window, with Noria's default
+  bodies, so content that draws its own bar can route the gestures. Two halves Noria has were **not**
+  ported: `TitlebarLayout`, whose parse produces `WindowDecoration.TitleBarElement` values this module
+  has no type for, and `MiddleClickPaste`, which gates a primary-selection API this module does not
+  have — consuming it would be a write-only field.
+
+- **`linux.md` 6 — `WindowCapabilities` is still ignored.** The Wayland half is a one-liner, but there
+  is nowhere for it to go: every backend class is `internal`, so it needs a member on `ComposeWindow`,
+  and Noria's vehicle (`customTitleBarLayout`, typed in `TitleBarElement`) does not transfer. That
+  leaves a real cross-platform design question — an observable `capabilities` object, or four booleans
+  `canMinimize`/`canMaximize`/`canFullscreen`/`hasWindowMenu` defaulting to `true` where the platform
+  has no equivalent, and what macOS, Windows and GTK would report. Deliberately left undone rather than
+  landing a field nothing can read.
+
 - **`gtk.md` 4 and 6** — see the commit; routing by the event's own window id, and keeping the stack
   trace in the two event-handler catches.
 - **`linux.md` 5 / `gtk.md` 7** — `WAYLAND_SOCKET`, recorded as finding 23 above.

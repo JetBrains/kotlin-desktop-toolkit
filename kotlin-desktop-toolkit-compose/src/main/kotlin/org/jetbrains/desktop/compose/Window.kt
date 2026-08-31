@@ -200,6 +200,25 @@ interface ComposeWindow {
     fun requestClose()
 
     /**
+     * What a click on a [WindowDecoration.CustomTitleBar] should do, for content that draws its own bar
+     * and has to route the gestures itself. Call these from the bar's pointer handler.
+     *
+     * Only the Wayland backend answers to the desktop's configuration here; elsewhere the defaults stand,
+     * and on GTK, where the platform runs the gestures itself
+     * ([handlesCustomTitleBarGestures]), content must not call them at all or both would fire.
+     */
+    fun requestTitleBarDoubleClickAction(pointerEvent: PointerEvent) {
+        when (placement) {
+            WindowPlacement.Floating, WindowPlacement.Fullscreen -> requestPlacement(WindowPlacement.Maximized)
+            WindowPlacement.Maximized -> requestPlacement(WindowPlacement.Floating)
+        }
+    }
+
+    fun requestTitleBarTertiaryClickAction(pointerEvent: PointerEvent) = Unit
+
+    fun requestTitleBarSecondaryClickAction(pointerEvent: PointerEvent) = Unit
+
+    /**
      * Hands the window over to the platform's own move loop.
      *
      * Only valid from within a pointer event handler: the platform starts the move from the press that

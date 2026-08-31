@@ -33,6 +33,7 @@ import org.jetbrains.desktop.linux.ApplicationConfig
 import org.jetbrains.desktop.linux.ColorSchemeValue
 import org.jetbrains.desktop.linux.DataSource
 import org.jetbrains.desktop.linux.DesktopSetting
+import org.jetbrains.desktop.linux.DesktopTitlebarAction
 import org.jetbrains.desktop.linux.DragAndDropQueryData
 import org.jetbrains.desktop.linux.DragAndDropQueryResponse
 import org.jetbrains.desktop.linux.Event
@@ -140,6 +141,19 @@ internal class LinuxApplication(private val params: ComposeApplicationParams) : 
 
     /** Reported to Compose through each window's `ViewConfiguration`, hence observable. */
     internal var doubleClickIntervalMillis: Long by mutableStateOf(500L)
+        private set
+
+    /**
+     * What a click on a client-side-decorated titlebar does, as the desktop has it configured. The defaults
+     * are the ones a desktop that never reports the setting would behave with.
+     */
+    internal var titleBarDoubleClickAction: DesktopTitlebarAction by mutableStateOf(DesktopTitlebarAction.ToggleMaximize)
+        private set
+
+    internal var titleBarMiddleClickAction: DesktopTitlebarAction by mutableStateOf(DesktopTitlebarAction.None)
+        private set
+
+    internal var titleBarRightClickAction: DesktopTitlebarAction by mutableStateOf(DesktopTitlebarAction.Menu)
         private set
 
     private var cursorTheme: String? = null
@@ -326,6 +340,18 @@ internal class LinuxApplication(private val params: ComposeApplicationParams) : 
 
             is DesktopSetting.DoubleClickInterval -> {
                 doubleClickIntervalMillis = setting.value.inWholeMilliseconds
+            }
+
+            is DesktopSetting.ActionDoubleClickTitlebar -> {
+                titleBarDoubleClickAction = setting.value
+            }
+
+            is DesktopSetting.ActionMiddleClickTitlebar -> {
+                titleBarMiddleClickAction = setting.value
+            }
+
+            is DesktopSetting.ActionRightClickTitlebar -> {
+                titleBarRightClickAction = setting.value
             }
 
             is DesktopSetting.CursorTheme -> {

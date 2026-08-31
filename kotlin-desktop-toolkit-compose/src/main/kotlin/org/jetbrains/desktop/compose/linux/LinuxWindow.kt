@@ -60,6 +60,7 @@ import org.jetbrains.desktop.compose.WindowDecoration
 import org.jetbrains.desktop.compose.WindowPlacement
 import org.jetbrains.desktop.compose.decodeFileChooserPath
 import org.jetbrains.desktop.compose.linuxMimeTypes
+import org.jetbrains.desktop.linux.DesktopTitlebarAction
 import org.jetbrains.desktop.linux.DragAndDropAction
 import org.jetbrains.desktop.linux.DragAndDropQueryData
 import org.jetbrains.desktop.linux.DragAndDropQueryResponse
@@ -426,6 +427,41 @@ internal class LinuxWindow(
     internal fun requestCloseFromQuit() {
         if (!isDisposed) {
             onCloseRequest(WindowCloseRequestReason.ApplicationQuit)
+        }
+    }
+
+    override fun requestTitleBarDoubleClickAction(pointerEvent: PointerEvent) {
+        performTitleBarAction(application.titleBarDoubleClickAction, pointerEvent)
+    }
+
+    override fun requestTitleBarTertiaryClickAction(pointerEvent: PointerEvent) {
+        performTitleBarAction(application.titleBarMiddleClickAction, pointerEvent)
+    }
+
+    override fun requestTitleBarSecondaryClickAction(pointerEvent: PointerEvent) {
+        performTitleBarAction(application.titleBarRightClickAction, pointerEvent)
+    }
+
+    private fun performTitleBarAction(action: DesktopTitlebarAction, pointerEvent: PointerEvent) {
+        when (action) {
+            DesktopTitlebarAction.ToggleMaximize -> {
+                when (placement) {
+                    WindowPlacement.Floating,
+                    WindowPlacement.Fullscreen,
+                    -> requestPlacement(WindowPlacement.Maximized)
+
+                    WindowPlacement.Maximized -> requestPlacement(WindowPlacement.Floating)
+                }
+            }
+            DesktopTitlebarAction.Minimize -> requestMinimized(true)
+            DesktopTitlebarAction.None -> Unit
+            DesktopTitlebarAction.Menu -> {
+                val (serial, position) = when (val nativeEvent = pointerEvent.nativeEvent) {
+                    is Event.MouseDown -> Pair(nativeEvent.serial, nativeEvent.locationInWindow)
+                    else -> return
+                }
+                onNativeWindow { showMenu(serial, position) }
+            }
         }
     }
 
