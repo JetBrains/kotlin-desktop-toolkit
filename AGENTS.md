@@ -36,6 +36,10 @@ The project uses Rust for native implementations and requires platform-specific 
 This is a Kotlin/Rust hybrid project providing desktop window management APIs for macOS, Linux (Wayland), and Windows:
 
 - **kotlin-desktop-toolkit/** - Main Kotlin API with platform-specific implementations in `org.jetbrains.desktop.{macos,linux,win32}`
+- **kotlin-desktop-toolkit-compose/** - Compose Multiplatform facade over the toolkit (`org.jetbrains.desktop.compose`,
+  with per-backend implementations in `.{macos,linux,gtk,windows}`). Publishes as `kotlin-desktop-toolkit-compose`;
+  built against released Compose artifacts, so it is a library rather than a Compose fork. `application { }` and
+  `Window { }` are the whole public entry point, and `DesktopBackend.default` picks the backend
 - **native/** - Rust workspace with platform-specific crates:
   - `desktop-common/` - Shared Rust utilities
   - `desktop-macos/` - macOS native implementation

@@ -1,5 +1,8 @@
 package org.jetbrains.desktop.sample.compose
 
+import org.jetbrains.desktop.compose.ComposeApplicationParams
+import org.jetbrains.desktop.compose.application
+
 /**
  * The sample's entry point — one `main` for every platform.
  *
@@ -10,6 +13,10 @@ package org.jetbrains.desktop.sample.compose
  * Run it with `./gradlew :sample:runComposeSample` — on every platform, since there is nothing left for a
  * per-backend run configuration to select.
  */
-fun main() = application {
+fun main() = application(
+    // The desktop matches windows against a `.desktop` file by this name, so it is the application's to
+    // give rather than the library's; on Wayland it is the app id.
+    ComposeApplicationParams(identifier = "org.jetbrains.desktop.sample.compose"),
+) {
     SampleWindows()
 }

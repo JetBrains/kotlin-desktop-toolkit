@@ -72,6 +72,16 @@ import androidx.compose.ui.unit.isSpecified
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.jetbrains.desktop.compose.ClipboardFormat
+import org.jetbrains.desktop.compose.ClipboardItem
+import org.jetbrains.desktop.compose.ComposeWindow
+import org.jetbrains.desktop.compose.ComposeWindowScope
+import org.jetbrains.desktop.compose.KdtDragAndDropTransferable
+import org.jetbrains.desktop.compose.WindowDecoration
+import org.jetbrains.desktop.compose.WindowPlacement
+import org.jetbrains.desktop.compose.acceptsFormat
+import org.jetbrains.desktop.compose.application
+import org.jetbrains.desktop.compose.clipboardEntry
 import kotlin.time.Duration.Companion.seconds
 
 /**

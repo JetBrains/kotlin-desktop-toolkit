@@ -37,12 +37,14 @@ val skikoVersion = "0.144.6"
 val skikoTarget = "$skikoTargetOs-$skikoTargetArch"
 dependencies {
     implementation(project(":kotlin-desktop-toolkit"))
+    // Brings the toolkit and the Compose artifacts with it, since both are part of its API.
+    implementation(project(":kotlin-desktop-toolkit-compose"))
+    // The Skiko *native* library. Its classes arrive transitively with Compose; the matching native
+    // library is the application's to supply, because it is the only module that knows the host it runs on.
     implementation("org.jetbrains.skiko:skiko-awt-runtime-$skikoTarget:$skikoVersion")
     implementation(kotlin("stdlib"))
 
-    implementation(libs.compose.runtime)
     implementation(libs.compose.foundation)
-    implementation(libs.compose.ui)
     implementation(libs.compose.material3)
 }
 

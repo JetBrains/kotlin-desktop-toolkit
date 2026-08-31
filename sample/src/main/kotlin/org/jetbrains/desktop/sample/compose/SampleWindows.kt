@@ -8,6 +8,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import org.jetbrains.desktop.compose.Window
+import org.jetbrains.desktop.compose.WindowDecoration
+import org.jetbrains.desktop.compose.application
 
 /**
  * The windows the sample opens.
