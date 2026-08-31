@@ -68,8 +68,13 @@ internal class WindowsTextInput(
             // NonCancellable: the coroutine is already cancelled by the time we get here, so a plain
             // withContext would refuse to run and the native client would stay installed.
             withContext(NonCancellable + KdtImmediateDispatcher) {
+                val client = activeClient
                 activeClient = null
                 if (!isWindowGone) {
+                    // The toolkit finalizes the compositions IMM32 knows about, but a dead key opens one
+                    // on Compose's side alone ([tryHandleTextInputEvent]), and that one would otherwise
+                    // outlive the field it was typed into.
+                    client?.unmarkText()
                     // Clearing the client finalizes an open composition, which calls back into it — hence
                     // this order, and hence the toolkit swapping the recipient only afterwards.
                     nativeWindow.clearTextInputClient()

@@ -351,6 +351,28 @@ half-snap and check `tiled`.
 
 ---
 
+# Later findings, landed outside the numbered workstreams
+
+Picked up after the ten workstreams; the report's P2/P3 backlog is otherwise untouched.
+
+- **`windows.md` 6 — typed clipboard failure.** A non-busy OLE failure used to be a bare
+  `check(...)`/`error(...)`, i.e. an `IllegalStateException` a caller could only tell apart by parsing
+  its message. Now a `ClipboardException` carrying `status`, `nativeCode` and the native message, as in
+  Noria. Public, like `WindowsPointerIcon` next to it, since catching it is the point. The retry ladder
+  gained 400 ms and 800 ms to match Noria's total of ~1.6 s.
+- **`windows.md` 9 — IME teardown.** The Windows sibling of WS3. No activate/deactivate half: the
+  Windows toolkit exposes no `textInputContext`, only `setTextInputClient`/`clearTextInputClient`.
+  The report framed the gap as an unverified KDT contract; it is narrower than that.
+  `window.rs:838` does finalize a composition IMM32 knows about — but a **dead key** opens a composition
+  on Compose's side alone, through `tryHandleTextInputEvent` → `setMarkedText`, which Rust never sees,
+  so `is_composition_active()` is false and the accent outlived the field. The session now finishes it
+  explicitly. The report's suggested reordering of `activeClient = null` was **not** adopted: the
+  ordering hazard it describes does not exist, because `clearTextInputClient` swaps the recipient to
+  `Noop` only after the downcall.
+- **`gtk.md` 4 and 6** — see the commit; routing by the event's own window id, and keeping the stack
+  trace in the two event-handler catches.
+- **`linux.md` 5 / `gtk.md` 7** — `WAYLAND_SOCKET`, recorded as finding 23 above.
+
 # Architectural verdict
 
 **The target's shared layer is the better-factored of the two.** Adopt Noria's seams selectively,

@@ -19,6 +19,7 @@ import org.jetbrains.desktop.win32.ClipboardResult
 import org.jetbrains.desktop.win32.DataObject
 import org.jetbrains.desktop.win32.DataObjectBuilder
 import org.jetbrains.desktop.win32.DataTransferException
+import org.jetbrains.desktop.win32.DataTransferStatus
 import org.jetbrains.desktop.win32.Logger
 import org.jetbrains.desktop.win32.isBusy
 import java.lang.ref.Cleaner
@@ -170,18 +171,37 @@ internal fun DataObjectBuilder.addClipboardItems(items: List<ClipboardItem>) {
  * little further each time. Any other failure is final.
  */
 private suspend fun <T> withBusyRetry(operation: () -> ClipboardResult<T>): T {
-    var lastFailure: ClipboardResult.Failure? = null
+    lateinit var latestFailure: ClipboardResult.Failure
     for (retryDelay in retryDelays) {
         when (val result = operation()) {
             is ClipboardResult.Success -> return result.value
             is ClipboardResult.Failure -> {
-                check(result.isBusy) { "Clipboard operation failed: ${result.status} (0x${result.nativeCode.toHexString()})" }
-                lastFailure = result
+                if (!result.isBusy) {
+                    throw ClipboardException(result)
+                }
+                latestFailure = result
                 delay(retryDelay)
             }
         }
     }
-    error("Clipboard stayed busy, last failure: $lastFailure")
+    throw ClipboardException(latestFailure)
+}
+
+/**
+ * A clipboard operation that failed for good: either OLE refused it outright, or the clipboard stayed
+ * held by another process for the whole of [retryDelays]. Carries the status and `HRESULT` so a caller
+ * can tell those two apart.
+ */
+class ClipboardException(failure: ClipboardResult.Failure) : RuntimeException(failure.clipboardExceptionMessage()) {
+    val status: DataTransferStatus = failure.status
+    val nativeCode: Int = failure.nativeCode
+    val nativeMessage: String? = failure.message
+}
+
+private fun ClipboardResult.Failure.clipboardExceptionMessage(): String {
+    val detail = if (nativeCode == 0) "" else " (HRESULT 0x${nativeCode.toHexString()})"
+    val detailedMessage = message?.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()
+    return "Clipboard operation failed: $status$detail$detailedMessage"
 }
 
 /**
@@ -197,4 +217,6 @@ private val retryDelays = listOf(
     50.milliseconds,
     100.milliseconds,
     200.milliseconds,
+    400.milliseconds,
+    800.milliseconds,
 )
