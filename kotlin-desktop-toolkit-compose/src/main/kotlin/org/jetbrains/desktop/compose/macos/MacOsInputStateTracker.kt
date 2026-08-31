@@ -181,7 +181,7 @@ internal class MacOsInputStateTracker(
             }
 
             is Event.ScrollWheel -> {
-                lastEventTimeMillis = event.timestamp.toDuration().inWholeMilliseconds
+                startPointerEvent(event.timestamp.toDuration().inWholeMilliseconds)
                 movePointerTo(event.locationInWindow, PointerEventType.Move, event, density)
                 sendPointerEvent(
                     PointerEventType.Scroll,

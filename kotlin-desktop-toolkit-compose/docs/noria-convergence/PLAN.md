@@ -171,11 +171,15 @@ A bug found while writing (9), not in either codebase: the two `launch`es in `ru
 immediately, so a `try`/`finally` wrapped straight around them would have torn the flush down before
 the first composition. They are inside a `coroutineScope` now.
 
-## WS5 — Input mode on scroll (2 × P1, trivial)
+## WS5 — Input mode on scroll (2 × P1, trivial) — **done**
 
 10. macOS and Windows scroll branches skip `startPointerEvent()`, so focus rings stay drawn and the
     cursor stays hidden after typing until the mouse physically moves. One line per branch.
     **GTK and Linux are already correct** — this is not a four-way fix.
+
+**Landed**: three branches (macOS `ScrollWheel`, Windows `ScrollWheelX`/`ScrollWheelY`) set
+`lastEventTimeMillis` by hand where GTK and Linux call `startPointerEvent`, which does that *and*
+requests `InputMode.Touch`. Not a Noria port — an internal inconsistency the comparison surfaced.
 
 ## WS6 — Windows clipboard serialization (P1, trivial)
 

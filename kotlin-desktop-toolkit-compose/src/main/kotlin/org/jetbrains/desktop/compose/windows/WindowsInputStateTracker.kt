@@ -165,7 +165,7 @@ internal class WindowsInputStateTracker(
             }
 
             is Event.ScrollWheelX -> {
-                lastEventTimeMillis = event.timestamp.toDuration().inWholeMilliseconds
+                startPointerEvent(event.timestamp.toDuration().inWholeMilliseconds)
                 keyboardModifiers = currentKeyboardModifiers()
                 movePointerTo(event.locationInWindow, PointerEventType.Move, event, density)
                 sendScroll(event.locationInWindow, horizontalScrollDelta(event.scrollingDelta), event, density)
@@ -173,7 +173,7 @@ internal class WindowsInputStateTracker(
             }
 
             is Event.ScrollWheelY -> {
-                lastEventTimeMillis = event.timestamp.toDuration().inWholeMilliseconds
+                startPointerEvent(event.timestamp.toDuration().inWholeMilliseconds)
                 keyboardModifiers = currentKeyboardModifiers()
                 movePointerTo(event.locationInWindow, PointerEventType.Move, event, density)
                 val delta = verticalScrollDelta(event.scrollingDelta, keyboardModifiers.isShiftPressed)
