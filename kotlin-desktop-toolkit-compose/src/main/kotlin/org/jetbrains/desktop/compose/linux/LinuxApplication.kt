@@ -104,7 +104,7 @@ internal class LinuxApplication(private val params: ComposeApplicationParams) : 
 
     override val windows: List<ComposeWindow> get() = windowList
 
-    override val focusedWindow: ComposeWindow? get() = windowList.firstOrNull { it.isFocused }
+    override val focusedWindow: ComposeWindow? get() = keyboardFocusWindowId?.let { windowsById[it] }
 
     override val mainScreen: LinuxScreen
         get() = screens.firstOrNull()
@@ -495,9 +495,12 @@ internal class LinuxApplication(private val params: ComposeApplicationParams) : 
      * arrives — see [LinuxWindow.requestFocus] for why focus needs the round trip.
      */
     internal fun requestWindowActivation(windowId: WindowId) {
-        val window = windowsById[windowId] ?: return
+        // Asked for by the window that holds the keyboard, not by the one being raised: the compositor
+        // builds the token from the requesting surface plus the seat's latest serial, and refuses one asked
+        // for by a surface that is not focused.
+        val source = keyboardFocusWindowId?.let { windowsById[it] } ?: return
         onEventLoop {
-            window.nativeWindow.requestActivationToken()?.let { requestId ->
+            source.nativeWindow.requestActivationToken()?.let { requestId ->
                 pendingActivations[requestId] = windowId
             }
         }
@@ -505,9 +508,8 @@ internal class LinuxApplication(private val params: ComposeApplicationParams) : 
 
     // ----- Application-level API -----
 
-    override fun requestActivation() {
-        (focusedWindow ?: windows.firstOrNull())?.requestFocusAndBringToFront()
-    }
+    /** Nothing to do: a Wayland client cannot raise itself, only spend a focus it already has. */
+    override fun requestActivation() = Unit
 
     override fun quit() {
         onEventLoop { quit.request() }

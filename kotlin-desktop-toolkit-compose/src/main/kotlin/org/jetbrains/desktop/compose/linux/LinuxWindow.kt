@@ -172,6 +172,7 @@ internal class LinuxWindow(
     /** Equal to [size]: the surface has no frame padding, so all of it is content. */
     override val contentSize: DpSize get() = size
 
+    /** `xdg_toplevel.configure`'s `activated` state, written only from [handleConfigure]. */
     override var isFocused: Boolean by mutableStateOf(false)
         private set
 
@@ -565,16 +566,6 @@ internal class LinuxWindow(
             is Event.WindowCloseRequest -> {
                 onCloseRequest(WindowCloseRequestReason.UserRequest)
                 EventHandlerResult.Stop
-            }
-
-            is Event.WindowKeyboardEnter -> {
-                isFocused = true
-                inputStateTracker.handleEvent(event, density)
-            }
-
-            is Event.WindowKeyboardLeave -> {
-                isFocused = false
-                inputStateTracker.handleEvent(event, density)
             }
 
             is Event.KeyDown -> handleKeyDown(event)

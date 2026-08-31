@@ -82,7 +82,7 @@ make the decision, so `application()` now installs its `exitApplication` in a pr
 (`Application.kt`, `requestApplicationExit`) that the quit sequence reaches for in that case. A
 composition driven by a bare `runApplication` has no such lever and gets a warning instead.
 
-## WS2 — Linux focus and activation (1 P0 + 1 P1)
+## WS2 — Linux focus and activation (1 P0 + 1 P1) — **done**
 
 5. **Activation token requested from the wrong surface** (P0). The target asks the *target* window;
    KDT names the parameter `source_window_id` and builds the request from that surface plus the
@@ -93,6 +93,11 @@ composition driven by a bare `runApplication` has no such lever and gets a warni
    — same commit.
 
 These two share a commit and should land together.
+
+**Landed** as Noria has them, including the third change in `7ec5af76e8605`: `requestActivation()` is
+now empty. Keyboard enter/leave no longer write `isFocused`, so `xdg_toplevel.configure`'s `activated`
+is its only writer — needs a caret-blink check on GNOME, where a CSD window keeps `activated` across a
+menu grab.
 
 ## WS3 — macOS IME teardown (P0)
 
