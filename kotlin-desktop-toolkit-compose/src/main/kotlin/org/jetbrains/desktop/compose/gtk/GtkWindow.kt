@@ -162,8 +162,15 @@ internal class GtkWindow(
     /** Equal to [size]: the scene is drawn over the whole window, titlebar area included. */
     override val contentSize: DpSize get() = size
 
-    override var isFocused: Boolean by mutableStateOf(false)
-        private set
+    /**
+     * `is_active_notify` and `ToplevelState::FOCUSED` are unrelated GTK signals, free to disagree in value
+     * and in order — and a configure re-sends the whole cached struct, so a resize can carry an `active`
+     * that lags the keyboard. Kept apart and ORed, so neither can clear the other.
+     */
+    private var hasActiveAppearance: Boolean by mutableStateOf(false)
+    private var hasKeyboardFocus: Boolean by mutableStateOf(false)
+
+    override val isFocused: Boolean get() = hasActiveAppearance || hasKeyboardFocus
 
     override var placement: WindowPlacement by mutableStateOf(WindowPlacement.Floating)
         private set
@@ -550,7 +557,7 @@ internal class GtkWindow(
                 if (textInput.isSessionActive) {
                     textInput.currentContext?.let { context -> onNativeWindow { textInputEnable(context) } }
                 }
-                isFocused = true
+                hasKeyboardFocus = true
                 inputStateTracker.handleEvent(event, density)
             }
 
@@ -561,7 +568,7 @@ internal class GtkWindow(
                     onNativeWindow { textInputDisable() }
                     textInput.discardActivePreedit()
                 }
-                isFocused = false
+                hasKeyboardFocus = false
                 inputStateTracker.handleEvent(event, density)
             }
 
@@ -604,7 +611,7 @@ internal class GtkWindow(
 
     private fun handleConfigure(event: Event.WindowConfigure): EventHandlerResult {
         size = event.size.toDpSize()
-        isFocused = event.active
+        hasActiveAppearance = event.active
         placement = when {
             event.fullscreen -> WindowPlacement.Fullscreen
             event.maximized -> WindowPlacement.Maximized

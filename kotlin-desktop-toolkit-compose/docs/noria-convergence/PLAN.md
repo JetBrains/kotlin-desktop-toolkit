@@ -192,7 +192,7 @@ requests `InputMode.Touch`. Not a Noria port — an internal inconsistency the c
 across `set`+`flush` together. Noria's `getClipEntrySync` `tryLock` check has no counterpart — this
 module's `Clipboard` has no synchronous read to guard.
 
-## WS7 — GTK input routing and focus (2 × P1)
+## WS7 — GTK input routing and focus (2 × P1) — **done**
 
 12. **`ModifiersChanged` must be broadcast to every window and not cleared locally.** It is a
     *seat-wide* event — verified in KDT's Rust, `application_state.rs:161-172` installs one handler
@@ -203,6 +203,16 @@ module's `Clipboard` has no synchronous read to guard.
     two unrelated GTK signals (`is_active_notify` vs `ToplevelState::FOCUSED`), and
     `update_window_configure` re-sends the cached `active` on every resize — so a resize can clear
     focus on a window that holds the keyboard. Noria: `369319fadacfe`.
+
+**Landed**, both as Noria has them. The broadcast made the tracker's `hasKeyboardFocus` and the
+application's `mouseFocusWindowId` dead — Noria's GTK has neither — so both are gone, along with the two
+local `keyboardModifiers` clears they guarded. `pointerButtons` still clears on `MouseExited`, as it does
+in Noria: that one is about the pointer grab.
+
+**GTK's `focusedWindow` was deliberately left as a `firstOrNull { it.isFocused }` scan.** Noria changed
+only the Wayland one (`7ec5af76e8605`, WS2 finding 6) and left GTK's alone, and this is Wayland-specific
+reasoning: on GTK the OR above means the scan can still match two windows during a switch. Worth
+revisiting on its own evidence, not as part of this port.
 
 ## WS8 — Windows caption buttons (P1)
 

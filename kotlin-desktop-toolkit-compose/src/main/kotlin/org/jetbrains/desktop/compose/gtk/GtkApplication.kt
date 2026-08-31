@@ -155,7 +155,6 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
         private set
 
     private var keyboardFocusWindowId: WindowId? = null
-    private var mouseFocusWindowId: WindowId? = null
 
     private var activeDragSource: ActiveDragSource? = null
 
@@ -262,10 +261,12 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
                     keyboardFocusWindowId?.let { windowsById[it]?.handleEvent(event) } ?: EventHandlerResult.Continue
 
                 is Event.ModifiersChanged -> {
-                    // The window under the pointer and the one with keyboard focus can differ, and both
-                    // consume the modifier state — hover cursors on one side, shortcuts on the other.
-                    setOfNotNull(mouseFocusWindowId, keyboardFocusWindowId)
-                        .forEach { windowId -> windowsById[windowId]?.handleEvent(event) }
+                    // A seat-wide event carrying no window id: GTK installs one `modifier_state_notify`
+                    // handler on the default seat's keyboard. Routing it to the focused window only would
+                    // lose any modifier held across a focus change — hold Alt, Alt-Tab, and the window
+                    // that arrives never hears that Alt is down, because it has not changed since.
+                    // Iterate a copy: a handler is free to dispose its window.
+                    windowList.toList().forEach { window -> window.handleEvent(event) }
                     EventHandlerResult.Stop
                 }
 
@@ -281,17 +282,8 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
                     windowsById[event.windowId]?.handleEvent(event) ?: EventHandlerResult.Continue
                 }
 
-                is Event.MouseEntered -> {
-                    mouseFocusWindowId = event.windowId
+                is Event.MouseEntered, is Event.MouseExited ->
                     windowsById[event.windowId]?.handleEvent(event) ?: EventHandlerResult.Continue
-                }
-
-                is Event.MouseExited -> {
-                    if (mouseFocusWindowId == event.windowId) {
-                        mouseFocusWindowId = null
-                    }
-                    windowsById[event.windowId]?.handleEvent(event) ?: EventHandlerResult.Continue
-                }
 
                 is Event.WindowClosed -> {
                     windowsById.remove(event.windowId)?.let { window ->

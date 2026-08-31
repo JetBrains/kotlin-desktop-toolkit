@@ -82,7 +82,6 @@ internal class GtkInputStateTracker(
     private var pointerPosition: Offset? = null
     private var lastEventTimeMillis: Long? = null
     private var pointerButtons = PointerButtons()
-    private var hasKeyboardFocus: Boolean = false
 
     /**
      * Bumped by every real event so that a synthetic post-relayout Move prepared before it is dropped: by
@@ -162,11 +161,6 @@ internal class GtkInputStateTracker(
                 // starts and keeps the matching button release to itself; a button not cleared here would
                 // stay pressed forever.
                 pointerButtons = PointerButtons()
-                // Modifiers are a keyboard thing, and keyboard focus does not follow the pointer — they
-                // only have to be dropped when this window has no keyboard focus either.
-                if (!hasKeyboardFocus) {
-                    keyboardModifiers = PointerKeyboardModifiers()
-                }
                 POINTER_EVENT_RESULT
             }
 
@@ -231,21 +225,6 @@ internal class GtkInputStateTracker(
                 if (inputModeManager.inputMode == InputMode.Touch) {
                     // Hover feedback often depends on the modifiers (a Ctrl-clickable link, say).
                     sendPointerEventWithCurrentState(PointerEventType.Move)
-                }
-                EventHandlerResult.Continue
-            }
-
-            is Event.WindowKeyboardEnter -> {
-                hasKeyboardFocus = true
-                EventHandlerResult.Continue
-            }
-
-            is Event.WindowKeyboardLeave -> {
-                hasKeyboardFocus = false
-                // Every pressed modifier has to be released when focus goes away, or it sticks forever:
-                // the release is delivered to whoever holds focus by then, not to us.
-                if (!isPointerInWindow) {
-                    keyboardModifiers = PointerKeyboardModifiers()
                 }
                 EventHandlerResult.Continue
             }
