@@ -152,8 +152,6 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
     internal var doubleClickIntervalMillis: Long by mutableStateOf(500L)
         private set
 
-    private var keyboardFocusWindowId: WindowId? = null
-
     private var activeDragSource: ActiveDragSource? = null
 
     /**
@@ -188,7 +186,7 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
             )
         } catch (throwable: Throwable) {
             eventLoopFailure = throwable
-            Logger.error { "The event loop stopped with an error: $throwable" }
+            Logger.error(throwable) { "The event loop stopped with an error" }
         } finally {
             // Releases a constructor still waiting to be told the application launched, so a loop that
             // never started fails the caller instead of hanging it.
@@ -252,12 +250,6 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
                     }
                 }
 
-                is Event.TextInput ->
-                    keyboardFocusWindowId?.let { windowsById[it]?.handleEvent(event) } ?: EventHandlerResult.Continue
-
-                is Event.KeyDown, is Event.KeyUp ->
-                    keyboardFocusWindowId?.let { windowsById[it]?.handleEvent(event) } ?: EventHandlerResult.Continue
-
                 is Event.ModifiersChanged -> {
                     // A seat-wide event carrying no window id: GTK installs one `modifier_state_notify`
                     // handler on the default seat's keyboard. Routing it to the focused window only would
@@ -268,17 +260,11 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
                     EventHandlerResult.Stop
                 }
 
-                is Event.WindowKeyboardEnter -> {
-                    keyboardFocusWindowId = event.windowId
+                is Event.WindowKeyboardEnter ->
                     windowsById[event.windowId]?.handleEvent(event) ?: EventHandlerResult.Continue
-                }
 
-                is Event.WindowKeyboardLeave -> {
-                    if (keyboardFocusWindowId == event.windowId) {
-                        keyboardFocusWindowId = null
-                    }
+                is Event.WindowKeyboardLeave ->
                     windowsById[event.windowId]?.handleEvent(event) ?: EventHandlerResult.Continue
-                }
 
                 is Event.MouseEntered ->
                     windowsById[event.windowId]?.handleEvent(event) ?: EventHandlerResult.Continue
@@ -309,7 +295,7 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
         } catch (throwable: Throwable) {
             // A handler that throws must not take the event loop with it; let the event fall through to the
             // toolkit's own handling instead.
-            Logger.error { "Failed to handle event $event: $throwable" }
+            Logger.error(throwable) { "Failed to handle event $event" }
             EventHandlerResult.Continue
         }
     }
@@ -582,8 +568,7 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
 /**
  * The window an event belongs to, for the events that are routed by nothing more than that.
  *
- * Events with a focus rule of their own (keys, the input method) and events that belong to the application
- * (the clipboard, the drag icon) are handled before this is reached.
+ * Events that belong to the application (the clipboard, the drag icon) are handled before this is reached.
  */
 private fun Event.windowIdOrNull(): WindowId? = when (this) {
     is Event.WindowConfigure -> windowId
@@ -597,5 +582,8 @@ private fun Event.windowIdOrNull(): WindowId? = when (this) {
     is Event.ScrollWheel -> windowId
     is Event.DropPerformed -> windowId
     is Event.DragAndDropLeave -> windowId
+    is Event.TextInput -> windowId
+    is Event.KeyDown -> windowId
+    is Event.KeyUp -> windowId
     else -> null
 }
