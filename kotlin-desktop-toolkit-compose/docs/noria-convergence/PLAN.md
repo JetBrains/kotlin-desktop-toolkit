@@ -347,10 +347,21 @@ target toward Noria.
     already-completed continuation: `CompletedContinuation cannot be cast to DispatchedContinuation`,
     followed by the calling coroutine getting a coroutines-internal `Symbol` as its result.
 
-    `MacOsWindow.recordFrame` now returns null while a modal dialog owns the thread, which is the frame
-    pump's existing "nothing to show yet" path, so the frame is simply re-requested afterwards. Only
-    macOS runs its dialogs modally on the loop thread; Wayland and GTK go through the portal, and the
-    Windows ones do not re-enter the scene.
+    The fix is one word: `withContext(KdtDispatcher)` rather than `KdtImmediateDispatcher`. The
+    immediate dispatcher does not dispatch when it is already on the event loop thread — that is its
+    purpose — so the dialog ran inline on the caller's stack. Dispatching lets the flush unwind first.
+
+    Two false starts, both reverted, both worth not repeating: suppressing frames during the modal
+    treated the symptom (the frame pump was merely the first thing to walk into the nested loop), and it
+    froze a window that stays visible next to the panel rather than under it. And the frame it requested
+    on the way out was redundant — `invalidate` is already wired to the frame request, and resuming the
+    caller onto the scene's dispatcher invalidates.
+
+    **Windows had the same bug**, same construct around the same `open_file_dialog_run_modal`, and got
+    the same fix. Its `withoutRenderReentrancy` guard does not catch it: that blocks a render inside a
+    render, and here there is only a flush on the stack below. Unverified — no Windows machine here.
+    Wayland and GTK are unaffected: their dialogs are `suspendCancellableCoroutine` over the portal's
+    async response, so nothing blocks the loop.
 
 ---
 

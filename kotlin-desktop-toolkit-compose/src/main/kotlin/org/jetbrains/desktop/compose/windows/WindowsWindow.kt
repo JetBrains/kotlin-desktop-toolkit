@@ -57,7 +57,6 @@ import org.jetbrains.desktop.compose.DragAndDropSourceWindow
 import org.jetbrains.desktop.compose.KdtDispatcher
 import org.jetbrains.desktop.compose.KdtDragAndDropManager
 import org.jetbrains.desktop.compose.KdtDragAndDropTransferable
-import org.jetbrains.desktop.compose.KdtImmediateDispatcher
 import org.jetbrains.desktop.compose.KdtInputModeManager
 import org.jetbrains.desktop.compose.LocalComposeWindow
 import org.jetbrains.desktop.compose.WindowCloseRequestReason
@@ -555,7 +554,14 @@ internal class WindowsWindow(
         allowsMultipleSelections: Boolean,
         canChooseFiles: Boolean,
         canChooseDirectories: Boolean,
-    ): List<Path> = withContext(KdtImmediateDispatcher) {
+    ): List<Path> = withContext(KdtDispatcher) {
+        // KdtDispatcher, not KdtImmediateDispatcher: the immediate one runs inline when it is already on
+        // the event loop thread, and `open_file_dialog_run_modal` runs its own message loop, so the dialog
+        // would sit on the stack of whatever was running. For a dialog opened from a click that is the
+        // scene's own `FlushCoroutineDispatcher`, mid-resume of this very coroutine — and the modal loop
+        // goes on dispatching posted messages, so the frame pump renders, `scene.render` re-enters that
+        // dispatcher, and the continuation is corrupted. `withoutRenderReentrancy` does not catch it:
+        // there is no render on the stack below, only a flush. Dispatching lets the flush unwind first.
         FileDialog.showOpenFileDialog(
             owner = nativeWindow,
             options = FileDialog.FileDialogOptions(title = title),
@@ -566,7 +572,8 @@ internal class WindowsWindow(
         ).map(Path::of)
     }
 
-    override suspend fun showSaveFileDialog(title: String, nameFieldStringValue: String?): Path? = withContext(KdtImmediateDispatcher) {
+    override suspend fun showSaveFileDialog(title: String, nameFieldStringValue: String?): Path? = withContext(KdtDispatcher) {
+        // Dispatched rather than immediate, for the reason spelled out in `showOpenFileDialog`.
         FileDialog.showSaveFileDialog(
             owner = nativeWindow,
             options = FileDialog.FileDialogOptions(title = title, nameFieldStringValue = nameFieldStringValue),
