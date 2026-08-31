@@ -23,6 +23,7 @@ import org.jetbrains.desktop.compose.gtk.GtkApplication
 import org.jetbrains.desktop.compose.linux.LinuxApplication
 import org.jetbrains.desktop.compose.macos.MacOsApplication
 import org.jetbrains.desktop.compose.windows.WindowsApplication
+import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -109,6 +110,14 @@ class ComposeApplicationParams(
      * macOS reports these; the toolkit's Wayland backend has no equivalent event.
      */
     val onOpenUris: (List<String>) -> Unit = {},
+    /** Where the toolkit's native library lives. Falls back to the `kdt.library.folder.path` property. */
+    val libraryFolderPath: Path? = null,
+    /** Where the native library writes its log. Falls back to the `kdt.native.log.path` property. */
+    val logFilePath: Path? = null,
+    val consoleLogLevel: ComposeLogLevel = ComposeLogLevel.Info,
+    val fileLogLevel: ComposeLogLevel = ComposeLogLevel.Info,
+    /** Routes the toolkit's logs into the host application's logger; console-only when left null. */
+    val logAppender: ComposeLogAppender? = null,
 )
 
 val LocalComposeApplication = staticCompositionLocalOf<ComposeApplication> {

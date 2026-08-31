@@ -26,6 +26,7 @@ import org.jetbrains.desktop.compose.DesktopBackend
 import org.jetbrains.desktop.compose.WindowCloseRequestReason
 import org.jetbrains.desktop.compose.dataForLinuxMimeType
 import org.jetbrains.desktop.compose.forgetApplication
+import org.jetbrains.desktop.compose.initToolkit
 import org.jetbrains.desktop.compose.requestApplicationExit
 import org.jetbrains.desktop.linux.Application
 import org.jetbrains.desktop.linux.ApplicationConfig
@@ -36,7 +37,6 @@ import org.jetbrains.desktop.linux.DragAndDropQueryData
 import org.jetbrains.desktop.linux.DragAndDropQueryResponse
 import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.EventHandlerResult
-import org.jetbrains.desktop.linux.KotlinDesktopToolkit
 import org.jetbrains.desktop.linux.Logger
 import org.jetbrains.desktop.linux.RequestId
 import org.jetbrains.desktop.linux.TextInputContext
@@ -46,8 +46,6 @@ import org.jetbrains.skia.Image
 import org.jetbrains.skia.ImageInfo
 import org.jetbrains.skia.Rect
 import org.jetbrains.skia.Surface
-import java.nio.file.Files
-import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicLong
@@ -73,7 +71,7 @@ import org.jetbrains.skia.Color as SkiaColor
 internal class LinuxApplication(private val params: ComposeApplicationParams) : ComposeApplication {
     // Must run before anything else in this class: every other native call needs the library loaded.
     init {
-        initToolkit()
+        initToolkit(DesktopBackend.Wayland, params)
     }
 
     override val nativeApplication: Application = Application()
@@ -599,22 +597,6 @@ internal class LinuxApplication(private val params: ComposeApplicationParams) : 
         eventLoopFailure?.let { throwable ->
             throw IllegalStateException("Could not start the Wayland event loop; is this a Wayland session?", throwable)
         }
-    }
-}
-
-/**
- * Loads the native library and points its logger at the configured file.
- *
- * The parent directory is created first: the native logger fails to initialize if it is not there, and a
- * fresh checkout has no build directory yet.
- */
-private fun initToolkit() {
-    val logFilePath = System.getProperty("kdt.native.log.path")?.let(Path::of)
-    logFilePath?.parent?.let(Files::createDirectories)
-    if (logFilePath == null) {
-        KotlinDesktopToolkit.init()
-    } else {
-        KotlinDesktopToolkit.init(logFilePath = logFilePath)
     }
 }
 

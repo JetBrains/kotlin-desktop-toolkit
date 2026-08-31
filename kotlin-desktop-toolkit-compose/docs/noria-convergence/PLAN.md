@@ -264,7 +264,12 @@ reconcile (AIR-6275, AIR-5036, AIR-5022).
     what a headless smoke test would catch. Noria has `headless/HeadlessEventLoopJvm.kt`.
 17. **`KdtLoggerAppender`** — bridge KDT's `AppenderInterface` into the host logger; today all four
     apps call `KotlinDesktopToolkit.init()` with defaults and there is no way to supply an appender.
-    Also de-duplicates an `initToolkit()` copy-pasted between Linux and GTK.
+    Also de-duplicates an `initToolkit()` copy-pasted between Linux and GTK. — **done**. Noria's
+    `KdtLoggerAppender` adapts one Fleet `KLogger` onto the macOS `AppenderInterface`; a library cannot
+    name a host logger, so a `ComposeLogAppender` interface of the same shape is the public seam and the
+    four adapters onto the per-backend `AppenderInterface` are internal. The appender is assigned to
+    `Logger.appender` after `init` rather than passed to it: `init` only takes effect once per process,
+    and KDT's `DefaultConsoleAppender` is internal, so it cannot be named as a fallback.
 18. **`InfiniteAnimationPolicy`/`MotionDurationScale` on the app composition.** `YieldFrameClock`
     (`Application.kt:274-279`) will spin the event loop at 100% CPU for an infinite animation
     outside a `Window`. Compose supplies both context elements; Noria installs

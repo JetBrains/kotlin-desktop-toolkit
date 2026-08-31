@@ -23,12 +23,12 @@ import org.jetbrains.desktop.compose.ComposeWindowParams
 import org.jetbrains.desktop.compose.DesktopBackend
 import org.jetbrains.desktop.compose.WindowCloseRequestReason
 import org.jetbrains.desktop.compose.forgetApplication
+import org.jetbrains.desktop.compose.initToolkit
 import org.jetbrains.desktop.compose.requestApplicationExit
 import org.jetbrains.desktop.win32.Appearance
 import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.Event
 import org.jetbrains.desktop.win32.EventHandlerResult
-import org.jetbrains.desktop.win32.KotlinDesktopToolkit
 import org.jetbrains.desktop.win32.Logger
 import org.jetbrains.desktop.win32.Screen
 import org.jetbrains.desktop.win32.WindowId
@@ -54,7 +54,7 @@ import kotlin.concurrent.thread
 internal class WindowsApplication(params: ComposeApplicationParams) : ComposeApplication {
     // Must run before anything else in this class: every other native call needs the library loaded.
     init {
-        KotlinDesktopToolkit.init()
+        initToolkit(DesktopBackend.Windows, params)
         // Neither creation parameter has a win32 counterpart, so both are only logged: the identifier is
         // matched against a `.desktop` file on Linux and comes from the bundle on macOS, and nothing in
         // the toolkit's Windows backend reports URLs handed to the application, so `onOpenUris` is never

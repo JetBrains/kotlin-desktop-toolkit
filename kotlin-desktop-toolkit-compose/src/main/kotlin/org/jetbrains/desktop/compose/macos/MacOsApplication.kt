@@ -25,6 +25,7 @@ import org.jetbrains.desktop.compose.DesktopBackend
 import org.jetbrains.desktop.compose.KdtInputModeManager
 import org.jetbrains.desktop.compose.WindowCloseRequestReason
 import org.jetbrains.desktop.compose.forgetApplication
+import org.jetbrains.desktop.compose.initToolkit
 import org.jetbrains.desktop.compose.requestApplicationExit
 import org.jetbrains.desktop.macos.Appearance
 import org.jetbrains.desktop.macos.Application
@@ -39,7 +40,6 @@ import org.jetbrains.desktop.macos.DraggingContext
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.GrandCentralDispatch
-import org.jetbrains.desktop.macos.KotlinDesktopToolkit
 import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.Screen
@@ -62,7 +62,7 @@ import kotlin.concurrent.thread
 internal class MacOsApplication(private val params: ComposeApplicationParams) : ComposeApplication {
     // Must run before anything else in this class: every other native call needs the library loaded.
     init {
-        KotlinDesktopToolkit.init()
+        initToolkit(DesktopBackend.MacOs, params)
     }
 
     private val windowsById = mutableMapOf<WindowId, MacOsWindow>()
