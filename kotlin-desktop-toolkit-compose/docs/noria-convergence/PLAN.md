@@ -392,6 +392,13 @@ target toward Noria.
 
 # Findings that are not Noria ports
 
+23. **`WAYLAND_SOCKET` is now honoured in backend detection** (`linux.md` finding 5, `gtk.md` finding 7,
+    AIR-5601 `66b09bbeca1b6`) — **done**. It is the second way `wl_display_connect` reaches a compositor:
+    an already-open file descriptor rather than a socket name, which is what a client launched by a
+    nested compositor or a session manager gets. Noria's removal of the `XDG_SESSION_TYPE` and `DISPLAY`
+    fallbacks was **not** adopted: this module's `LinuxWindowSystem` has real `X11` and `Unknown` cases
+    that `DesktopBackend.default` uses to fail legibly, which Noria's two-valued enum cannot express.
+
 21. Compose's desktop `ScrollConfig` reads `awtEventOrNull`, which is always `null` for KDT events,
     so precise-wheel detection never fires and trackpad scrolling gets Compose's stepping-wheel
     animation stacked on top of macOS inertia. Fix mirrors the target's own `MacOsTypedEvents`

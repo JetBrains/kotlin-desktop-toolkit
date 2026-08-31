@@ -93,17 +93,20 @@ enum class LinuxWindowSystem {
 /**
  * Reads the session's window system out of the environment.
  *
- * `WAYLAND_DISPLAY` is the strongest signal, because it names a socket that has to exist for a Wayland
- * client to connect at all; `XDG_SESSION_TYPE` is what the login session declares, and `DISPLAY` is the
- * last resort. Note that a Wayland session exports `WAYLAND_DISPLAY` to X11 clients under XWayland too,
- * which is why this cannot be the whole story for choosing a backend.
+ * `WAYLAND_DISPLAY` and `WAYLAND_SOCKET` are the strongest signals, because they are the two ways
+ * `wl_display_connect` can reach a compositor: a socket name to open, or a file descriptor already opened
+ * for us. A client launched by a nested compositor or a session manager often gets only the second.
+ * `XDG_SESSION_TYPE` is what the login session declares, and `DISPLAY` is the last resort. Note that a
+ * Wayland session exports `WAYLAND_DISPLAY` to X11 clients under XWayland too, which is why this cannot be
+ * the whole story for choosing a backend.
  */
 fun currentLinuxWindowSystem(): LinuxWindowSystem {
     val waylandDisplay = System.getenv("WAYLAND_DISPLAY")
+    val waylandSocket = System.getenv("WAYLAND_SOCKET")
     val xdgSessionType = System.getenv("XDG_SESSION_TYPE")?.lowercase()
     val display = System.getenv("DISPLAY")
     return when {
-        !waylandDisplay.isNullOrBlank() -> LinuxWindowSystem.Wayland
+        !waylandDisplay.isNullOrBlank() || !waylandSocket.isNullOrBlank() -> LinuxWindowSystem.Wayland
         xdgSessionType == "wayland" -> LinuxWindowSystem.Wayland
         xdgSessionType == "x11" -> LinuxWindowSystem.X11
         !display.isNullOrBlank() -> LinuxWindowSystem.X11
