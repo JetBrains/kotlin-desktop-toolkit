@@ -17,6 +17,8 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.unit.LayoutDirection
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.runBlocking
 import org.jetbrains.desktop.compose.ClipboardItemsEntry
 import org.jetbrains.desktop.compose.ComposeApplication
 import org.jetbrains.desktop.compose.ComposeApplicationParams
@@ -329,7 +331,7 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
         }
     }
 
-    private fun readScreens(): List<GtkScreen> = nativeApplication.allScreens().screens.map(::GtkScreen)
+    private fun readScreens(): List<GtkScreen> = onEventLoopSync { allScreens() }.screens.map(::GtkScreen)
 
     // ----- Closing and quitting -----
     //
@@ -542,6 +544,28 @@ internal class GtkApplication(private val params: ComposeApplicationParams) : Co
     /** [onEventLoop] with the native application as the receiver, for the many one-line native calls. */
     internal fun onEventLoopAsync(block: Application.() -> Unit) {
         onEventLoop { nativeApplication.block() }
+    }
+
+    /**
+     * [onEventLoopAsync] for the native calls that have to answer with something: inline when the caller
+     * is already on the event loop thread, and a round trip that blocks the caller when it is not.
+     *
+     * Never from inside an event handler — that is the inline case, and a handler that blocks the loop
+     * waiting for the loop would deadlock.
+     */
+    internal fun <T> onEventLoopSync(block: Application.() -> T): T {
+        if (nativeApplication.isEventLoopThread()) {
+            return nativeApplication.block()
+        }
+        val result = CompletableDeferred<T>()
+        nativeApplication.runOnEventLoopAsync {
+            try {
+                result.complete(nativeApplication.block())
+            } catch (throwable: Throwable) {
+                result.completeExceptionally(throwable)
+            }
+        }
+        return runBlocking { result.await() }
     }
 
     @Composable

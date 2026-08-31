@@ -416,6 +416,30 @@ Picked up after the ten workstreams; the report's P2/P3 backlog is otherwise unt
   has no equivalent, and what macOS, Windows and GTK would report. Deliberately left undone rather than
   landing a field nothing can read.
 
+- **`gtk.md` 8 — `onEventLoopSync`.** A native call that has to answer with something had no round trip;
+  `readScreens()` and `GtkWindow`'s `createWindow` both called straight through, which is a hazard on
+  the public `mainScreen`. Both inline on the loop thread today, so no behaviour change.
+
+- **`gtk.md` 5 — drag threshold: attempted and reverted.** Consuming
+  `DragAndDropDragThresholdPixels` is easy; the only place to put it is
+  `ViewConfiguration.touchSlop`, and that is wrong twice over. Noria does **not** do it — it keeps
+  `touchSlop` at 18 dp and applies the threshold to the mouse alone, inside its *forked*
+  `DragGestureDetector`. This module is on upstream Compose, where `touchSlop` is pointer-agnostic, so
+  wiring it there would halve touch slop as well, and only on GTK — leaving GTK at 8 dp while macOS,
+  Windows and Wayland stay at 18 dp. Needs either a shared `ComposeApplication.dragThreshold` that
+  content applies to its own mouse gestures, or Noria's fork. `DoubleClickDistancePixels` is blocked on
+  the same missing shared property, and `MiddleClickPaste` gates a primary-selection API this module
+  does not have.
+
+- **`windows.md` 7 — `WindowStyle` flags: nothing to do.** The report is overstated, verified against
+  KDT: `WindowStyle` already defaults `isMinimizable` and `isMaximizable` to `true`
+  (`win32/Window.kt:33-34`), so Noria's explicit flags are no-ops and this module's windows already get
+  those style bits. The one real difference is `systemBackdropType = Mica`, deliberately not adopted —
+  Noria is an application picking its own look, this is a library, and Mica behind an opaque Compose
+  swapchain is either invisible or an unrequested visual change on every Windows window with no way to
+  opt out. What is genuinely missing is an *API*: no way to ask for a non-maximizable window, since
+  those bits are creation-time only and `ComposeWindowParams` has no field for them.
+
 - **`gtk.md` 4 and 6** — see the commit; routing by the event's own window id, and keeping the stack
   trace in the two event-handler catches.
 - **`linux.md` 5 / `gtk.md` 7** — `WAYLAND_SOCKET`, recorded as finding 23 above.

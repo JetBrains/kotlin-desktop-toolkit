@@ -114,17 +114,19 @@ internal class GtkWindow(
     private val onCloseRequest: (WindowCloseRequestReason) -> Unit,
 ) : ComposeWindow,
     DragAndDropSourceWindow {
-    override val nativeWindow: Window = application.nativeApplication.createWindow(
-        WindowParams(
-            windowId = application.allocateWindowId(),
-            title = params.title,
-            size = params.size.roundToLogicalSize(),
-            minSize = params.minSize.roundToLogicalSize(),
-            decorationMode = params.decoration.toDecorationMode(),
-            // Let the toolkit pick between desktop GL and GL ES; it knows which one it managed to set up.
-            renderingMode = RenderingMode.Auto,
-        ),
-    )
+    override val nativeWindow: Window = application.onEventLoopSync {
+        createWindow(
+            WindowParams(
+                windowId = application.allocateWindowId(),
+                title = params.title,
+                size = params.size.roundToLogicalSize(),
+                minSize = params.minSize.roundToLogicalSize(),
+                decorationMode = params.decoration.toDecorationMode(),
+                // Let the toolkit pick between desktop GL and GL ES; it knows which one it managed to set up.
+                renderingMode = RenderingMode.Auto,
+            ),
+        )
+    }
 
     internal val windowId: WindowId = nativeWindow.windowId
 
