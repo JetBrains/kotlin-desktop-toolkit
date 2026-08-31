@@ -18,6 +18,7 @@ import kotlinx.coroutines.yield
 import org.jetbrains.desktop.sample.compose.gtk.GtkApplication
 import org.jetbrains.desktop.sample.compose.linux.LinuxApplication
 import org.jetbrains.desktop.sample.compose.macos.MacOsApplication
+import org.jetbrains.desktop.sample.compose.windows.WindowsApplication
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -115,8 +116,8 @@ val LocalComposeApplication = staticCompositionLocalOf<ComposeApplication> {
  * can be created straight away.
  *
  * This is the single point where the backend implementation is chosen; adding a backend means adding a
- * branch here plus a [ComposeApplication] implementation next to [MacOsApplication], [LinuxApplication]
- * and [GtkApplication].
+ * branch here plus a [ComposeApplication] implementation next to [MacOsApplication], [LinuxApplication],
+ * [GtkApplication] and [WindowsApplication].
  */
 fun initApplication(
     params: ComposeApplicationParams = ComposeApplicationParams(),
@@ -126,7 +127,7 @@ fun initApplication(
         DesktopBackend.MacOs -> MacOsApplication(params)
         DesktopBackend.Wayland -> LinuxApplication(params)
         DesktopBackend.Gtk -> GtkApplication(params)
-        DesktopBackend.Windows -> error("Compose integration is not implemented for $backend yet")
+        DesktopBackend.Windows -> WindowsApplication(params)
     }
     ApplicationRegistry.register(application)
     return application

@@ -288,6 +288,26 @@ fun JavaExec.setUpCrashDumpPath() {
     )
 }
 
+tasks.register<JavaExec>("runComposeSampleWin32") {
+    group = "application"
+    description = "Runs example of integration with Compose on Windows (Win32)"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.jetbrains.desktop.sample.compose.windows.ComposeSampleWindowsKt")
+    javaLauncher.set(
+        javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(25))
+        },
+    )
+    jvmArgs = listOf(
+        "--enable-native-access=ALL-UNNAMED",
+        "-Djextract.trace.downcalls=false",
+        "-Dstdout.encoding=UTF-8",
+        "-Dstderr.encoding=UTF-8",
+    )
+    setUpLoggingAndLibraryPath()
+    setUpCrashDumpPath()
+}
+
 tasks.register<JavaExec>("runSkikoSampleWin32") {
     group = "application"
     description = "Runs example of integration with Skiko on Windows (Win32)"

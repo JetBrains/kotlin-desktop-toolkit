@@ -137,6 +137,20 @@ interface ComposeWindow {
     /** The platform object behind this window, for code that needs to reach past this abstraction. */
     val nativeWindow: Any
 
+    /**
+     * Declares the areas of a [WindowDecoration.CustomTitleBar] that the content wants pointer events in,
+     * in window coordinates.
+     *
+     * Only meaningful when [handlesCustomTitleBarGestures] is true, and then only on Windows: the platform
+     * there is handed the titlebar as one native drag region, so a press anywhere in it moves the window
+     * instead of reaching the content, and this is how a button drawn into the bar claims its own area
+     * back. GTK, which also runs the gestures, decides per press itself and ignores this; the platforms
+     * that leave the bar inert have nothing to claim back from.
+     *
+     * The last call wins, so a content that draws several buttons has to report all of them at once.
+     */
+    fun setCustomTitleBarInteractiveAreas(areas: List<DpRect>) = Unit
+
     fun requestPosition(position: DpOffset)
 
     fun requestSize(size: DpSize)

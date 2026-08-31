@@ -59,10 +59,14 @@ import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import kotlinx.coroutines.Job
@@ -106,10 +110,11 @@ fun ComposeWindowScope.SampleContent() {
  * means it drew none at all — in which case a close affordance has to come from here, or the window could
  * not be closed.
  *
- * Moving and maximizing are explicit on most platforms: an empty area of the bar starts the platform's own
- * move loop on press, and a double click toggles maximized. GTK is the exception — it keeps those gestures
- * for itself even over a custom titlebar — so [ComposeWindow.handlesCustomTitleBarGestures] is what decides
- * whether the content adds them.
+ * Moving and maximizing are explicit on some platforms: an empty area of the bar starts the platform's own
+ * move loop on press, and a double click toggles maximized. GTK and Windows are the exceptions — a custom
+ * titlebar is still a platform drag region there, and they keep those gestures for themselves — so
+ * [ComposeWindow.handlesCustomTitleBarGestures] is what decides whether the content adds them, and
+ * [ComposeWindow.setCustomTitleBarInteractiveAreas] is how anything drawn into the bar stays clickable.
  */
 @Composable
 private fun ComposeWindowScope.CustomTitleBar() {
@@ -141,9 +146,23 @@ private fun ComposeWindowScope.CustomTitleBar() {
             // The platform reserved no room, so it drew no buttons either, and this is the only way out.
             // Deliberately a sibling of the draggable area rather than a child: the move gesture above runs
             // on the initial pass and would otherwise claim the press before the button ever saw it.
+            val density = LocalDensity.current
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
+                    // Where the platform runs the titlebar gestures itself, it also owns every press in
+                    // the bar — so this button has to claim its own area back, or the click would move
+                    // the window instead of closing it. A no-op everywhere else.
+                    .onGloballyPositioned { coordinates ->
+                        val bounds = coordinates.boundsInWindow()
+                        window.setCustomTitleBarInteractiveAreas(
+                            listOf(
+                                with(density) {
+                                    DpRect(bounds.left.toDp(), bounds.top.toDp(), bounds.right.toDp(), bounds.bottom.toDp())
+                                },
+                            ),
+                        )
+                    }
                     .pointerInput(window) {
                         detectTapGestures(onTap = { window.requestClose() })
                     }
@@ -288,7 +307,8 @@ private fun ComposeWindowScope.WindowControls() {
 
 /**
  * Cursors. Compose's four built-in icons are recognised by every backend; anything else has to be asked
- * for with a toolkit cursor — `MacOsPointerIcon` or `LinuxPointerIcon`, depending on the platform.
+ * for with a toolkit cursor — `MacOsPointerIcon`, `LinuxPointerIcon` or `WindowsPointerIcon`, depending on
+ * the platform.
  */
 @Composable
 private fun PointerIcons() {
