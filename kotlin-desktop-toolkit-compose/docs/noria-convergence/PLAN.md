@@ -227,6 +227,27 @@ first in `hitTestTitleBar` — but as a defaulted member on `ComposeWindow` rath
 dropped: Noria needs them because it reads the map from the WndProc thread, and here that is the same
 thread the composition runs on.
 
+## WS11 — macOS startup failure surfaces as a hang (P1) — **done**
+
+Not in the original workstream list: [macos.md](macos.md) findings 2 and 3 are P1 and were never
+promoted into one. This is finding 3.
+
+22. `MacOsApplication`'s constructor blocks on `applicationStarted.await()`, and nothing caught a
+    throw from `GrandCentralDispatch.startOnMainThread { … }` or counted the latch down in a
+    `finally`. Any failure before `ApplicationDidFinishLaunching` — the native library, `Application.init`,
+    `Screen.allScreens()`, a bad `kdt.library.folder.path`, or running headless — hung `main` with no
+    diagnostic. Noria: `5c3e7e685eedf`.
+
+**Landed** as the `eventLoopFailure` slot the Linux, GTK and Windows backends in this module already
+had; macOS was the only one without it. Noria uses a `CompletableJob` and
+`completeExceptionally`, but its `awaitWhenReady()` is `suspend` — here the constructor blocks, so the
+latch is the right primitive and the house pattern is the closer match.
+
+**Still open from that report: [macos.md](macos.md) finding 2** (P1) — a window that is not visible
+stops recomposing entirely, because its display link is the only thing pumping its scene. Needs a
+decision about how a scene with no display link is paced; Noria falls back to a rate-limited windowless
+reconcile (AIR-6275, AIR-5036, AIR-5022).
+
 ## WS9 — Linux CSD frame (P1, staged — do not treat as a drop-in)
 
 15. The target requests `padding=0, resizerThickness=0`, so there is no shadow and `tiled` is

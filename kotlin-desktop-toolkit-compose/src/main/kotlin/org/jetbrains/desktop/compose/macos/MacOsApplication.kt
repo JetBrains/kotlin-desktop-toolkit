@@ -120,25 +120,38 @@ internal class MacOsApplication(private val params: ComposeApplicationParams) : 
         Cursor.setHiddenUntilMouseMoves(inputMode == InputMode.Keyboard)
     }
 
+    /** Set when the event loop never got off the ground — a missing library, or no window server. */
+    @Volatile
+    private var eventLoopFailure: Throwable? = null
+
     private val eventLoopThread: Thread
 
     // ----- Event loop -----
 
     private fun startEventLoopThread(): Thread = thread(start = true, name = "KDT Event Loop") {
-        GrandCentralDispatch.startOnMainThread {
-            Application.init()
-            Thread.currentThread().name = "KDT Main Thread"
-            systemTheme = Application.appearance.toComposeSystemTheme()
-            screens = readScreens()
-            Application.setQuitHandler(::onQuitRequested)
-            DragAndDropHandler.init(dragTargetCallbacks, dragSourceCallbacks)
+        try {
+            GrandCentralDispatch.startOnMainThread {
+                Application.init()
+                Thread.currentThread().name = "KDT Main Thread"
+                systemTheme = Application.appearance.toComposeSystemTheme()
+                screens = readScreens()
+                Application.setQuitHandler(::onQuitRequested)
+                DragAndDropHandler.init(dragTargetCallbacks, dragSourceCallbacks)
 
-            Application.runEventLoop(::handleEvent)
+                Application.runEventLoop(::handleEvent)
 
-            if (lazyGpuContext.isInitialized()) {
-                lazyGpuContext.value.close()
+                if (lazyGpuContext.isInitialized()) {
+                    lazyGpuContext.value.close()
+                }
+                GrandCentralDispatch.close()
             }
-            GrandCentralDispatch.close()
+        } catch (throwable: Throwable) {
+            eventLoopFailure = throwable
+            Logger.error { "The event loop stopped with an error: $throwable" }
+        } finally {
+            // Releases a constructor still waiting to be told the application launched, so a loop that
+            // never started fails the caller instead of hanging it.
+            applicationStarted.countDown()
         }
     }
 
@@ -340,6 +353,9 @@ internal class MacOsApplication(private val params: ComposeApplicationParams) : 
         eventLoopThread = startEventLoopThread()
         // Returns once AppKit reports the application has launched, so windows can be created.
         applicationStarted.await()
+        eventLoopFailure?.let { throwable ->
+            throw IllegalStateException("Could not start the AppKit event loop", throwable)
+        }
     }
 }
 
