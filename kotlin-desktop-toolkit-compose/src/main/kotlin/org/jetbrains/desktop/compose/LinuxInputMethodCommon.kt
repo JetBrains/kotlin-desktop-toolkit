@@ -1,3 +1,7 @@
+// Named after Noria's file of the same name, which both Linux backends share; ktlint would rather a
+// file holding one class were named after the class.
+@file:Suppress("ktlint:standard:filename")
+
 package org.jetbrains.desktop.compose
 
 /**

@@ -254,10 +254,12 @@ thread the composition runs on.
 19. **`LinuxInputMethodCommon.kt`** — the target duplicates ~110 lines of IME arithmetic between
     `gtk/` and `linux/`, and `GtkKeys.kt` / `LinuxKeys.kt` are byte-identical modulo the package
     token. — **done, in part**: the arithmetic is hoisted under Noria's class name,
-    `LinuxTextInputSurroundingText`. Two forced departures. The *file* is named after the class rather
-    than Noria's `LinuxInputMethodCommon.kt`, because ktlint's `standard:filename` rule requires it of a
-    file holding one class, and ktlint is this repo's verification bar. `toTextInputContentPurpose`
-    stays duplicated, as it is in Noria: the `TextInputContentPurpose` enum it maps onto is per-backend.
+    `LinuxTextInputSurroundingText`, in a file with Noria's name. Verified that Noria's
+    `LinuxInputMethodCommon.kt` really is shared and not a Wayland file that GTK ignores: both
+    `linux/LinuxTextInputSessionOwner.kt` and `gtk/GtkTextInputSessionOwner.kt` import from it.
+    A file holding one class trips ktlint's `standard:filename` rule, so the file carries a one-line
+    `@file:Suppress` rather than being renamed away from Noria's. `toTextInputContentPurpose` stays
+    duplicated, as it is in Noria: the `TextInputContentPurpose` enum it maps onto is per-backend.
     **`GtkKeys.kt` / `LinuxKeys.kt` are deliberately left duplicated** — Noria duplicates them too
     (`gtk/Key.kt`, `linux/Key.kt`), so merging them would diverge rather than converge.
 20. Build hygiene: the module lacks `maven-publish` and `explicitApi()`, both of which the base
