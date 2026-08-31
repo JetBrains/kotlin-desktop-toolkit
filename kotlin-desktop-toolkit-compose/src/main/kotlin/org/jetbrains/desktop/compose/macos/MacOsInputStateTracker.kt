@@ -190,7 +190,7 @@ internal class MacOsInputStateTracker(
                     lastEventTimeMillis(),
                     pointerButtons,
                     keyboardModifiers,
-                    event,
+                    event.wheelEvent(),
                     null,
                 )
                 // Scrolling moves content under a stationary pointer, so hover state has to be redone.

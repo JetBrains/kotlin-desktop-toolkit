@@ -590,6 +590,11 @@ internal class MacOsWindow(
 
             is Event.WindowChangedOcclusionState -> {
                 isWindowVisible = event.isVisible
+                if (event.isVisible) {
+                    // AppKit's origin is only reliable while the window is on screen, so the last one
+                    // reported before it was hidden may be stale.
+                    position = nativeWindow.origin.toDpOffset()
+                }
                 when {
                     // A window that was hidden while its screen went away has no display link to resume.
                     event.isVisible && displayLink == null -> setUpDisplayLink()

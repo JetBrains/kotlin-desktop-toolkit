@@ -7,19 +7,18 @@ import androidx.compose.ui.input.key.KeyEventType
 import org.jetbrains.desktop.macos.Event
 import java.awt.Component
 import java.awt.event.InputEvent
+import kotlin.math.roundToInt
 import java.awt.event.KeyEvent as AwtKeyEvent
+import java.awt.event.MouseEvent as AwtMouseEvent
+import java.awt.event.MouseWheelEvent as AwtMouseWheelEvent
 
 /**
- * Makes typed characters reach Compose text fields.
+ * The component every synthesized AWT event is attributed to.
  *
- * Compose decides whether a key event should insert a character with its internal `isTypedEvent`, which
- * is implemented as "the native event is a `java.awt.event.KeyEvent` with `id == KEY_TYPED`, carrying a
- * printable `keyChar`". There is no way to satisfy that with a kotlin-desktop-toolkit event, so instead
- * a matching AWT event is synthesized and carried along as the Compose event's `nativeEvent`.
- *
- * AWT-backed Compose delivers KEY_PRESSED, KEY_TYPED and KEY_RELEASED as three separate Compose events,
- * and only the KEY_TYPED one inserts text. This mirrors that: [typedKeyEventOrNull] produces the extra
- * "typed" event, which is sent in addition to the ordinary KeyDown rather than replacing it.
+ * Compose answers some questions about an event by inspecting the AWT event behind it — whether a key
+ * press inserts a character, whether a scroll came from a trackpad. There is no way to satisfy those
+ * checks with a kotlin-desktop-toolkit event, so instead a matching AWT event is synthesized and carried
+ * along as the Compose event's `nativeEvent`.
  */
 private object SyntheticEventSource : Component()
 
@@ -54,8 +53,15 @@ private fun Char.isPrintable(): Boolean {
 /**
  * The extra Compose event that inserts a character, or `null` when this key press types nothing.
  *
- * The shape matches what Compose derives from a real AWT KEY_TYPED event: type [KeyEventType.Unknown]
- * and an undefined key code, with the character in `codePoint`.
+ * Compose decides whether a key event should insert a character with its internal `isTypedEvent`, which
+ * is implemented as "the native event is a `java.awt.event.KeyEvent` with `id == KEY_TYPED`, carrying a
+ * printable `keyChar`".
+ *
+ * AWT-backed Compose delivers KEY_PRESSED, KEY_TYPED and KEY_RELEASED as three separate Compose events,
+ * and only the KEY_TYPED one inserts text. This mirrors that: the event produced here is sent in
+ * addition to the ordinary KeyDown rather than replacing it. Its shape matches what Compose derives from
+ * a real AWT KEY_TYPED event: type [KeyEventType.Unknown] and an undefined key code, with the character
+ * in `codePoint`.
  */
 @OptIn(InternalComposeUiApi::class)
 internal fun Event.KeyDown.typedKeyEventOrNull(): KeyEvent? {
@@ -83,5 +89,39 @@ internal fun Event.KeyDown.typedKeyEventOrNull(): KeyEvent? {
         isShiftPressed = modifiers.shift,
         isAltPressed = modifiers.option,
         nativeEvent = awtEvent,
+    )
+}
+
+/**
+ * The AWT event Compose reads a scroll's device from.
+ *
+ * `ScrollConfig.isPreciseWheelScroll` decides whether to run Compose's own smooth-scroll animation, and
+ * the desktop implementation answers it from the AWT event: a wheel whose precise rotation differs from
+ * its whole-notch one is a trackpad. Without one every scroll looks like a stepping wheel, and the
+ * animation ends up stacked on top of the inertia macOS has already applied.
+ *
+ * `scrollType` and `scrollAmount` carry the values Compose falls back to when there is no AWT event, so
+ * the device is the only thing this changes.
+ */
+internal fun Event.ScrollWheel.wheelEvent(): AwtMouseWheelEvent {
+    // AppKit reports the device outright, so rather than reproducing AWT's rounding — which cannot tell
+    // a precise delta that lands on a whole notch from a wheel click — the two rotations are made to
+    // differ by half a notch exactly when the deltas are precise.
+    val wheelRotation = -scrollingDeltaY.roundToInt()
+    return AwtMouseWheelEvent(
+        SyntheticEventSource,
+        AwtMouseEvent.MOUSE_WHEEL,
+        timestamp.toDuration().inWholeMilliseconds,
+        0,
+        locationInWindow.x.roundToInt(),
+        locationInWindow.y.roundToInt(),
+        0,
+        0,
+        0,
+        false,
+        AwtMouseWheelEvent.WHEEL_UNIT_SCROLL,
+        1,
+        wheelRotation,
+        if (hasPreciseScrillingDeltas) wheelRotation + 0.5 else wheelRotation.toDouble(),
     )
 }

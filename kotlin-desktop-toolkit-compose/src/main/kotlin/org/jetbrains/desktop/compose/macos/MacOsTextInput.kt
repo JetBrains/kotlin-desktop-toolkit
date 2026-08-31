@@ -6,6 +6,8 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.PlatformTextInputMethodRequest
+import androidx.compose.ui.text.input.SetComposingTextCommand
+import androidx.compose.ui.text.input.SetSelectionCommand
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpRect
 import kotlinx.coroutines.NonCancellable
@@ -175,8 +177,25 @@ private class MacOsTextInputClient(
     override fun setMarkedText(text: String, selectedRange: KdtTextRange?, replacementRange: KdtTextRange?) {
         didEditText = true
         // `setComposingText` already replaces the current composition, or the selection when there is
-        // none, which is exactly what macOS specifies for a null `replacementRange`.
-        request.editText { setComposingText(text, 1) }
+        // none, which is exactly what macOS specifies for a null `replacementRange`, and leaves the
+        // caret at the end of what it inserted.
+        val compositionStart = (request.state.composition ?: request.state.selection).min
+        val selection = selectedRange?.let {
+            ComposeTextRange(compositionStart + it.location.toInt(), compositionStart + (it.location + it.length).toInt())
+        }
+        if (selection == null || selection == ComposeTextRange(compositionStart + text.length)) {
+            request.editText { setComposingText(text, 1) }
+        } else {
+            // `selectedRange` is the clause the input method is converting, or where inside the
+            // composition it wants the caret — multi-clause Japanese conversion and Hangul depend on it.
+            // `TextEditingScope` cannot move the selection, so the edit goes through the command path.
+            request.onEditCommand(
+                listOf(
+                    SetComposingTextCommand(text, 1),
+                    SetSelectionCommand(selection.start, selection.end),
+                ),
+            )
+        }
     }
 
     override fun attributedStringForRange(range: KdtTextRange): TextInputClient.StringAndRange {

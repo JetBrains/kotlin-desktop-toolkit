@@ -399,6 +399,30 @@ Picked up after the ten workstreams; the report's P2/P3 backlog is otherwise unt
   `stopAndJoin` (AIR-5478) — has no counterpart: it exists because its teardown is reachable from a
   structured quit, a shutdown hook and dock cleanup, and here `close()` is the only path.
 
+- **`macos.md` 5 — stale window position after hiding.** AppKit's origin is only reliable while the
+  window is on screen; re-read on the visible transition, as Noria does. Noria refreshes only
+  `position`, so neither does this.
+
+- **`macos.md` 9 — `setMarkedText` ignored the IME's `selectedRange`.** That range is the clause a
+  multi-clause Japanese conversion is working on, or where inside the composition the caret belongs;
+  dropping it left both wrong. **Noria's shape does not transfer**: the report's suggested
+  `request.editText { setSelection(...) }` does not exist — released `TextEditingScope` has exactly
+  four methods and no way to move the selection, and `setComposingText`'s `newCursorPosition` can only
+  express caret-at-start or caret-at-end. The route is `PlatformTextInputMethodRequest.onEditCommand`,
+  which is a first-class member of the same interface. Confined to the case where the requested
+  selection differs from where `setComposingText` would leave the caret, so the common path is
+  byte-identical to before. **Unverified — needs a CJK IME.**
+
+- **`macos.md` 15 — trackpad scrolling ran Compose's stepping-wheel animation** on top of the inertia
+  macOS had already applied, because `ScrollConfig.isPreciseWheelScroll` reads `awtEventOrNull`, always
+  null here. A synthetic `MouseWheelEvent` now rides along as the scroll's `nativeEvent`, on the same
+  `SyntheticEventSource` the typed-key events already use. Verified against foundation 1.11.1 that this
+  changes nothing else: magnitude comes from `event.totalScrollDelta`, which this module supplies, and
+  `scrollAmount = 1` / `WHEEL_UNIT_SCROLL` reproduce exactly the fallbacks Compose uses when there is no
+  AWT event. The device flag is set from AppKit's `hasPreciseScrollingDeltas` rather than by
+  reproducing AWT's `abs(precise - rotation) > 0.001` rounding, which cannot tell a precise delta that
+  lands on a whole notch from a real wheel click and would flap mid-gesture.
+
 - **`linux.md` 7 — titlebar click actions.** The desktop configures what a double, middle or right
   click on a client-side-decorated titlebar does, and those settings arrived as `DesktopSettingChange`
   events the layer dropped. Consumed now, and exposed the way Noria exposes them:
