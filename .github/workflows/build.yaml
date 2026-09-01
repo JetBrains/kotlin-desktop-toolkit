@@ -62,7 +62,7 @@ jobs:
         uses: dorny/test-reporter@v3
         with:
           name: Tests Report (${{ matrix.os }})
-          path: kotlin-desktop-toolkit/build/test-results/test/*.xml
+          path: kotlin-desktop-toolkit/build/test-results/test/*.xml,kotlin-desktop-toolkit/build/test-results/testGtk/*.xml,kotlin-desktop-toolkit/build/test-results/testWayland/*.xml
           reporter: java-junit
           fail-on-empty: false
           fail-on-error: false
