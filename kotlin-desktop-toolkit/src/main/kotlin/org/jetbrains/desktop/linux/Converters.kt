@@ -52,9 +52,12 @@ import org.jetbrains.desktop.linux.generated.NativeWindowCapabilities
 import org.jetbrains.desktop.linux.generated.NativeWindowCloseRequestEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowConfigureEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowDecorationMode
+import org.jetbrains.desktop.linux.generated.NativeWindowDecorationMode_NativeClient_Body
 import org.jetbrains.desktop.linux.generated.NativeWindowDrawEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowFrame
-import org.jetbrains.desktop.linux.generated.NativeWindowFrameSide
+import org.jetbrains.desktop.linux.generated.NativeWindowFramePadding
+import org.jetbrains.desktop.linux.generated.NativeWindowFrameResizerThickness
+import org.jetbrains.desktop.linux.generated.NativeWindowFrameTiling
 import org.jetbrains.desktop.linux.generated.NativeWindowKeyboardEnterEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowKeyboardLeaveEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScaleChangedEvent
@@ -245,25 +248,12 @@ private fun DesktopTitlebarAction.Companion.fromNative(raw: Int): DesktopTitleba
 
 private fun WindowDecorationMode.Companion.fromNative(native: MemorySegment): WindowDecorationMode {
     return when (val nativeTag = NativeWindowDecorationMode.tag(native)) {
-        desktop_linux_h.NativeWindowDecorationMode_Client() -> WindowDecorationMode.Client(
-            WindowFrame.fromNative(NativeWindowDecorationMode.client(native)),
+        desktop_linux_h.NativeWindowDecorationMode_Client() -> WindowDecorationMode.Client.fromNative(
+            NativeWindowDecorationMode.client(native),
         )
-
         desktop_linux_h.NativeWindowDecorationMode_Server() -> WindowDecorationMode.Server
         else -> error("Unexpected Window decoration mode: $nativeTag")
     }
-}
-
-internal fun WindowDecorationMode.toNative(arena: Arena): MemorySegment {
-    val result = NativeWindowDecorationMode.allocate(arena)
-    when (this) {
-        WindowDecorationMode.Server -> NativeWindowDecorationMode.tag(result, desktop_linux_h.NativeWindowDecorationMode_Server())
-        is WindowDecorationMode.Client -> {
-            NativeWindowDecorationMode.tag(result, desktop_linux_h.NativeWindowDecorationMode_Client())
-            NativeWindowDecorationMode.client(result, frame.toNative(arena))
-        }
-    }
-    return result
 }
 
 internal fun DesktopSetting.Companion.fromNative(s: MemorySegment): DesktopSetting {
@@ -627,35 +617,65 @@ internal fun ScrollData.Companion.fromNative(s: MemorySegment): ScrollData {
     )
 }
 
-internal fun WindowFrameSide.Companion.fromNative(s: MemorySegment) = WindowFrameSide(
-    padding = LogicalPixelsInt(NativeWindowFrameSide.padding(s)),
-    resizerThickness = LogicalPixelsInt(NativeWindowFrameSide.resizer_thickness(s)),
-    tiled = NativeWindowFrameSide.tiled(s),
-)
-
-internal fun WindowFrameSide.toNative(arena: Arena): MemorySegment {
-    val result = NativeWindowFrame.allocate(arena)
-    NativeWindowFrameSide.padding(result, padding.rawLogical)
-    NativeWindowFrameSide.resizer_thickness(result, resizerThickness.rawLogical)
-    NativeWindowFrameSide.tiled(result, tiled)
-    return result
+internal fun WindowDecorationMode.Client.Companion.fromNative(s: MemorySegment): WindowDecorationMode.Client {
+    return WindowDecorationMode.Client(
+        frame = WindowFrame.fromNative(NativeWindowDecorationMode_NativeClient_Body.frame(s)),
+        tiled = WindowFrameTiling.fromNative(NativeWindowDecorationMode_NativeClient_Body.tiling(s)),
+    )
 }
 
-internal fun WindowFrame.Companion.fromNative(s: MemorySegment) = WindowFrame(
-    left = WindowFrameSide.fromNative(NativeWindowFrame.left(s)),
-    top = WindowFrameSide.fromNative(NativeWindowFrame.top(s)),
-    right = WindowFrameSide.fromNative(NativeWindowFrame.right(s)),
-    bottom = WindowFrameSide.fromNative(NativeWindowFrame.bottom(s)),
-)
+internal fun WindowFrame.Companion.fromNative(s: MemorySegment): WindowFrame {
+    return WindowFrame(
+        padding = WindowFrame.Padding.fromNative(NativeWindowFrame.padding(s)),
+        resizerThickness = WindowFrame.ResizerThickness.fromNative(NativeWindowFrame.resizer_thickness(s)),
+    )
+}
 
 internal fun WindowFrame.toNative(arena: Arena): MemorySegment {
     val result = NativeWindowFrame.allocate(arena)
-    NativeWindowFrame.left(result, left.toNative(arena))
-    NativeWindowFrame.top(result, top.toNative(arena))
-    NativeWindowFrame.right(result, right.toNative(arena))
-    NativeWindowFrame.bottom(result, bottom.toNative(arena))
+    NativeWindowFrame.padding(result, padding.toNative(arena))
+    NativeWindowFrame.resizer_thickness(result, resizerThickness.toNative(arena))
     return result
 }
+
+internal fun WindowFrame.Padding.Companion.fromNative(s: MemorySegment) = WindowFrame.Padding(
+    left = LogicalPixelsInt(NativeWindowFramePadding.left(s)),
+    top = LogicalPixelsInt(NativeWindowFramePadding.top(s)),
+    right = LogicalPixelsInt(NativeWindowFramePadding.right(s)),
+    bottom = LogicalPixelsInt(NativeWindowFramePadding.bottom(s)),
+)
+
+internal fun WindowFrame.Padding.toNative(arena: Arena): MemorySegment {
+    val result = NativeWindowFramePadding.allocate(arena)
+    NativeWindowFramePadding.left(result, left.rawLogical)
+    NativeWindowFramePadding.top(result, top.rawLogical)
+    NativeWindowFramePadding.right(result, right.rawLogical)
+    NativeWindowFramePadding.bottom(result, bottom.rawLogical)
+    return result
+}
+
+internal fun WindowFrame.ResizerThickness.Companion.fromNative(s: MemorySegment) = WindowFrame.ResizerThickness(
+    left = LogicalPixelsInt(NativeWindowFrameResizerThickness.left(s)),
+    top = LogicalPixelsInt(NativeWindowFrameResizerThickness.top(s)),
+    right = LogicalPixelsInt(NativeWindowFrameResizerThickness.right(s)),
+    bottom = LogicalPixelsInt(NativeWindowFrameResizerThickness.bottom(s)),
+)
+
+internal fun WindowFrame.ResizerThickness.toNative(arena: Arena): MemorySegment {
+    val result = NativeWindowFrameResizerThickness.allocate(arena)
+    NativeWindowFrameResizerThickness.left(result, left.rawLogical)
+    NativeWindowFrameResizerThickness.top(result, top.rawLogical)
+    NativeWindowFrameResizerThickness.right(result, right.rawLogical)
+    NativeWindowFrameResizerThickness.bottom(result, bottom.rawLogical)
+    return result
+}
+
+internal fun WindowFrameTiling.Companion.fromNative(s: MemorySegment) = WindowFrameTiling(
+    left = NativeWindowFrameTiling.left(s),
+    top = NativeWindowFrameTiling.top(s),
+    right = NativeWindowFrameTiling.right(s),
+    bottom = NativeWindowFrameTiling.bottom(s),
+)
 
 internal fun readNativeAutoDropU8Array(nativeU8Array: MemorySegment): ByteArray? {
     val dataPtr = NativeAutoDropArray_u8.ptr(nativeU8Array)

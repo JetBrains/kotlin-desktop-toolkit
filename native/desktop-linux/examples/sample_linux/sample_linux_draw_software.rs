@@ -31,10 +31,10 @@ pub fn draw_software(data: &SoftwareDrawData, physical_size: PhysicalSize, windo
     let w = f64::from(physical_size.width.raw_physical());
     let h = f64::from(physical_size.height.raw_physical());
 
-    let padding_left = scaled(window_state.frame.left.padding, scale);
-    let padding_right = scaled(window_state.frame.right.padding, scale);
-    let padding_top = scaled(window_state.frame.top.padding, scale);
-    let padding_bottom = scaled(window_state.frame.bottom.padding, scale);
+    let padding_left = scaled(window_state.frame.padding.left, scale);
+    let padding_right = scaled(window_state.frame.padding.right, scale);
+    let padding_top = scaled(window_state.frame.padding.top, scale);
+    let padding_bottom = scaled(window_state.frame.padding.bottom, scale);
 
     let line_thickness = scaled(LogicalPixelsInt::new(4), scale);
     let drag_and_drop_left_of = scaled(DRAG_AND_DROP_LEFT_OF, scale) + padding_left;

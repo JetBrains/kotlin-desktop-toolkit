@@ -45,7 +45,7 @@ import org.jetbrains.desktop.linux.Window
 import org.jetbrains.desktop.linux.WindowCapabilities
 import org.jetbrains.desktop.linux.WindowDecorationMode
 import org.jetbrains.desktop.linux.WindowFrame
-import org.jetbrains.desktop.linux.WindowFrameSide
+import org.jetbrains.desktop.linux.WindowFrameTiling
 import org.jetbrains.desktop.linux.WindowId
 import org.jetbrains.desktop.linux.WindowParams
 import org.jetbrains.desktop.linux.WindowResizeEdge
@@ -1078,10 +1078,6 @@ internal data class ExpectedWindowConfigure(
     val active: Boolean,
     val maximized: Boolean,
     val fullscreen: Boolean,
-    val tiledLeft: Boolean,
-    val tiledRight: Boolean,
-    val tiledTop: Boolean,
-    val tiledBottom: Boolean,
     val decorationMode: WindowDecorationMode,
 ) {
     fun assertEquals(event: Event?, msg: String? = null) {
@@ -1103,72 +1099,8 @@ internal data class ExpectedWindowConfigure(
         if (fullscreen != event.fullscreen) {
             failures.add("\nWindowConfigure.fullscreen(expected=$fullscreen, actual=${event.fullscreen})$msg")
         }
-        when (decorationMode) {
-            is WindowDecorationMode.Client -> {
-                val eventDecorationMode = event.decorationMode
-                if (eventDecorationMode !is WindowDecorationMode.Client) {
-                    failures.add("\nWindowConfigure.decorationMode(expected=$decorationMode, actual=${event.decorationMode})$msg")
-                } else {
-                    val frame = eventDecorationMode.frame
-                    if (decorationMode.frame.left.padding != frame.left.padding) {
-                        failures.add(
-                            "\nWindowConfigure.paddingLeft(expected=${decorationMode.frame.left.padding}, actual=${frame.left.padding})$msg",
-                        )
-                    }
-                    if (decorationMode.frame.right.padding != frame.right.padding) {
-                        failures.add(
-                            "\nWindowConfigure.paddingRight(expected=${decorationMode.frame.right.padding}, actual=${frame.right.padding})$msg",
-                        )
-                    }
-                    if (decorationMode.frame.top.padding != frame.top.padding) {
-                        failures.add(
-                            "\nWindowConfigure.paddingTop(expected=${decorationMode.frame.bottom.padding}, actual=${frame.top.padding})$msg",
-                        )
-                    }
-                    if (decorationMode.frame.bottom.padding != frame.bottom.padding) {
-                        failures.add(
-                            "\nWindowConfigure.paddingBottom(expected=${decorationMode.frame.bottom.padding}, actual=${frame.bottom.padding})$msg",
-                        )
-                    }
-                    if (decorationMode.frame.left.resizerThickness != frame.left.resizerThickness) {
-                        failures.add(
-                            "\nWindowConfigure.resizerThicknessLeft(expected=${decorationMode.frame.left.resizerThickness}, actual=${frame.left.resizerThickness})$msg",
-                        )
-                    }
-                    if (decorationMode.frame.right.resizerThickness != frame.right.resizerThickness) {
-                        failures.add(
-                            "\nWindowConfigure.resizerThicknessRight(expected=${decorationMode.frame.right.resizerThickness}, actual=${frame.right.resizerThickness})$msg",
-                        )
-                    }
-                    if (decorationMode.frame.top.resizerThickness != frame.top.resizerThickness) {
-                        failures.add(
-                            "\nWindowConfigure.resizerThicknessTop(expected=${decorationMode.frame.top.resizerThickness}, actual=${frame.top.resizerThickness})$msg",
-                        )
-                    }
-                    if (decorationMode.frame.bottom.resizerThickness != frame.bottom.resizerThickness) {
-                        failures.add(
-                            "\nWindowConfigure.resizerThicknessBottom(expected=${decorationMode.frame.bottom.resizerThickness}, actual=${frame.bottom.resizerThickness})$msg",
-                        )
-                    }
-                    if (tiledLeft != frame.left.tiled) {
-                        failures.add("\nWindowConfigure.tiledLeft(expected=$tiledLeft, actual=${frame.left.tiled})$msg")
-                    }
-                    if (tiledRight != frame.right.tiled) {
-                        failures.add("\nWindowConfigure.tiledRight(expected=$tiledRight, actual=${frame.right.tiled})$msg")
-                    }
-                    if (tiledTop != frame.top.tiled) {
-                        failures.add("\nWindowConfigure.tiledTop(expected=$tiledTop, actual=${frame.top.tiled})$msg")
-                    }
-                    if (tiledBottom != frame.bottom.tiled) {
-                        failures.add("\nWindowConfigure.tiledBottom(expected=$tiledBottom, actual=${frame.bottom.tiled})$msg")
-                    }
-                }
-            }
-            WindowDecorationMode.Server -> {
-                if (event.decorationMode != WindowDecorationMode.Server) {
-                    failures.add("\nWindowConfigure.decorationMode(expected=$decorationMode, actual=${event.decorationMode})$msg")
-                }
-            }
+        if (decorationMode != event.decorationMode) {
+            failures.add("\nWindowConfigure.decorationMode(expected=$decorationMode, actual=${event.decorationMode})$msg")
         }
         val failuresString = failures.joinToString()
         assertEquals("", failuresString)
@@ -1227,11 +1159,9 @@ abstract class WaylandTestsBase {
                 appId = APP_ID,
                 preferClientSideDecoration = false,
                 renderingMode = RenderingMode.Software,
-                clientSideDecorationFrame = WindowFrame.all(
-                    WindowFrameSide(
-                        padding = LogicalPixelsInt(25),
-                        resizerThickness = LogicalPixelsInt(12),
-                    ),
+                clientSideDecorationFrame = WindowFrame(
+                    padding = WindowFrame.Padding.withAll(LogicalPixelsInt(25)),
+                    resizerThickness = WindowFrame.ResizerThickness.withAll(LogicalPixelsInt(12)),
                 ),
             )
         }
@@ -2172,10 +2102,6 @@ class WaylandTests : WaylandTestsBase() {
             maximized = false,
             fullscreen = false,
             decorationMode = WindowDecorationMode.Server,
-            tiledLeft = false,
-            tiledRight = false,
-            tiledTop = false,
-            tiledBottom = false,
         )
 
         withNextEvent { event ->
@@ -2608,11 +2534,9 @@ class WaylandTests : WaylandTestsBase() {
     fun testWindowDecorationsToggle() {
         run(defaultApplicationConfig())
         val windowParams = defaultWindowParams().copy(
-            clientSideDecorationFrame = WindowFrame.all(
-                WindowFrameSide(
-                    padding = LogicalPixelsInt(25),
-                    resizerThickness = LogicalPixelsInt(12),
-                ),
+            clientSideDecorationFrame = WindowFrame(
+                padding = WindowFrame.Padding.withAll(LogicalPixelsInt(25)),
+                resizerThickness = WindowFrame.ResizerThickness.withAll(LogicalPixelsInt(12)),
             ),
         )
 
@@ -2629,20 +2553,19 @@ class WaylandTests : WaylandTestsBase() {
             maximized = false,
             fullscreen = false,
             decorationMode = WindowDecorationMode.Server,
-            tiledLeft = false,
-            tiledRight = false,
-            tiledTop = false,
-            tiledBottom = false,
         )
 
         val sizeWithOriginalFrame = LogicalSize(
-            requestedWindowSize.width + windowParams.clientSideDecorationFrame.left.padding +
-                windowParams.clientSideDecorationFrame.right.padding,
-            requestedWindowSize.height + windowParams.clientSideDecorationFrame.top.padding +
-                windowParams.clientSideDecorationFrame.bottom.padding,
+            requestedWindowSize.width + windowParams.clientSideDecorationFrame.padding.left +
+                windowParams.clientSideDecorationFrame.padding.right,
+            requestedWindowSize.height + windowParams.clientSideDecorationFrame.padding.top +
+                windowParams.clientSideDecorationFrame.padding.bottom,
         )
         expectedWindowConfigure = expectedWindowConfigure.copy(
-            decorationMode = WindowDecorationMode.Client(windowParams.clientSideDecorationFrame),
+            decorationMode = WindowDecorationMode.Client(
+                windowParams.clientSideDecorationFrame,
+                tiled = WindowFrameTiling.withAll(false),
+            ),
             size = sizeWithOriginalFrame,
         )
         ui {
@@ -2656,16 +2579,13 @@ class WaylandTests : WaylandTestsBase() {
                 }
         }
 
-        val smallerWindowFrame = WindowFrame.withSameResizerThickness(
-            resizerThickness = LogicalPixelsInt.Zero,
-            left = LogicalPixelsInt.Zero,
-            top = LogicalPixelsInt.Zero,
-            right = LogicalPixelsInt.Zero,
-            bottom = LogicalPixelsInt.Zero,
+        val smallerWindowFrame = WindowFrame(
+            padding = WindowFrame.Padding.withAll(LogicalPixelsInt.Zero),
+            resizerThickness = WindowFrame.ResizerThickness.withAll(LogicalPixelsInt.Zero),
         )
 
         expectedWindowConfigure = expectedWindowConfigure.copy(
-            decorationMode = WindowDecorationMode.Client(smallerWindowFrame),
+            decorationMode = WindowDecorationMode.Client(frame = smallerWindowFrame, tiled = WindowFrameTiling.withAll(false)),
             size = requestedWindowSize,
         )
         ui {
@@ -2682,7 +2602,10 @@ class WaylandTests : WaylandTestsBase() {
         awaitEventOfType<Event.WindowDraw> { true }
 
         expectedWindowConfigure = expectedWindowConfigure.copy(
-            decorationMode = WindowDecorationMode.Client(windowParams.clientSideDecorationFrame),
+            decorationMode = WindowDecorationMode.Client(
+                windowParams.clientSideDecorationFrame,
+                tiled = WindowFrameTiling.withAll(false),
+            ),
             size = sizeWithOriginalFrame,
         )
         ui {
@@ -2736,10 +2659,6 @@ class WaylandTests : WaylandTestsBase() {
             maximized = false,
             fullscreen = false,
             decorationMode = WindowDecorationMode.Server,
-            tiledLeft = false,
-            tiledRight = false,
-            tiledTop = false,
-            tiledBottom = false,
         )
 
         awaitEventOfType<Event.WindowConfigure>(msg = "First window active") { event ->
@@ -2763,11 +2682,9 @@ class WaylandTests : WaylandTestsBase() {
             preferClientSideDecoration = true,
             renderingMode = RenderingMode.Software,
             appId = APP_ID,
-            clientSideDecorationFrame = WindowFrame.all(
-                WindowFrameSide(
-                    padding = LogicalPixelsInt(25),
-                    resizerThickness = LogicalPixelsInt(12),
-                ),
+            clientSideDecorationFrame = WindowFrame(
+                padding = WindowFrame.Padding.withAll(LogicalPixelsInt(25)),
+                resizerThickness = WindowFrame.ResizerThickness.withAll(LogicalPixelsInt(12)),
             ),
         )
         val window2 = ui { app.createWindow(window2Params) }
@@ -2781,20 +2698,19 @@ class WaylandTests : WaylandTestsBase() {
             windowId = window2Params.windowId,
             size = requestedWindow2Size.copy(
                 width = requestedWindow2Size.width +
-                    window2Params.clientSideDecorationFrame.left.padding +
-                    window2Params.clientSideDecorationFrame.right.padding,
+                    window2Params.clientSideDecorationFrame.padding.left +
+                    window2Params.clientSideDecorationFrame.padding.right,
                 height = requestedWindow2Size.height +
-                    window2Params.clientSideDecorationFrame.top.padding +
-                    window2Params.clientSideDecorationFrame.bottom.padding,
+                    window2Params.clientSideDecorationFrame.padding.top +
+                    window2Params.clientSideDecorationFrame.padding.bottom,
             ),
             active = true,
             maximized = false,
             fullscreen = false,
-            decorationMode = WindowDecorationMode.Client(window2Params.clientSideDecorationFrame),
-            tiledLeft = false,
-            tiledRight = false,
-            tiledTop = false,
-            tiledBottom = false,
+            decorationMode = WindowDecorationMode.Client(
+                window2Params.clientSideDecorationFrame,
+                tiled = WindowFrameTiling.withAll(false),
+            ),
         )
 
         expectedWindow1ConfigureEvent = expectedWindow1ConfigureEvent.copy(active = false)
@@ -2899,20 +2815,12 @@ class WaylandTests : WaylandTestsBase() {
         expectedWindow1ConfigureEvent =
             expectedWindow1ConfigureEvent.copy(
                 size = wm.getWindowState(window1WmId).clientAreaSize,
-                tiledLeft = true,
-                tiledRight = true,
-                tiledTop = true,
-                tiledBottom = true,
             )
 
         expectedWindow2ConfigureEvent =
             expectedWindow2ConfigureEvent.copy(
                 decorationMode = WindowDecorationMode.Server,
                 size = wm.getWindowState(window2WmId).clientAreaSize,
-                tiledLeft = true,
-                tiledRight = true,
-                tiledTop = true,
-                tiledBottom = true,
             )
 
         checkNextEvents(

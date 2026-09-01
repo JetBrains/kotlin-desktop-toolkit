@@ -57,10 +57,10 @@ impl Drawable for SkiaOpenglState {
         let w = physical_size.width.raw_physical() as f32;
         #[allow(clippy::cast_precision_loss)]
         let h = physical_size.height.raw_physical() as f32;
-        let padding_left = scaled(window_state.frame.left.padding, scale);
-        let padding_right = scaled(window_state.frame.right.padding, scale);
-        let padding_top = scaled(window_state.frame.top.padding, scale);
-        let padding_bottom = scaled(window_state.frame.bottom.padding, scale);
+        let padding_left = scaled(window_state.frame.padding.left, scale);
+        let padding_right = scaled(window_state.frame.padding.right, scale);
+        let padding_top = scaled(window_state.frame.padding.top, scale);
+        let padding_bottom = scaled(window_state.frame.padding.bottom, scale);
 
         {
             let background_color = if window_state.active {

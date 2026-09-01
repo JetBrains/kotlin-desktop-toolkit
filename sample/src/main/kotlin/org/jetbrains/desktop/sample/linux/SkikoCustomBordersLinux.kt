@@ -32,6 +32,7 @@ internal class SkikoCustomBordersLinux {
     fun configure(size: LogicalSize, frame: WindowFrame) {
         val w = size.width
         val h = size.height
+        val resizerThickness = frame.resizerThickness
         rectangles.clear()
 
         rectangles.add(
@@ -39,8 +40,8 @@ internal class SkikoCustomBordersLinux {
                 LogicalRect(
                     x = LogicalPixelsInt.Zero,
                     y = LogicalPixelsInt.Zero,
-                    width = frame.left.padding,
-                    height = frame.top.padding,
+                    width = resizerThickness.left,
+                    height = resizerThickness.top,
                 ),
                 WindowResizeEdge.TopLeft,
             ),
@@ -48,10 +49,10 @@ internal class SkikoCustomBordersLinux {
         rectangles.add(
             Pair(
                 LogicalRect(
-                    x = w - frame.right.padding,
+                    x = w - resizerThickness.right,
                     y = LogicalPixelsInt.Zero,
-                    width = frame.right.padding,
-                    height = frame.top.padding,
+                    width = resizerThickness.right,
+                    height = resizerThickness.top,
                 ),
                 WindowResizeEdge.TopRight,
             ),
@@ -60,9 +61,9 @@ internal class SkikoCustomBordersLinux {
             Pair(
                 LogicalRect(
                     x = LogicalPixelsInt.Zero,
-                    y = h - frame.bottom.padding,
-                    width = frame.left.padding,
-                    height = frame.bottom.padding,
+                    y = h - resizerThickness.bottom,
+                    width = resizerThickness.left,
+                    height = resizerThickness.bottom,
                 ),
                 WindowResizeEdge.BottomLeft,
             ),
@@ -70,10 +71,10 @@ internal class SkikoCustomBordersLinux {
         rectangles.add(
             Pair(
                 LogicalRect(
-                    x = w - frame.right.padding,
-                    y = h - frame.bottom.padding,
-                    width = frame.right.padding,
-                    height = frame.bottom.padding,
+                    x = w - resizerThickness.right,
+                    y = h - resizerThickness.bottom,
+                    width = resizerThickness.right,
+                    height = resizerThickness.bottom,
                 ),
                 WindowResizeEdge.BottomRight,
             ),
@@ -84,7 +85,7 @@ internal class SkikoCustomBordersLinux {
                 LogicalRect(
                     x = LogicalPixelsInt.Zero,
                     y = LogicalPixelsInt.Zero,
-                    width = frame.left.padding,
+                    width = resizerThickness.left,
                     height = h,
                 ),
                 WindowResizeEdge.Left,
@@ -93,9 +94,9 @@ internal class SkikoCustomBordersLinux {
         rectangles.add(
             Pair(
                 LogicalRect(
-                    x = w - frame.right.padding,
+                    x = w - resizerThickness.right,
                     y = LogicalPixelsInt.Zero,
-                    width = frame.right.padding,
+                    width = resizerThickness.right,
                     height = h,
                 ),
                 WindowResizeEdge.Right,
@@ -103,7 +104,7 @@ internal class SkikoCustomBordersLinux {
         )
         rectangles.add(
             Pair(
-                LogicalRect(x = LogicalPixelsInt.Zero, y = LogicalPixelsInt.Zero, width = w, height = frame.top.padding),
+                LogicalRect(x = LogicalPixelsInt.Zero, y = LogicalPixelsInt.Zero, width = w, height = resizerThickness.top),
                 WindowResizeEdge.Top,
             ),
         )
@@ -111,9 +112,9 @@ internal class SkikoCustomBordersLinux {
             Pair(
                 LogicalRect(
                     x = LogicalPixelsInt.Zero,
-                    y = h - frame.bottom.padding,
+                    y = h - resizerThickness.bottom,
                     width = w,
-                    height = frame.bottom.padding,
+                    height = resizerThickness.bottom,
                 ),
                 WindowResizeEdge.Bottom,
             ),

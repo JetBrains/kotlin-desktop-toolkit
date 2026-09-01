@@ -3,7 +3,7 @@ use crate::linux::{
     application_state::{ApplicationState, EGLData},
     events::{
         EventSerial, SoftwareDrawData, WindowCapabilities, WindowConfigureEvent, WindowDecorationMode, WindowDrawEvent, WindowFrame,
-        WindowId,
+        WindowFrameTiling, WindowId,
     },
     geometry::{LogicalPixelsInt, LogicalPoint, LogicalRect, LogicalSize, PhysicalSize, Scale},
     pointer_shapes_api::PointerShape,
@@ -188,15 +188,11 @@ impl SimpleWindow {
         };
         self.content_size = Some(content_size);
 
-        let mut frame = if configure.decoration_mode == DecorationMode::Server || configure.is_maximized() || configure.is_fullscreen() {
+        let frame = if configure.decoration_mode == DecorationMode::Server || configure.is_maximized() || configure.is_fullscreen() {
             WindowFrame::default()
         } else {
             self.default_client_side_decoration_frame.clone()
         };
-        frame.left.tiled = configure.is_tiled_left();
-        frame.right.tiled = configure.is_tiled_right();
-        frame.top.tiled = configure.is_tiled_top();
-        frame.bottom.tiled = configure.is_tiled_bottom();
 
         let surface_size = self.update_window_geometry(content_size, &frame, compositor_state, shm);
 
@@ -238,7 +234,15 @@ impl SimpleWindow {
         }
 
         let decoration_mode = match configure.decoration_mode {
-            DecorationMode::Client => WindowDecorationMode::Client(frame),
+            DecorationMode::Client => WindowDecorationMode::Client {
+                frame,
+                tiling: WindowFrameTiling {
+                    left: configure.is_tiled_left(),
+                    top: configure.is_tiled_top(),
+                    right: configure.is_tiled_right(),
+                    bottom: configure.is_tiled_bottom(),
+                },
+            },
             DecorationMode::Server => WindowDecorationMode::Server,
         };
 
@@ -274,8 +278,8 @@ impl SimpleWindow {
         shm: &Shm,
     ) -> LogicalSize {
         let surface_size = LogicalSize {
-            width: content_size.width + frame.left.padding + frame.right.padding,
-            height: content_size.height + frame.top.padding + frame.bottom.padding,
+            width: content_size.width + frame.padding.left + frame.padding.right,
+            height: content_size.height + frame.padding.top + frame.padding.bottom,
         };
         if self.surface_size != Some(surface_size) {
             self.on_resize(surface_size, surface_size.to_rounded_physical(self.current_scale), shm);
@@ -283,8 +287,8 @@ impl SimpleWindow {
         }
 
         let geometry = LogicalRect {
-            x: frame.left.padding,
-            y: frame.top.padding,
+            x: frame.padding.left,
+            y: frame.padding.top,
             width: content_size.width,
             height: content_size.height,
         };
@@ -300,10 +304,10 @@ impl SimpleWindow {
             );
 
             let input_region_rect = LogicalRect {
-                x: geometry.x - frame.left.resizer_thickness,
-                y: geometry.y - frame.top.resizer_thickness,
-                width: geometry.width + frame.left.resizer_thickness + frame.right.resizer_thickness,
-                height: geometry.height + frame.top.resizer_thickness + frame.bottom.resizer_thickness,
+                x: geometry.x - frame.resizer_thickness.left,
+                y: geometry.y - frame.resizer_thickness.top,
+                width: geometry.width + frame.resizer_thickness.left + frame.resizer_thickness.right,
+                height: geometry.height + frame.resizer_thickness.top + frame.resizer_thickness.bottom,
             };
 
             if input_region_rect == geometry {
@@ -458,7 +462,7 @@ impl SimpleWindow {
     #[must_use]
     pub fn set_client_side_decoration_frame(
         &mut self,
-        mut frame: WindowFrame,
+        frame: WindowFrame,
         compositor_state: &CompositorState,
         shm: &Shm,
     ) -> Option<WindowConfigureEvent> {
@@ -471,20 +475,17 @@ impl SimpleWindow {
         self.default_client_side_decoration_frame = frame.clone();
 
         if let Some(mut event) = self.last_configure_event.clone()
-            && let WindowDecorationMode::Client(last_frame) = event.decoration_mode
+            && let WindowDecorationMode::Client {
+                frame: last_configure_event_frame,
+                ..
+            } = &mut event.decoration_mode
             && !event.maximized
             && !event.fullscreen
         {
             if let Some(content_size) = self.content_size {
-                self.update_window_geometry(content_size, &frame, compositor_state, shm);
+                event.size = self.update_window_geometry(content_size, &frame, compositor_state, shm);
             }
-
-            frame.left.tiled = last_frame.left.tiled;
-            frame.top.tiled = last_frame.top.tiled;
-            frame.right.tiled = last_frame.right.tiled;
-            frame.bottom.tiled = last_frame.bottom.tiled;
-            event.decoration_mode = WindowDecorationMode::Client(frame);
-            event.size = self.surface_size.unwrap();
+            *last_configure_event_frame = frame;
 
             self.last_configure_event = Some(event.clone());
             Some(event)
