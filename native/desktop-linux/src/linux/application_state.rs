@@ -10,10 +10,7 @@ use crate::linux::{
         EventSerial,
         RequestId,
         ScreenId,
-        WindowCapabilities,
         WindowCloseRequestEvent,
-        WindowConfigureEvent,
-        WindowDecorationMode,
         WindowDrawEvent,
         WindowFrame,
         WindowId,
@@ -57,7 +54,6 @@ use smithay_client_toolkit::{
                 wl_surface::WlSurface,
             },
         },
-        csd_frame::WindowManagerCapabilities,
         protocols::wp::{
             fractional_scale::v1::client::{
                 wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
@@ -78,7 +74,7 @@ use smithay_client_toolkit::{
         WaylandSurface,
         xdg::{
             XdgShell,
-            window::{DecorationMode, Window, WindowConfigure, WindowHandler},
+            window::{Window, WindowConfigure, WindowHandler},
         },
     },
     shm::{Shm, ShmHandler},
@@ -339,19 +335,8 @@ impl ApplicationState {
             .get(&window_id)
             .and_then(|surface_id| self.windows.get_mut(surface_id))
             .with_context(|| format!("Couldn't find window for {window_id:?}"))?;
-        w.default_client_side_decoration_frame = frame.clone();
 
-        if let Some(mut event) = w.last_configure_event.clone()
-            && matches!(event.decoration_mode, WindowDecorationMode::Client(_))
-            && !event.maximized
-            && !event.fullscreen
-        {
-            w.set_client_side_decoration_frame(&frame, &self.compositor_state, &self.shm_state);
-
-            event.decoration_mode = WindowDecorationMode::Client(frame);
-            event.size = w.surface_size.unwrap();
-
-            w.last_configure_event = Some(event.clone());
+        if let Some(event) = w.set_client_side_decoration_frame(frame, &self.compositor_state, &self.shm_state) {
             _ = send_event(self.callbacks.event_handler, event);
         }
         Ok(())
@@ -533,40 +518,9 @@ impl WindowHandler for ApplicationState {
                 RenderingMode::Software => None,
             };
 
-            let mut frame = if configure.decoration_mode == DecorationMode::Server || configure.is_maximized() || configure.is_fullscreen()
-            {
-                WindowFrame::default()
-            } else {
-                w.default_client_side_decoration_frame.clone()
-            };
-            frame.left.tiled = configure.is_tiled_left();
-            frame.right.tiled = configure.is_tiled_right();
-            frame.top.tiled = configure.is_tiled_top();
-            frame.bottom.tiled = configure.is_tiled_bottom();
+            let (is_first_configure, event) = w.configure(&self.shm_state, &self.compositor_state, window, &configure, egl);
 
-            let is_first_configure = w.configure(&self.shm_state, &self.compositor_state, window, &configure, egl, &frame);
-
-            let decoration_mode = match configure.decoration_mode {
-                DecorationMode::Client => WindowDecorationMode::Client(frame),
-                DecorationMode::Server => WindowDecorationMode::Server,
-            };
-
-            let event = WindowConfigureEvent {
-                window_id: w.window_id,
-                size: w.surface_size.unwrap(),
-                active: configure.is_activated(),
-                maximized: configure.is_maximized(),
-                fullscreen: configure.is_fullscreen(),
-                decoration_mode,
-                capabilities: WindowCapabilities {
-                    window_menu: configure.capabilities.contains(WindowManagerCapabilities::WINDOW_MENU),
-                    maximize: configure.capabilities.contains(WindowManagerCapabilities::MAXIMIZE),
-                    fullscreen: configure.capabilities.contains(WindowManagerCapabilities::FULLSCREEN),
-                    minimize: configure.capabilities.contains(WindowManagerCapabilities::MINIMIZE),
-                },
-            };
-
-            if w.last_configure_event.replace(event.clone()).is_none_or(|e| e != event) {
+            if let Some(event) = event {
                 _ = send_event(self.callbacks.event_handler, event);
             }
 
