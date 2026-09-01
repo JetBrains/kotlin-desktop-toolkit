@@ -446,6 +446,25 @@ Picked up after the ten workstreams; the report's P2/P3 backlog is otherwise unt
   gets a display link, so it may never produce a first frame and its content's `LaunchedEffect`s may
   never start. If real, the fix is one guaranteed frame, not a 60 Hz loop.
 
+- **macOS accent popover: arrows did not move the selection** — **fixed**, reported in use. Noria had
+  solved it; `offerEventBeforeSendingToApplication` + `isIMENavigationEvent`
+  (`MacOsTextInputSessionOwner.kt:131-159`) is the shape that was missing here. Three causes:
+
+  1. **A comment in this module was wrong**, and everything else followed from it.
+     `offerKeyDownToInputMethod` claimed `handleCurrentEvent`'s result is "useless as a *was this
+     consumed* answer" because the input method turns arrows into `doCommandBySelector:`. Not true of
+     this toolkit: `text_input_client.rs:325-330` already folds the command's outcome in — when a
+     command ran, the reported result is what `doCommand` returned. The answer is trustworthy, and the
+     `&& hasMarkedText()` guard added to work around it is what broke the popover.
+  2. **The popover holds no marked text.** It commits the base character and later replaces it, so
+     gating the pre-Compose offer on `hasMarkedText()` meant Compose read the arrow as caret movement
+     and returned before the input method was asked. `ownsKeyDown` now also offers Noria's navigation
+     set — arrows, Escape, Return, without Command or Control.
+  3. **`macos.md` 11, `insertText` ignoring `replacementRange`, was wrong to dismiss.** It is filed P3
+     on the grounds that "macOS only sends a range for corrections we do not offer" — the popover sends
+     one, and ignoring it yields "aá" instead of "á". Honoured now, through the same `onEditCommand`
+     path as the `setMarkedText` fix. **That finding is closed.**
+
 - **`macos.md` 5 — stale window position after hiding.** AppKit's origin is only reliable while the
   window is on screen; re-read on the visible transition, as Noria does. Noria refreshes only
   `position`, so neither does this.

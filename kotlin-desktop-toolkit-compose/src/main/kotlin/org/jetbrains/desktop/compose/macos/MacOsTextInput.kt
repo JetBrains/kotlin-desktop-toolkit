@@ -6,6 +6,7 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.PlatformTextInputMethodRequest
+import androidx.compose.ui.text.input.CommitTextCommand
 import androidx.compose.ui.text.input.SetComposingTextCommand
 import androidx.compose.ui.text.input.SetSelectionCommand
 import androidx.compose.ui.unit.Density
@@ -16,6 +17,7 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.desktop.compose.KdtImmediateDispatcher
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
+import org.jetbrains.desktop.macos.KeyCode
 import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.TextInputClient
 import org.jetbrains.desktop.macos.Window
@@ -34,6 +36,16 @@ import org.jetbrains.desktop.macos.TextRange as KdtTextRange
  * Compose starts and ends a session through `PlatformContext.startInputMethod`, so its lifetime is the
  * lifetime of a focused text field, and only one can be active at a time.
  */
+/** The keys an input method drives its own UI with: a candidate list, or the accent popover. */
+private val imeNavigationKeys = setOf(
+    KeyCode.LeftArrow,
+    KeyCode.RightArrow,
+    KeyCode.UpArrow,
+    KeyCode.DownArrow,
+    KeyCode.Escape,
+    KeyCode.Return,
+)
+
 internal class MacOsTextInput(
     private val nativeWindow: Window,
     private val density: () -> Density,
@@ -100,15 +112,29 @@ internal class MacOsTextInput(
     fun hasMarkedText(): Boolean = activeClient?.hasMarkedText() == true
 
     /**
-     * Offers a key press to the input method, returning whether it turned it into text.
+     * Whether this key has to be offered to the input method before Compose sees it.
      *
-     * The input method has to see the keys, because that is the only way a dead key or a CJK
-     * composition can work: the character the user ends up with is not a function of this one keystroke.
-     * But `NSTextInputContext.handleEvent` claims almost every key it is given — it turns arrows into
-     * `doCommandBySelector:` calls, which we deliberately do not implement — so its return value is
-     * useless as a "was this consumed" answer. What the client actually did with the event is tracked
-     * instead: if it inserted or marked text, the key was text input; if not, the caller is free to give
-     * the key to Compose, and navigation keeps working.
+     * A composition in progress is the obvious case. The other is macOS's press-and-hold accent
+     * popover, which uses **no marked text at all** — the base character is committed and the popover
+     * then replaces it — so the only sign that the input method wants the arrows is the keys themselves.
+     * Offering them afterwards is too late: Compose consumes an arrow as caret movement and the popover
+     * never sees it.
+     */
+    fun ownsKeyDown(event: Event.KeyDown): Boolean {
+        if (activeClient == null || event.modifiers.command || event.modifiers.control) {
+            return false
+        }
+        return hasMarkedText() || event.keyCode in imeNavigationKeys
+    }
+
+    /**
+     * Offers a key press to the input method, returning whether it consumed it.
+     *
+     * The input method has to see the keys, because that is the only way a dead key, an accent popover
+     * or a CJK composition can work: the character the user ends up with is not a function of this one
+     * keystroke. The toolkit's answer already accounts for the awkward case — when the input method
+     * turns a key into a `doCommandBySelector:` call, `handleCurrentEvent` reports what [doCommand]
+     * returned rather than claiming the key — so it can be taken at face value.
      *
      * A key held with Command or Control is a shortcut, never text, so it is not offered at all.
      */
@@ -120,9 +146,7 @@ internal class MacOsTextInput(
         client.beginEventInterpretation()
         val handledNatively = nativeWindow.textInputContext.handleCurrentEvent() == EventHandlerResult.Stop
         val editedText = client.endEventInterpretation()
-        // While a composition is open the input method also owns the navigation keys — arrows walk the
-        // candidate list, Escape and Return end the composition — so it is trusted there.
-        return editedText || (handledNatively && client.hasMarkedText())
+        return editedText || handledNatively
     }
 }
 
@@ -157,10 +181,21 @@ private class MacOsTextInputClient(
     override fun selectedRange(): KdtTextRange = request.state.selection.toKdtTextRange()
 
     override fun insertText(text: String, replacementRange: KdtTextRange?) {
-        // `replacementRange` is not honoured: the released `TextEditingScope` can only edit around the
-        // selection and the composition, and macOS only sends a range for corrections we do not offer.
         didEditText = true
-        request.editText { commitText(text, 1) }
+        val replacement = replacementRange?.toComposeTextRange()
+        if (replacement == null || replacement == request.state.selection) {
+            request.editText { commitText(text, 1) }
+            return
+        }
+        // The accent popover commits its base character and then replaces it once a candidate is picked,
+        // so the range it names is behind the caret rather than the selection. `TextEditingScope` cannot
+        // move the selection, so the replacement goes through the command path, as in `setMarkedText`.
+        request.onEditCommand(
+            listOf(
+                SetSelectionCommand(replacement.start, replacement.end),
+                CommitTextCommand(text, 1),
+            ),
+        )
     }
 
     override fun doCommand(command: String): Boolean {

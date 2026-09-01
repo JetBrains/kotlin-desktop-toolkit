@@ -627,8 +627,10 @@ internal class MacOsWindow(
      *     event, because nothing else would insert the character. See [MacOsTypedEvents].
      */
     private fun handleKeyDown(event: Event.KeyDown): EventHandlerResult {
-        val hasMarkedText = textInput.hasMarkedText()
-        if (hasMarkedText && textInput.offerKeyDownToInputMethod(event)) {
+        // Not just "is a composition open": the accent popover drives itself with the arrow keys and
+        // holds no marked text, so it has to get them before Compose reads them as caret movement.
+        val inputMethodOwnsKey = textInput.ownsKeyDown(event)
+        if (inputMethodOwnsKey && textInput.offerKeyDownToInputMethod(event)) {
             return EventHandlerResult.Stop
         }
 
@@ -643,7 +645,7 @@ internal class MacOsWindow(
 
         when {
             // Already offered above, and refused; re-offering would run the interpretation twice.
-            hasMarkedText -> {}
+            inputMethodOwnsKey -> {}
             textInput.isSessionActive -> {
                 if (textInput.offerKeyDownToInputMethod(event)) {
                     return EventHandlerResult.Stop
