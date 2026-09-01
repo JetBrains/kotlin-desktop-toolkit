@@ -79,6 +79,10 @@ internal class WindowsApplication(params: ComposeApplicationParams) : ComposeApp
     @Volatile
     private var terminationInProgress = false
 
+    /** Set when the event loop never got off the ground — a failed init, a missing library. */
+    @Volatile
+    private var eventLoopFailure: Throwable? = null
+
     private var hasShownAWindow = false
 
     override var systemTheme: SystemTheme by mutableStateOf(SystemTheme.Unknown)
@@ -137,6 +141,7 @@ internal class WindowsApplication(params: ComposeApplicationParams) : ComposeApp
             }
             nativeApplication.runEventLoop(::handleEvent)
         } catch (throwable: Throwable) {
+            eventLoopFailure = throwable
             Logger.error(throwable) { "The event loop has stopped" }
         } finally {
             // Whatever happened, nobody may be left waiting for a launch that is not coming.
@@ -292,6 +297,9 @@ internal class WindowsApplication(params: ComposeApplicationParams) : ComposeApp
         eventLoopThread = startEventLoopThread()
         // Returns once the loop is up, so windows can be created straight away.
         applicationStarted.await()
+        eventLoopFailure?.let { throwable ->
+            throw IllegalStateException("Could not start the win32 event loop", throwable)
+        }
     }
 }
 
