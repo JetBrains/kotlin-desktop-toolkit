@@ -22,6 +22,9 @@ import org.jetbrains.desktop.buildscripts.targetArch
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.copyTo
 import kotlin.io.path.createDirectories
@@ -1060,6 +1063,15 @@ fun configureTestTask(test: Test, backends: List<Backend>) {
         jvmArgs("--enable-native-access=ALL-UNNAMED")
         useJUnitPlatform()
         addTestListener(object : TestListener {
+            private fun withTimestamp(message: String): String {
+                val formatter = DateTimeFormatterBuilder()
+                    .append(DateTimeFormatter.ISO_LOCAL_DATE).appendLiteral(' ')
+                    .append(DateTimeFormatter.ISO_LOCAL_TIME)
+                    .toFormatter()
+                val time = LocalDateTime.now().format(formatter)
+                return "$time: $message"
+            }
+
             private fun getPrintableTestName(descriptor: TestDescriptor?): String {
                 val names = mutableListOf<String>()
                 var current = descriptor
@@ -1071,20 +1083,24 @@ fun configureTestTask(test: Test, backends: List<Backend>) {
                 return names.joinToString(" > ")
             }
 
+            private fun log(msg: String) {
+                logger.warn(withTimestamp(msg))
+            }
+
             override fun beforeSuite(suite: TestDescriptor?) {
-                logger.warn("beforeSuite: ${getPrintableTestName(suite)}")
+                log("beforeSuite: ${getPrintableTestName(suite)}")
             }
 
             override fun beforeTest(testDescriptor: TestDescriptor?) {
-                logger.warn("beforeTest: ${getPrintableTestName(testDescriptor)}")
+                log("beforeTest: ${getPrintableTestName(testDescriptor)}")
             }
 
             override fun afterSuite(suite: TestDescriptor?, result: TestResult?) {
-                logger.warn("afterSuite: ${getPrintableTestName(suite)}")
+                log("afterSuite: ${getPrintableTestName(suite)}")
             }
 
             override fun afterTest(testDescriptor: TestDescriptor?, result: TestResult?) {
-                logger.warn("afterTest: ${getPrintableTestName(testDescriptor)}")
+                log("afterTest: ${getPrintableTestName(testDescriptor)}")
             }
         })
 
