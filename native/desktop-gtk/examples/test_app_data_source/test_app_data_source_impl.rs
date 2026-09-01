@@ -41,8 +41,8 @@ static ALL_ARGS: LazyLock<AllArgs> = LazyLock::new(|| {
     args.next().expect("arg 0"); // skip the program name
 
     let mut drag_actions = gdk4::DragAction::empty();
-    let data_source = match args.next().expect("data source arg").as_str() {
-        "--clipboard" => match args.next().expect("clipboard type arg").as_str() {
+    let data_source = match args.next().as_deref() {
+        Some("--clipboard") => match args.next().expect("clipboard type arg").as_str() {
             "clipboard" => DataSource::Clipboard,
             "primary" => DataSource::PrimarySelection,
             _ => {
@@ -50,7 +50,7 @@ static ALL_ARGS: LazyLock<AllArgs> = LazyLock::new(|| {
                 std::process::exit(1);
             }
         },
-        "--drag" => {
+        Some("--drag") => {
             let drag_actions_str = args.next().expect("drag actions arg");
             for action_str in drag_actions_str.split(',') {
                 match action_str {
@@ -193,14 +193,9 @@ fn build_ui(application: &gtk4::Application) {
     let window = gtk4::ApplicationWindow::new(application);
 
     window.set_title(Some("Test Data Source"));
-    {
-        let dnd_in_progress = dnd_in_progress.clone();
-        window.connect_is_active_notify(move |window| {
-            if window.is_active() && !*dnd_in_progress.borrow() {
-                log("ready");
-            }
-        });
-    }
+    window.connect_show(move |_window| {
+        log("window created");
+    });
 
     match data_source {
         DataSource::DragAndDrop => {

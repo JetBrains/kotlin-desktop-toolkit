@@ -13,10 +13,6 @@ def eprint(msg):
 def _motion(*_args):
     eprint("Received DRAG_MOTION event")
 
-def on_is_active_changed(w: Gtk.Window, *_args, **_kwargs):
-    if w.is_active:
-        eprint("ready")
-
 class MyApplication(Gtk.Application):
     def __init__(self):
         super().__init__(application_id="org.jetbrains.desktop.linux.tests.TestAppBlankWindow")
@@ -25,7 +21,7 @@ class MyApplication(Gtk.Application):
     def do_activate(self):
         try:
             window = Gtk.ApplicationWindow(application=self, title="Blank Window")
-            window.connect("notify::is-active", on_is_active_changed)
+            window.connect("show", lambda *_args, **_kwargs: eprint("window created"))
 
             event_controller = Gtk.DropControllerMotion.new()
             event_controller.connect("motion", _motion)

@@ -18,10 +18,6 @@ def _text_changed(text_buffer: Gtk.TextBuffer):
 def _motion(*_args):
     eprint("Received DRAG_MOTION event")
 
-def on_is_active_changed(w: Gtk.Window, *_args, **_kwargs):
-    if w.is_active:
-        eprint("ready")
-
 class MyApplication(Gtk.Application):
     def __init__(self):
         super().__init__(application_id="org.jetbrains.desktop.linux.tests.TestAppDropTarget")
@@ -30,7 +26,7 @@ class MyApplication(Gtk.Application):
     def do_activate(self):
         try:
             window = Gtk.ApplicationWindow(application=self, title="Drop Target")
-            window.connect("notify::is-active", on_is_active_changed)
+            window.connect("show", lambda *_args, **_kwargs: eprint("window created"))
 
             text_view = Gtk.TextView.new()
             text_view.set_editable(True)
