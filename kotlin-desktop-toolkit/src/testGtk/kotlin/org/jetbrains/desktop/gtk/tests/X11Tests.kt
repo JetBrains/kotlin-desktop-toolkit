@@ -59,6 +59,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.TestInfo
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.assertInstanceOf
 import org.junit.jupiter.api.assertNotNull
@@ -66,7 +67,6 @@ import org.junit.jupiter.api.assertNull
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
-import org.junit.jupiter.api.fail
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
 import java.nio.file.Files
@@ -122,7 +122,12 @@ private fun withTimestamp(message: String): String {
 }
 
 internal fun log(message: String) {
-    println(withTimestamp(message))
+    Application.log("${withTimestamp(message)}\n")
+}
+
+internal fun fail(message: String, throwable: Throwable? = null): Nothing {
+    log(message)
+    org.junit.jupiter.api.fail(message, throwable)
 }
 
 private fun runCommandImpl(command: List<String>, timeout: Duration = 5.seconds): Result<Path> {
@@ -1317,21 +1322,27 @@ abstract class X11TestsBase {
     internal var eventHandler: ((Event) -> EventHandlerResult)? = null
 
     @BeforeEach
-    fun setUp() {
+    fun setUp(testInfo: TestInfo) {
         testStart.elapsedNow() // trigger lazy evaluation
+
+        log("${testInfo.displayName} start")
     }
 
-    @AfterEach
-    @Timeout(value = 20, unit = TimeUnit.SECONDS)
-    fun tearDown() {
-        log("tearDown start")
+    fun tearDownImpl() {
         appExecutingResult?.let {
             if (!it.isDone) {
                 app.stopEventLoop()
             }
             assertNull(it.get())
         }
-        log("tearDown end")
+    }
+
+    @AfterEach
+    @Timeout(value = 20, unit = TimeUnit.SECONDS)
+    fun tearDown(testInfo: TestInfo) {
+        log("${testInfo.displayName} tearDown start")
+        tearDownImpl()
+        log("${testInfo.displayName} tearDown end")
     }
 }
 
@@ -4618,7 +4629,7 @@ text/plain;charset=utf-8
         val timeTaken = measureTime {
             val notification1RequestId = ui { app.requestShowNotification(showNotificationParams) }
             assertNotNull(notification1RequestId)
-            tearDown()
+            tearDownImpl()
         }
         if (timeTaken > 1.seconds) {
             fail("Took $timeTaken")

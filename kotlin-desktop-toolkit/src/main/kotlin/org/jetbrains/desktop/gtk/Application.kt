@@ -103,6 +103,15 @@ public class Application(public val appId: String) {
     public companion object {
         public const val MAX_STRING_SIZE_BYTES: Int = 4083 // Align with Wayland implementation
         public const val MAX_PIXEL_VALUE: UShort = UShort.MAX_VALUE // X11 can handle only 16-bit integers
+
+        public fun log(message: String) {
+            return ffiDownCall {
+                Arena.ofConfined().use { arena ->
+                    val nativeMessage = message.toNativeUtf8(arena)
+                    desktop_gtk_h.application_log(nativeMessage)
+                }
+            }
+        }
     }
 
     private var applicationConfig: ApplicationConfig? = null

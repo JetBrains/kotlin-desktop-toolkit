@@ -1,4 +1,4 @@
-use crate::gtk::application::{Application, with_app_state, with_app_state_mut};
+use crate::gtk::application::{Application, application_log_impl, with_app_state, with_app_state_mut};
 use crate::gtk::application_state::{EglInstance, get_egl, get_gl};
 use crate::gtk::data_transfer_api::{DataSource, DragAndDropAction, DragAndDropActions, DragAndDropQueryData};
 use crate::gtk::events::{EventHandler, RequestId, WindowId};
@@ -329,4 +329,9 @@ pub extern "C" fn application_set_prefer_dark_theme(value: bool) {
             Ok(())
         })
     });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_log(message: BorrowedUtf8) {
+    let _ = application_log_impl(&message);
 }

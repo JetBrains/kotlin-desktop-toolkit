@@ -2,11 +2,13 @@ use crate::gtk::application_api::ApplicationCallbacks;
 use crate::gtk::application_state::ApplicationState;
 use crate::gtk::events::{Event, EventHandler};
 use anyhow::{Context, bail};
+use desktop_common::ffi_utils::BorrowedUtf8;
 use desktop_common::logger::catch_panic;
 use gtk4::glib;
 use gtk4::prelude::ApplicationExtManual;
 use log::debug;
 use std::cell::{Cell, OnceCell, RefCell};
+use std::io::Write;
 use std::sync::OnceLock;
 use std::thread::ThreadId;
 
@@ -61,6 +63,14 @@ pub fn send_event<'a, T: Into<Event<'a>>>(event_handler: EventHandler, event_dat
         _ => debug!("Sending event: {event:?}"),
     }
     catch_panic(|| Ok(event_handler(&event))).unwrap_or(false)
+}
+
+pub fn application_log_impl(message: &BorrowedUtf8) -> anyhow::Result<()> {
+    let msg_str = message.get("application_log message")?;
+    let mut stdout = std::io::stdout();
+    stdout.write_all(msg_str.as_bytes())?;
+    stdout.flush()?;
+    Ok(())
 }
 
 impl Application {
