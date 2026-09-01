@@ -4,23 +4,18 @@ use crate::gtk::events::{
     Timestamp, WindowId,
 };
 use crate::gtk::geometry::{LogicalPixels, LogicalPoint};
-use gtk4::prelude::{EventControllerExt, NativeExt, ObjectExt, WidgetExt};
+use gtk4::prelude::{EventControllerExt, NativeExt, WidgetExt};
 use gtk4::{gdk as gdk4, glib};
 
-fn translate_event_coordinates(e: &gdk4::Event, widget: &gtk4::Widget) -> Option<LogicalPoint> {
-    let (mut event_x, mut event_y) = e.position()?;
+fn translate_event_coordinates(e: &gdk4::Event) -> Option<LogicalPoint> {
+    let (event_x, event_y) = e.position()?;
     let surface = e.surface()?;
     let native = gtk4::Native::for_surface(&surface)?;
     let (nx, ny) = native.surface_transform();
-    event_x -= nx;
-    event_y -= ny;
-
-    #[allow(clippy::cast_possible_truncation)]
-    let p = native.compute_point(widget, &gtk4::graphene::Point::new(event_x as f32, event_y as f32))?;
 
     Some(LogicalPoint {
-        x: LogicalPixels::new(f64::from(p.x())),
-        y: LogicalPixels::new(f64::from(p.y())),
+        x: LogicalPixels::new(event_x - nx),
+        y: LogicalPixels::new(event_y - ny),
     })
 }
 
@@ -60,15 +55,12 @@ fn set_motion_events_handler(widget: &gtk4::Widget, window_id: WindowId, event_h
 fn set_mouse_button_events_handler(widget: &gtk4::Widget, window_id: WindowId, event_handler: EventHandler) {
     let event_controller_legacy = gtk4::EventControllerLegacy::new();
     event_controller_legacy.set_propagation_phase(gtk4::PropagationPhase::Capture);
-    let widget_weak_ref = widget.downgrade();
     event_controller_legacy.connect_event(move |_event_controller_legacy, e| {
         let handled = match e.event_type() {
             gdk4::EventType::ButtonPress => {
                 let button_event = e.downcast_ref::<gdk4::ButtonEvent>().unwrap();
                 let button = button_event.button();
-                if let Some(widget) = widget_weak_ref.upgrade()
-                    && let Some(location_in_window) = translate_event_coordinates(e, &widget)
-                {
+                if let Some(location_in_window) = translate_event_coordinates(e) {
                     let event = MouseDownEvent {
                         window_id,
                         button: MouseButton(button),
@@ -83,9 +75,7 @@ fn set_mouse_button_events_handler(widget: &gtk4::Widget, window_id: WindowId, e
             gdk4::EventType::ButtonRelease => {
                 let button_event = e.downcast_ref::<gdk4::ButtonEvent>().unwrap();
                 let button = button_event.button();
-                if let Some(widget) = widget_weak_ref.upgrade()
-                    && let Some(location_in_window) = translate_event_coordinates(e, &widget)
-                {
+                if let Some(location_in_window) = translate_event_coordinates(e) {
                     let event = MouseUpEvent {
                         window_id,
                         button: MouseButton(button),
