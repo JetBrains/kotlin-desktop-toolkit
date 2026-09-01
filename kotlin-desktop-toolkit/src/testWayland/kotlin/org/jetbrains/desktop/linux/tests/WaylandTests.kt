@@ -5107,7 +5107,7 @@ text/plain;charset=utf-8
             "Expected ${backgroundColor.toHexString()}, got ${bottomRightColor.toHexString()} for $path",
         )
 
-        val topLeftColor = bitmap.getColor(0, 0)
+        val topLeftColor = bitmap.getColor(1, 1)
         assertEquals(rectColor, topLeftColor, "Expected ${rectColor.toHexString()}, got ${topLeftColor.toHexString()} for $path")
 
         screenshotPath.deleteIfExists()
