@@ -42,7 +42,14 @@ internal object KdtSnapshotManager {
         scope.launch {
             channel.consumeEach {
                 pending.set(false)
-                Snapshot.sendApplyNotifications()
+                try {
+                    Snapshot.sendApplyNotifications()
+                } catch (throwable: Throwable) {
+                    // A throwing state observer must not end the loop: this coroutine is the only thing
+                    // flushing writes made outside a composition, and losing it would silently stop every
+                    // later write from invalidating anything.
+                    logError(throwable) { "A snapshot apply observer failed" }
+                }
             }
         }
         val writeObserver = Snapshot.registerGlobalWriteObserver {
