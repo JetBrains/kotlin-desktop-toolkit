@@ -48,12 +48,25 @@ import org.jetbrains.desktop.gtk.WindowParams
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.makeGLWithInterface
 import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertArrayEquals
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertIterableEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Disabled
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.assertInstanceOf
+import org.junit.jupiter.api.assertNotNull
+import org.junit.jupiter.api.assertNull
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
+import org.junit.jupiter.api.fail
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
 import java.nio.file.Files
@@ -81,19 +94,6 @@ import kotlin.io.path.writeBytes
 import kotlin.io.path.writeText
 import kotlin.math.floor
 import kotlin.math.roundToInt
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
-import kotlin.test.Ignore
-import kotlin.test.Test
-import kotlin.test.assertContentEquals
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertNotEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
-import kotlin.test.fail
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -230,7 +230,7 @@ private class TestApp(private val cmd: List<String>) {
             assertTrue(process.isAlive)
 
             val lines = outputFile.readLines()
-            assertContentEquals(arrayOf("window created"), lines.toTypedArray())
+            assertArrayEquals(arrayOf("window created"), lines.toTypedArray())
             log("Test app ready")
 
             val lastLinesCount = mutableListOf(1)
@@ -328,7 +328,7 @@ private fun withPrimarySelectionSourceTestApp(
 private fun assertDataMatches(expectedDataSequence: Sequence<ByteArray>, actual: ByteArray) {
     val actualDataStream = actual.inputStream()
     for (e in expectedDataSequence) {
-        assertContentEquals(e, actualDataStream.readNBytes(e.size))
+        assertArrayEquals(e, actualDataStream.readNBytes(e.size))
     }
 }
 
@@ -843,14 +843,14 @@ abstract class X11TestsBase {
                 fail(withTimestamp("Application event loop finished exceptionally"), t)
             }
         }
-        assertIs<Event.ApplicationStarted>(getNextEvent())
+        assertInstanceOf<Event.ApplicationStarted>(getNextEvent())
 
         val initialSettings = InitialSettings()
 
         // Initial settings are always sent in the same order, and this is the last one.
         while (initialSettings.isComposited == null) {
             val event = getNextEvent()
-            assertIs<Event.DesktopSettingChange>(event, "initialSettings=$initialSettings")
+            assertInstanceOf<Event.DesktopSettingChange>(event, "initialSettings=$initialSettings")
             when (val setting = event.setting) {
                 is DesktopSetting.AccentColor -> initialSettings.accentColor = setting
                 is DesktopSetting.ActionDoubleClickTitlebar -> initialSettings.actionDoubleClickTitlebar = setting
@@ -1154,12 +1154,12 @@ abstract class X11TestsBase {
 
         return InitialWindowData(
             window = window,
-            scale = assertNotNull(scale),
-            configure = assertNotNull(configure),
-            draw = assertNotNull(draw),
-            keyboardEnter = assertNotNull(keyboardEnter),
-            screen = assertNotNull(screen),
-            operations = assertNotNull(operations),
+            scale = checkNotNull(scale),
+            configure = checkNotNull(configure),
+            draw = checkNotNull(draw),
+            keyboardEnter = checkNotNull(keyboardEnter),
+            screen = checkNotNull(screen),
+            operations = checkNotNull(operations),
             otherEvents = otherEvents,
         )
     }
@@ -1304,11 +1304,9 @@ abstract class X11TestsBase {
         log("checkNextEvents: ${remainingChecks.keys}")
         val otherEvents = mutableListOf<Event>()
         waitUntil("checkNextEvents", getter = {
-            val event =
-                assertNotNull(
-                    eventQueue.poll(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS),
-                    withTimestamp("Timed out waiting for event, remaining: ${remainingChecks.keys}"),
-                )
+            val event = checkNotNull(eventQueue.poll(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)) {
+                withTimestamp("Timed out waiting for event, remaining: ${remainingChecks.keys}")
+            }
             val matchedName = remainingChecks.firstNotNullOfOrNull { (name, predicate) ->
                 if (predicate(event, remainingChecks.keys)) name else null
             }
@@ -1325,12 +1323,12 @@ abstract class X11TestsBase {
     @Volatile
     internal var eventHandler: ((Event) -> EventHandlerResult)? = null
 
-    @BeforeTest
+    @BeforeEach
     fun setUp() {
         testStart.elapsedNow() // trigger lazy evaluation
     }
 
-    @AfterTest
+    @AfterEach
     @Timeout(value = 20, unit = TimeUnit.SECONDS)
     fun tearDown() {
         log("tearDown start")
@@ -1358,27 +1356,27 @@ class X11Tests : X11TestsBase() {
     fun testSettings() {
         val initialSettings = run(defaultApplicationConfig())
 
-        val initialAccentColor = assertNotNull(initialSettings.accentColor, "Initial AccentColor setting")
-        val initialAudibleBell = assertNotNull(initialSettings.audibleBell, "Initial AudibleBell setting")
-        val initialColorScheme = assertNotNull(initialSettings.colorScheme, "Initial ColorScheme setting")
-        val initialCursorBlink = assertNotNull(initialSettings.cursorBlink, "Initial CursorBlink setting")
-        val initialCursorBlinkTime = assertNotNull(initialSettings.cursorBlinkTime, "Initial CursorBlinkTime setting")
-        val initialCursorBlinkTimeout = assertNotNull(initialSettings.cursorBlinkTimeout, "Initial CursorBlinkTimeout setting")
-        val initialDoubleClickInterval = assertNotNull(initialSettings.doubleClickInterval, "Initial DoubleClickInterval setting")
+        val initialAccentColor = checkNotNull(initialSettings.accentColor) { "Initial AccentColor setting" }
+        val initialAudibleBell = checkNotNull(initialSettings.audibleBell) { "Initial AudibleBell setting" }
+        val initialColorScheme = checkNotNull(initialSettings.colorScheme) { "Initial ColorScheme setting" }
+        val initialCursorBlink = checkNotNull(initialSettings.cursorBlink) { "Initial CursorBlink setting" }
+        val initialCursorBlinkTime = checkNotNull(initialSettings.cursorBlinkTime) { "Initial CursorBlinkTime setting" }
+        val initialCursorBlinkTimeout = checkNotNull(initialSettings.cursorBlinkTimeout) { "Initial CursorBlinkTimeout setting" }
+        val initialDoubleClickInterval = checkNotNull(initialSettings.doubleClickInterval) { "Initial DoubleClickInterval setting" }
         val initialDragAndDropDragThresholdPixels =
-            assertNotNull(initialSettings.dragAndDropDragThresholdPixels, "Initial DragAndDropDragThresholdPixels setting")
-        val initialFontHinting = assertNotNull(initialSettings.fontHinting, "Initial FontHinting setting")
-        val initialFontRgbaOrder = assertNotNull(initialSettings.fontRgbaOrder, "Initial FontRgbaOrder setting")
-        val initialIsComposited = assertNotNull(initialSettings.isComposited, "Initial IsComposited setting")
-        val initialMiddleClickPaste = assertNotNull(initialSettings.middleClickPaste, "Initial MiddleClickPaste setting")
-        val initialOverlayScrolling = assertNotNull(initialSettings.overlayScrolling, "Initial OverlayScrolling setting")
+            checkNotNull(initialSettings.dragAndDropDragThresholdPixels) { "Initial DragAndDropDragThresholdPixels setting" }
+        val initialFontHinting = checkNotNull(initialSettings.fontHinting) { "Initial FontHinting setting" }
+        val initialFontRgbaOrder = checkNotNull(initialSettings.fontRgbaOrder) { "Initial FontRgbaOrder setting" }
+        val initialIsComposited = checkNotNull(initialSettings.isComposited) { "Initial IsComposited setting" }
+        val initialMiddleClickPaste = checkNotNull(initialSettings.middleClickPaste) { "Initial MiddleClickPaste setting" }
+        val initialOverlayScrolling = checkNotNull(initialSettings.overlayScrolling) { "Initial OverlayScrolling setting" }
         val initialDoubleClickDistancePixels =
-            assertNotNull(initialSettings.doubleClickDistancePixels, "Initial DoubleClickDistancePixels setting")
-        val initialEnableAnimations = assertNotNull(initialSettings.enableAnimations, "Initial EnableAnimations setting")
+            checkNotNull(initialSettings.doubleClickDistancePixels) { "Initial DoubleClickDistancePixels setting" }
+        val initialEnableAnimations = checkNotNull(initialSettings.enableAnimations) { "Initial EnableAnimations setting" }
         val initialPrimaryButtonWarpsSlider =
-            assertNotNull(initialSettings.primaryButtonWarpsSlider, "Initial PrimaryButtonWarpsSlider setting")
-        val initialRecentFilesEnabled = assertNotNull(initialSettings.recentFilesEnabled, "Initial RecentFilesEnabled setting")
-        val initialRecentFilesMaxAgeDays = assertNotNull(initialSettings.recentFilesMaxAgeDays, "Initial RecentFilesMaxAgeDays setting")
+            checkNotNull(initialSettings.primaryButtonWarpsSlider) { "Initial PrimaryButtonWarpsSlider setting" }
+        val initialRecentFilesEnabled = checkNotNull(initialSettings.recentFilesEnabled) { "Initial RecentFilesEnabled setting" }
+        val initialRecentFilesMaxAgeDays = checkNotNull(initialSettings.recentFilesMaxAgeDays) { "Initial RecentFilesMaxAgeDays setting" }
 
         val windowParams = defaultWindowParams()
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
@@ -1608,13 +1606,13 @@ class X11Tests : X11TestsBase() {
             ),
         ) {
             val event = getNextEvent()
-            assertIs<Event.WindowScaleChanged>(event)
+            assertInstanceOf<Event.WindowScaleChanged>(event)
             assertEquals(windowParams.windowId, event.windowId)
             assertEquals(1.0, event.newScale.rawValue)
 
             if (wm.isMutter()) {
                 withNextEvent { event ->
-                    assertIs<Event.WindowConfigure>(event)
+                    assertInstanceOf<Event.WindowConfigure>(event)
                     assertEquals(windowParams.windowId, event.windowId)
                 }
             }
@@ -1622,7 +1620,7 @@ class X11Tests : X11TestsBase() {
             ui { initialWindowData.window.requestRedraw() }
 
             withNextEvent { event ->
-                assertIs<Event.WindowDraw>(event)
+                assertInstanceOf<Event.WindowDraw>(event)
                 assertEquals(windowParams.windowId, event.windowId)
                 assertEquals(initialWindowData.configure.size.width.toRawPhysical(Scale.NO_SCALE), event.size.width.rawPhysical.toDouble())
                 if (!wm.isMutter()) {
@@ -1641,7 +1639,7 @@ class X11Tests : X11TestsBase() {
 
         if (wm.isMutter()) {
             withNextEvent { event ->
-                assertIs<Event.WindowConfigure>(event)
+                assertInstanceOf<Event.WindowConfigure>(event)
                 assertEquals(windowParams.windowId, event.windowId)
             }
         }
@@ -1719,7 +1717,7 @@ class X11Tests : X11TestsBase() {
 
         val minSize = LogicalSize.makeWH(width = 100, height = 70)
         val windowParams = defaultWindowParams().copy(minSize = minSize)
-        val requestedSize = assertNotNull(windowParams.size)
+        val requestedSize = checkNotNull(windowParams.size)
 
         var expectedConfigureEvent = ExpectedWindowConfigure(
             windowId = windowParams.windowId,
@@ -1735,7 +1733,7 @@ class X11Tests : X11TestsBase() {
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
         val window = initialWindowData.window
 
-        val wmVersion = assertNotNull(wm.getVersion())
+        val wmVersion = checkNotNull(wm.getVersion())
 
         // i3 versions older than 4.24 don't report windows as maximized.
         // https://github.com/i3/i3/commit/b660d6a902cf44be22c434101dd2a4e6743e26bc
@@ -1949,7 +1947,7 @@ class X11Tests : X11TestsBase() {
             if (mouseInWindow) {
                 withNextEvent { event ->
                     if (event != null) {
-                        assertIs<Event.MouseExited>(event)
+                        assertInstanceOf<Event.MouseExited>(event)
                     }
                 }
             }
@@ -2069,7 +2067,7 @@ class X11Tests : X11TestsBase() {
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
         val window = initialWindowData.window
 
-        val clientAreaPos = assertNotNull(initialWindowData.operations.clientAreaPosition())
+        val clientAreaPos = checkNotNull(initialWindowData.operations.clientAreaPosition())
 
         val screenshotRect = LogicalRect.makeWH(150, 150)
 
@@ -2221,7 +2219,7 @@ class X11Tests : X11TestsBase() {
     }
 
     @Test
-    @Ignore("Allocates too much memory on some WMs")
+    @Disabled("Allocates too much memory on some WMs")
     fun testWindowCreationLargeSizeValues() {
         run(defaultApplicationConfig())
 
@@ -2380,20 +2378,20 @@ TEXT
 STRING
 text/plain;charset=utf-8
 """.toByteArray()
-                assertContentEquals(expected, it)
+                assertArrayEquals(expected, it)
             }
 
-            assertContentEquals(htmlContent, getClipboardContent(HTML_TEXT_MIME_TYPE))
-            assertContentEquals(textContent, getClipboardContent(TEXT_UTF8_MIME_TYPE))
-            assertContentEquals(textContent, getClipboardContent("UTF8_STRING"))
-            assertContentEquals(textContent + 0.toByte(), getClipboardContent("TEXT"))
-            assertContentEquals(textContent + 0.toByte(), getClipboardContent("STRING"))
+            assertArrayEquals(htmlContent, getClipboardContent(HTML_TEXT_MIME_TYPE))
+            assertArrayEquals(textContent, getClipboardContent(TEXT_UTF8_MIME_TYPE))
+            assertArrayEquals(textContent, getClipboardContent("UTF8_STRING"))
+            assertArrayEquals(textContent + 0.toByte(), getClipboardContent("TEXT"))
+            assertArrayEquals(textContent + 0.toByte(), getClipboardContent("STRING"))
 
             ui { app.clipboardPut(listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE)) }
             withNextEvent { event ->
-                assertIs<Event.DataTransferAvailable>(event)
+                assertInstanceOf<Event.DataTransferAvailable>(event)
                 assertEquals(DataSource.Clipboard, event.dataSource)
-                assertContentEquals(listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE), event.mimeTypes)
+                assertIterableEquals(listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE), event.mimeTypes)
             }
         }
     }
@@ -2434,12 +2432,12 @@ TEXT
 STRING
 text/plain;charset=utf-8
 """.toByteArray()
-                assertContentEquals(expected, it)
+                assertArrayEquals(expected, it)
             }
 
-            assertContentEquals(htmlContent, getClipboardContent(HTML_TEXT_MIME_TYPE))
-            assertContentEquals(textContent, getClipboardContent(TEXT_UTF8_MIME_TYPE))
-            assertContentEquals(textContent, getClipboardContent("UTF8_STRING"))
+            assertArrayEquals(htmlContent, getClipboardContent(HTML_TEXT_MIME_TYPE))
+            assertArrayEquals(textContent, getClipboardContent(TEXT_UTF8_MIME_TYPE))
+            assertArrayEquals(textContent, getClipboardContent("UTF8_STRING"))
             // TODO? "TEXT" and "STRING" types are not working well with Unicode content
         }
     }
@@ -2472,13 +2470,13 @@ TEXT
 STRING
 text/plain;charset=utf-8
 """.toByteArray()
-                assertContentEquals(expected, it)
+                assertArrayEquals(expected, it)
             }
 
-            assertContentEquals(textContent, getClipboardContent(TEXT_UTF8_MIME_TYPE))
-            assertContentEquals(textContent, getClipboardContent("UTF8_STRING"))
-            assertContentEquals(byteArrayOf(0), getClipboardContent("TEXT"))
-            assertContentEquals(byteArrayOf(0), getClipboardContent("STRING"))
+            assertArrayEquals(textContent, getClipboardContent(TEXT_UTF8_MIME_TYPE))
+            assertArrayEquals(textContent, getClipboardContent("UTF8_STRING"))
+            assertArrayEquals(byteArrayOf(0), getClipboardContent("TEXT"))
+            assertArrayEquals(byteArrayOf(0), getClipboardContent("STRING"))
         }
     }
 
@@ -2618,20 +2616,20 @@ TEXT
 STRING
 text/plain;charset=utf-8
 """.toByteArray()
-                assertContentEquals(expected, it)
+                assertArrayEquals(expected, it)
             }
 
-            assertContentEquals(htmlContent, getPrimarySelectionContent(HTML_TEXT_MIME_TYPE))
-            assertContentEquals(textContent, getPrimarySelectionContent(TEXT_UTF8_MIME_TYPE))
-            assertContentEquals(textContent, getPrimarySelectionContent("UTF8_STRING"))
-            assertContentEquals(textContent + 0.toByte(), getPrimarySelectionContent("TEXT"))
-            assertContentEquals(textContent + 0.toByte(), getPrimarySelectionContent("STRING"))
+            assertArrayEquals(htmlContent, getPrimarySelectionContent(HTML_TEXT_MIME_TYPE))
+            assertArrayEquals(textContent, getPrimarySelectionContent(TEXT_UTF8_MIME_TYPE))
+            assertArrayEquals(textContent, getPrimarySelectionContent("UTF8_STRING"))
+            assertArrayEquals(textContent + 0.toByte(), getPrimarySelectionContent("TEXT"))
+            assertArrayEquals(textContent + 0.toByte(), getPrimarySelectionContent("STRING"))
 
             ui { app.primarySelectionPut(mimeTypes) }
             withNextEvent { event ->
-                assertIs<Event.DataTransferAvailable>(event)
+                assertInstanceOf<Event.DataTransferAvailable>(event)
                 assertEquals(DataSource.PrimarySelection, event.dataSource)
-                assertContentEquals(mimeTypes, event.mimeTypes)
+                assertIterableEquals(mimeTypes, event.mimeTypes)
             }
         }
     }
@@ -2706,7 +2704,7 @@ text/plain;charset=utf-8
                 val content = event.content
                 assertNotNull(content)
                 assertEquals(TEXT_UTF8_MIME_TYPE, content.mimeType)
-                assertContentEquals(textContent, content.data)
+                assertArrayEquals(textContent, content.data)
             }
 
             val transferSerial2 = 6
@@ -2732,7 +2730,7 @@ text/plain;charset=utf-8
                 val content = event.content
                 assertNotNull(content)
                 assertEquals(TEXT_UTF8_MIME_TYPE, content.mimeType)
-                assertContentEquals(byteArrayOf(), content.data)
+                assertArrayEquals(byteArrayOf(), content.data)
             }
         }
     }
@@ -2752,7 +2750,7 @@ text/plain;charset=utf-8
 
             awaitEventOfType<Event.DataTransferAvailable> { event ->
                 assertEquals(DataSource.Clipboard, event.dataSource)
-                assertEquals(emptyList(), event.mimeTypes)
+                assertEquals(emptyList<String>(), event.mimeTypes)
                 true
             }
             awaitEventOfType<Event.DataTransferAvailable> { event ->
@@ -2810,7 +2808,7 @@ text/plain;charset=utf-8
                 val content = event.content
                 assertNotNull(content)
                 assertEquals(TEXT_UTF8_MIME_TYPE, content.mimeType)
-                assertContentEquals(textData, content.data)
+                assertArrayEquals(textData, content.data)
             }
 
             val transferSerial2 = 6
@@ -2822,7 +2820,7 @@ text/plain;charset=utf-8
                 val content = event.content
                 assertNotNull(content)
                 assertEquals(URI_LIST_MIME_TYPE, content.mimeType)
-                assertContentEquals(uriListData, content.data)
+                assertArrayEquals(uriListData, content.data)
             }
 
             val transferSerial3 = 7
@@ -2911,7 +2909,7 @@ text/plain;charset=utf-8
             val content = event.content
             assertNotNull(content)
             assertEquals(TEXT_UTF8_MIME_TYPE, content.mimeType)
-            assertContentEquals(textData, content.data)
+            assertArrayEquals(textData, content.data)
 
             // Test app sleeps 100ms after every 10 bytes
             if (timeTaken < 1.seconds) {
@@ -2925,7 +2923,7 @@ text/plain;charset=utf-8
     }
 
     @Test
-    @Ignore("Event.DataTransfer is not received and other tests are impacted afterwards")
+    @Disabled("Event.DataTransfer is not received and other tests are impacted afterwards")
     fun testClipboardPasteSourceDisappears() {
         val textData = "qwertyuiop".repeat(10).encodeToByteArray()
         val data = listOf(TEXT_UTF8_MIME_TYPE to sequenceOf(textData))
@@ -2936,7 +2934,7 @@ text/plain;charset=utf-8
 
             awaitEventOfType<Event.DataTransferAvailable> { event ->
                 assertEquals(DataSource.Clipboard, event.dataSource)
-                assertEquals(emptyList(), event.mimeTypes)
+                assertEquals(emptyList<String>(), event.mimeTypes)
                 true
             }
 
@@ -2968,7 +2966,7 @@ text/plain;charset=utf-8
 
             awaitEventOfType<Event.DataTransferAvailable> { event ->
                 assertEquals(DataSource.PrimarySelection, event.dataSource)
-                assertEquals(emptyList(), event.mimeTypes)
+                assertEquals(emptyList<String>(), event.mimeTypes)
                 true
             }
             awaitEventOfType<Event.DataTransferAvailable> { event ->
@@ -2988,7 +2986,7 @@ text/plain;charset=utf-8
                 val content = event.content
                 assertNotNull(content)
                 assertEquals(TEXT_UTF8_MIME_TYPE, content.mimeType)
-                assertContentEquals(textData, content.data)
+                assertArrayEquals(textData, content.data)
             }
         }
         awaitEventOfType<Event.DataTransferAvailable>(msg = "testPrimarySelectionPaste close wait 1") { true }
@@ -2998,7 +2996,7 @@ text/plain;charset=utf-8
     fun testPasteWithoutClipboard() {
         run(defaultApplicationConfig())
         ui { app.clipboardGetAvailableMimeTypes() }.also {
-            assertEquals(emptyList(), it)
+            assertEquals(emptyList<String>(), it)
         }
         val serial = 6
         ui { app.clipboardPaste(serial, listOf(TEXT_UTF8_MIME_TYPE)) }
@@ -3013,7 +3011,7 @@ text/plain;charset=utf-8
     fun testPasteWithoutPrimarySelection() {
         run(defaultApplicationConfig())
         ui { app.primarySelectionGetAvailableMimeTypes() }.also {
-            assertEquals(emptyList(), it)
+            assertEquals(emptyList<String>(), it)
         }
 
         val serial = 6
@@ -3051,7 +3049,7 @@ text/plain;charset=utf-8
                 assertEquals(windowParams.windowId, event.windowId)
                 assertEquals(KeyCode.Return, event.keyCode.value)
                 assertEquals(KeySym.Return, event.key.value)
-                assertContentEquals("\r".toByteArray(), event.characters?.toByteArray())
+                assertArrayEquals("\r".toByteArray(), event.characters?.toByteArray())
             }
         }
         withNextEvent { event ->
@@ -3067,7 +3065,7 @@ text/plain;charset=utf-8
                 assertEquals(windowParams.windowId, event.windowId)
                 assertEquals(KeyCode.Escape, event.keyCode.value)
                 assertEquals(KeySym.Escape, event.key.value)
-                assertContentEquals("\u001b".toByteArray(), event.characters?.toByteArray())
+                assertArrayEquals("\u001b".toByteArray(), event.characters?.toByteArray())
             }
         }
         withNextEvent { event ->
@@ -3083,7 +3081,7 @@ text/plain;charset=utf-8
                 assertEquals(windowParams.windowId, event.windowId)
                 assertEquals(KeyCode.BackSpace, event.keyCode.value)
                 assertEquals(KeySym.BackSpace, event.key.value)
-                assertContentEquals("\b".toByteArray(), event.characters?.toByteArray())
+                assertArrayEquals("\b".toByteArray(), event.characters?.toByteArray())
             }
         }
         withNextEvent { event ->
@@ -3099,7 +3097,7 @@ text/plain;charset=utf-8
                 assertEquals(windowParams.windowId, event.windowId)
                 assertEquals(KeyCode.Tab, event.keyCode.value)
                 assertEquals(KeySym.Tab, event.key.value)
-                assertContentEquals("\t".toByteArray(), event.characters?.toByteArray())
+                assertArrayEquals("\t".toByteArray(), event.characters?.toByteArray())
             }
         }
         withNextEvent { event ->
@@ -3145,7 +3143,7 @@ text/plain;charset=utf-8
         }
         withNextEvent { event ->
             assertInstanceOf<Event.ModifiersChanged>(event)
-            assertEquals(emptySet(), event.modifiers)
+            assertEquals(emptySet<KeyModifiers>(), event.modifiers)
         }
 
         wm.withKeyPress(KeyCode.Control_L) {
@@ -3183,7 +3181,7 @@ text/plain;charset=utf-8
         }
         withNextEvent { event ->
             assertInstanceOf<Event.ModifiersChanged>(event)
-            assertEquals(emptySet(), event.modifiers)
+            assertEquals(emptySet<KeyModifiers>(), event.modifiers)
         }
     }
 
@@ -3263,7 +3261,7 @@ text/plain;charset=utf-8
             val window = initialWindowData.window
             val windowSize = initialWindowData.configure.size
             val scale = initialWindowData.scale.newScale
-            val windowPosition = assertNotNull(initialWindowData.operations.clientAreaPosition())
+            val windowPosition = checkNotNull(initialWindowData.operations.clientAreaPosition())
             val maxValue = floor(Application.MAX_PIXEL_VALUE.toDouble() / 2 / scale.rawValue).roundToInt()
             ui { window.textInputEnable(textInputContext) }
 
@@ -3555,7 +3553,7 @@ text/plain;charset=utf-8
                     assertNotNull(preeditStringData)
                     assertEquals("", preeditStringData.text)
                     assertEquals(0, preeditStringData.cursorBytePos)
-                    assertContentEquals(emptyArray(), preeditStringData.attributes.toTypedArray())
+                    assertArrayEquals(emptyArray(), preeditStringData.attributes.toTypedArray())
                     assertNull(event.commitStringData)
                     assertNull(event.deleteSurroundingTextData)
                 }
@@ -3608,7 +3606,7 @@ text/plain;charset=utf-8
             }
             withNextEvent { event ->
                 assertInstanceOf<Event.ModifiersChanged>(event)
-                assertEquals(emptySet(), event.modifiers)
+                assertEquals(emptySet<KeyModifiers>(), event.modifiers)
             }
 
             // Control characters should still be reported as just KeyDown events.
@@ -3619,7 +3617,7 @@ text/plain;charset=utf-8
                     assertEquals(windowParams.windowId, event.windowId)
                     assertEquals(KeyCode.Return, event.keyCode.value)
                     assertEquals(KeySym.Return, event.key.value)
-                    assertContentEquals("\r".toByteArray(), event.characters?.toByteArray())
+                    assertArrayEquals("\r".toByteArray(), event.characters?.toByteArray())
                 }
             }
             withNextEvent { event ->
@@ -3635,7 +3633,7 @@ text/plain;charset=utf-8
                     assertEquals(windowParams.windowId, event.windowId)
                     assertEquals(KeyCode.Escape, event.keyCode.value)
                     assertEquals(KeySym.Escape, event.key.value)
-                    assertContentEquals("\u001b".toByteArray(), event.characters?.toByteArray())
+                    assertArrayEquals("\u001b".toByteArray(), event.characters?.toByteArray())
                 }
             }
             withNextEvent { event ->
@@ -3651,7 +3649,7 @@ text/plain;charset=utf-8
                     assertEquals(windowParams.windowId, event.windowId)
                     assertEquals(KeyCode.BackSpace, event.keyCode.value)
                     assertEquals(KeySym.BackSpace, event.key.value)
-                    assertContentEquals("\b".toByteArray(), event.characters?.toByteArray())
+                    assertArrayEquals("\b".toByteArray(), event.characters?.toByteArray())
                 }
             }
             withNextEvent { event ->
@@ -3667,7 +3665,7 @@ text/plain;charset=utf-8
                     assertEquals(windowParams.windowId, event.windowId)
                     assertEquals(KeyCode.Tab, event.keyCode.value)
                     assertEquals(KeySym.Tab, event.key.value)
-                    assertContentEquals("\t".toByteArray(), event.characters?.toByteArray())
+                    assertArrayEquals("\t".toByteArray(), event.characters?.toByteArray())
                 }
             }
             withNextEvent { event ->
@@ -3816,7 +3814,7 @@ text/plain;charset=utf-8
             }
             withNextEvent { event ->
                 assertInstanceOf<Event.ModifiersChanged>(event)
-                assertEquals(emptySet(), event.modifiers)
+                assertEquals(emptySet<KeyModifiers>(), event.modifiers)
             }
 
             wm.withKeyPress(KeyCode.Alt_L) {
@@ -3928,7 +3926,7 @@ text/plain;charset=utf-8
                         assertNotNull(preeditStringData)
                         assertEquals("second", preeditStringData.text)
                         assertEquals(0, preeditStringData.cursorBytePos)
-                        assertContentEquals(emptyArray(), preeditStringData.attributes.toTypedArray())
+                        assertArrayEquals(emptyArray(), preeditStringData.attributes.toTypedArray())
                     }
                 }
                 withNextEvent { event ->
@@ -4028,7 +4026,7 @@ text/plain;charset=utf-8
                         assertNotNull(preeditStringData)
                         assertEquals("", preeditStringData.text)
                         assertEquals(0, preeditStringData.cursorBytePos)
-                        assertContentEquals(arrayOf(), preeditStringData.attributes.toTypedArray())
+                        assertArrayEquals(arrayOf(), preeditStringData.attributes.toTypedArray())
                         assertNull(event.commitStringData)
                         assertNull(event.deleteSurroundingTextData)
                     }
@@ -4055,7 +4053,7 @@ text/plain;charset=utf-8
             }
             withNextEvent { event ->
                 assertInstanceOf<Event.ModifiersChanged>(event)
-                assertEquals(emptySet(), event.modifiers)
+                assertEquals(emptySet<KeyModifiers>(), event.modifiers)
             }
 
             // After `textInputDisable`, KeyDown events should be reported for character keys.
@@ -4264,7 +4262,7 @@ text/plain;charset=utf-8
                 val content = event.content
                 assertNotNull(content)
                 assertEquals(TEXT_UTF8_MIME_TYPE, content.mimeType)
-                assertContentEquals("Text from TestAppDragSource".encodeToByteArray(), content.data)
+                assertArrayEquals("Text from TestAppDragSource".encodeToByteArray(), content.data)
                 true
             }
 
@@ -4471,7 +4469,7 @@ text/plain;charset=utf-8
             val content = event.content
             assertNotNull(content)
             assertEquals(TEXT_UTF8_MIME_TYPE, content.mimeType)
-            assertContentEquals(textContent, content.data)
+            assertArrayEquals(textContent, content.data)
             mousePos.assertEquals(event.locationInWindow, "Drop performed")
             true
         }
@@ -4576,8 +4574,7 @@ text/plain;charset=utf-8
             val notification1Id = withNextEvent { event ->
                 assertInstanceOf<Event.NotificationShown>(event)
                 assertEquals(notification1RequestId, event.requestId)
-                assertNotNull(event.notificationId)
-                event.notificationId
+                checkNotNull(event.notificationId)
             }
             runCommand(listOf("dunstctl", "action"))
 
@@ -4603,8 +4600,7 @@ text/plain;charset=utf-8
             val notification2Id = withNextEvent { event ->
                 assertInstanceOf<Event.NotificationShown>(event)
                 assertEquals(notification2RequestId, event.requestId)
-                assertNotNull(event.notificationId)
-                event.notificationId
+                checkNotNull(event.notificationId)
             }
             runCommand(listOf("dunstctl", "action"))
 
@@ -4637,7 +4633,7 @@ text/plain;charset=utf-8
     }
 
     private fun checkDunstOutput(dunstOutput: List<String>, showNotificationParams: ShowNotificationParams) {
-        assertNotEquals(emptyList(), dunstOutput)
+        assertNotEquals(emptyList<String>(), dunstOutput)
         val checklist = Checklist(listOf("summary", "body"))
         for (line in dunstOutput) {
             val line = line.trim()
@@ -4649,7 +4645,7 @@ text/plain;charset=utf-8
                 assertEquals("body: '${showNotificationParams.body}'", line)
             }
         }
-        assertEquals(emptySet(), checklist.uncheckedEntries())
+        assertEquals(emptySet<String>(), checklist.uncheckedEntries())
     }
 
     @Test
@@ -4668,8 +4664,7 @@ text/plain;charset=utf-8
             val notification1Id = withNextEvent { event ->
                 assertInstanceOf<Event.NotificationShown>(event)
                 assertEquals(notification1RequestId, event.requestId)
-                assertNotNull(event.notificationId)
-                event.notificationId
+                checkNotNull(event.notificationId)
             }
 
             runCommand(listOf("dunstctl", "action"))
@@ -4700,8 +4695,7 @@ text/plain;charset=utf-8
             val notification1Id = withNextEvent { event ->
                 assertInstanceOf<Event.NotificationShown>(event)
                 assertEquals(notification1RequestId, event.requestId)
-                assertNotNull(event.notificationId)
-                event.notificationId
+                checkNotNull(event.notificationId)
             }
 
             runCommand(listOf("dunstctl", "close"))
@@ -4832,7 +4826,7 @@ text/plain;charset=utf-8
 
         assertEquals(initialWindowData.draw.size.width.rawPhysical, image.width)
         assertEquals(initialWindowData.draw.size.height.rawPhysical, image.height)
-        val pixmap = assertNotNull(image.peekPixels())
+        val pixmap = checkNotNull(image.peekPixels())
 
         val bottomRightRectColor = pixmap.getColor(
             (rectSize.width - LogicalPixelsInt(1)).toRawPhysical(scale).roundToInt(),
@@ -4860,7 +4854,7 @@ text/plain;charset=utf-8
         run(defaultApplicationConfig())
         val url = "https://localhost"
         ui { app.openURL(url, null) }
-        val homeDir = assertNotNull(System.getenv("HOME"))
+        val homeDir = checkNotNull(System.getenv("HOME"))
         val logPath = Path.of(homeDir, "test_app_browser.log")
         waitUntilTrue("Log created") { logPath.exists() }
         waitUntil("Log startup_id", getter = { logPath.readText() }) {
@@ -4871,7 +4865,7 @@ text/plain;charset=utf-8
     @Test
     fun testOpenFileManager() {
         run(defaultApplicationConfig())
-        val homeDir = assertNotNull(System.getenv("HOME"))
+        val homeDir = checkNotNull(System.getenv("HOME"))
         val logPath = Path.of(homeDir, "test_app_file_manager.log")
 
         val dir = Path.of(

@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.win32.tests
 
+import org.assertj.core.api.Assertions.assertThat
 import org.jetbrains.desktop.win32.FontSmoothing
 import org.jetbrains.desktop.win32.FontSmoothingOrientation
 import org.jetbrains.desktop.win32.FontSmoothingType
@@ -21,6 +22,6 @@ class FontSettingsTests {
         FontSmoothingType.getCurrent()
         FontSmoothingOrientation.getCurrent()
         val contrast = getFontSmoothingContrast()
-        assert(contrast in 1000..2200) { "Font smoothing contrast out of expected range [1000, 2200]: $contrast" }
+        assertThat(contrast).isBetween(1000, 2200)
     }
 }

@@ -2,12 +2,12 @@ package org.jetbrains.desktop.macos.tests
 
 import org.jetbrains.desktop.macos.DisplayLink
 import org.jetbrains.desktop.macos.Screen
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import java.util.concurrent.TimeUnit
-import kotlin.test.assertTrue
 
 @EnabledOnOs(OS.MAC)
 class DisplayLinkTest : KDTApplicationTestBase() {

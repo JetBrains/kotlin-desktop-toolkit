@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.win32.tests
 
+import org.assertj.core.api.Assertions.assertThat
 import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.Clipboard
 import org.jetbrains.desktop.win32.ClipboardResult
@@ -11,12 +12,17 @@ import org.jetbrains.desktop.win32.DataTransferStatus
 import org.jetbrains.desktop.win32.EventHandlerResult
 import org.jetbrains.desktop.win32.KotlinDesktopToolkit
 import org.jetbrains.desktop.win32.WindowParams
+import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.assertInstanceOf
+import org.junit.jupiter.api.assertNull
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import java.lang.foreign.Arena
@@ -31,12 +37,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertContentEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
-import kotlin.test.assertNull
 
 @EnabledOnOs(OS.WINDOWS)
 class ClipboardTests {
@@ -74,9 +74,7 @@ class ClipboardTests {
             assertEquals(expectedHtml, it.readHtmlFragment())
             assertEquals(expectedFiles, it.readListOfFiles())
             val formats = it.listItemFormats()
-            assertContains(formats, DataFormat.Text)
-            assertContains(formats, DataFormat.Html)
-            assertContains(formats, DataFormat.FileList)
+            assertThat(formats).containsAll(listOf(DataFormat.Text, DataFormat.Html, DataFormat.FileList))
             assertTrue(it.isFormatAvailable(DataFormat.Text))
             assertTrue(it.isFormatAvailable(DataFormat.Html))
             assertTrue(it.isFormatAvailable(DataFormat.FileList))
@@ -89,7 +87,7 @@ class ClipboardTests {
         val format = DataFormat.register("KDT_TEST_BYTES_${System.nanoTime()}")
         val expected = byteArrayOf(4, 5, 6, 7)
         publish { addItemOfType(format, expected) }
-        readClipboard { assertContentEquals(expected, it.readItemOfType(format)) }
+        readClipboard { assertArrayEquals(expected, it.readItemOfType(format)) }
     }
 
     @Test
@@ -106,7 +104,7 @@ class ClipboardTests {
         publish { addTextItem("available text") }
         readClipboard {
             assertNull(it.tryReadItemOfType(unavailable))
-            val exception = assertFailsWith<DataTransferException> { it.readItemOfType(unavailable) }
+            val exception = assertThrows<DataTransferException> { it.readItemOfType(unavailable) }
             assertEquals(DataTransferStatus.FormatUnavailable, exception.status)
         }
     }
@@ -177,7 +175,7 @@ class ClipboardTests {
     @Timeout(20)
     fun `data object builder rejects empty payload`() = runClipboardTest {
         val format = DataFormat.register("KDT_TEST_EMPTY_${System.nanoTime()}")
-        assertFailsWith<IllegalArgumentException> {
+        assertThrows<IllegalArgumentException> {
             DataObject.build { addItemOfType(format, byteArrayOf()) }
         }
     }
@@ -187,7 +185,7 @@ class ClipboardTests {
     fun `get reports Busy while the clipboard is held`() = runClipboardTest {
         HeldClipboard.open().use {
             val result = Clipboard.get()
-            assertIs<ClipboardResult.Failure>(result)
+            assertInstanceOf<ClipboardResult.Failure>(result)
             assertEquals(DataTransferStatus.Busy, result.status)
         }
     }
@@ -198,7 +196,7 @@ class ClipboardTests {
         DataObject.build { addTextItem("blocked write") }.use { data ->
             HeldClipboard.open().use {
                 val result = Clipboard.set(data)
-                assertIs<ClipboardResult.Failure>(result)
+                assertInstanceOf<ClipboardResult.Failure>(result)
                 assertEquals(DataTransferStatus.Busy, result.status)
             }
         }

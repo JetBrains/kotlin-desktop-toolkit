@@ -10,15 +10,15 @@ import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyDown
 import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyUp
 import org.jetbrains.desktop.macos.tests.KeyboardHelpers.withModifiersPressed
 import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Disabled
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import java.util.concurrent.TimeUnit
 import kotlin.collections.emptySet
-import kotlin.test.Ignore
-import kotlin.test.Test
-import kotlin.test.assertEquals
 
 @EnabledOnOs(OS.MAC)
 class KeyboardTest : KDTApplicationTestBase() {
@@ -548,7 +548,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         }
     }
 
-    @Ignore("By some weird reason when robot presses F-key it leads to stuck of Function modifier")
+    @Disabled("By some weird reason when robot presses F-key it leads to stuck of Function modifier")
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun `all keys ansi keyboard`() {

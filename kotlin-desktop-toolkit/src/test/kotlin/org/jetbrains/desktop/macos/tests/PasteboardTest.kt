@@ -1,16 +1,17 @@
 package org.jetbrains.desktop.macos.tests
 
+import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.jetbrains.desktop.macos.Pasteboard
 import org.jetbrains.desktop.macos.Pasteboard.Element
 import org.jetbrains.desktop.macos.PasteboardType
+import org.junit.jupiter.api.Assertions.assertArrayEquals
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertNull
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import kotlin.io.path.createTempFile
-import kotlin.test.Test
-import kotlin.test.assertContentEquals
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 @EnabledOnOs(OS.MAC)
 class PasteboardTest : KDTApplicationTestBase() {
@@ -24,7 +25,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         val counter = ui {
             Pasteboard.clear()
         }
-        assert(counter > 0L)
+        assertThat(counter).isGreaterThan(0)
         val success = ui {
             Pasteboard.writeObjects(
                 Pasteboard.Item.ofString(
@@ -52,7 +53,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         val counter = ui {
             Pasteboard.clear()
         }
-        assert(counter > 0L)
+        assertThat(counter).isGreaterThan(0)
         val success = ui {
             Pasteboard.writeObjects(
                 Pasteboard.Item(
@@ -83,7 +84,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         val counter = ui {
             Pasteboard.clear()
         }
-        assert(counter > 0L)
+        assertThat(counter).isGreaterThan(0)
         val success = ui {
             Pasteboard.writeObjects(
                 Pasteboard.Item.ofString(
@@ -108,7 +109,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         val counter = ui {
             Pasteboard.clear()
         }
-        assert(counter > 0L)
+        assertThat(counter).isGreaterThan(0)
         val file1 = createTempFile(suffix = "File1.txt")
         val file2 = createTempFile(suffix = "File2.txt")
         val content1 = "Hello1"
@@ -137,7 +138,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         val counter = ui {
             Pasteboard.clear()
         }
-        assert(counter > 0L)
+        assertThat(counter).isGreaterThan(0)
         val file = createTempFile(suffix = "File name with spaces.txt")
         val success = ui {
             Pasteboard.writeObjects(
@@ -157,7 +158,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         val counter = ui {
             Pasteboard.clear()
         }
-        assert(counter > 0L)
+        assertThat(counter).isGreaterThan(0)
         val success = ui {
             Pasteboard.writeObjects(
                 Pasteboard.Item(Element.ofString(Pasteboard.URL_TYPE, url)),
@@ -175,7 +176,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         val counter = ui {
             Pasteboard.clear()
         }
-        assert(counter > 0L)
+        assertThat(counter).isGreaterThan(0)
 
         val emojiString = "😃"
         val success = ui {
@@ -195,7 +196,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         val counter = ui {
             Pasteboard.clear()
         }
-        assert(counter > 0L)
+        assertThat(counter).isGreaterThan(0)
 
         val imageBytes = jbIconBytes()
         val success = ui {
@@ -210,7 +211,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         val result = ui {
             Pasteboard.readItemsOfType(type = Pasteboard.PNG_IMAGE_TYPE).single()
         }
-        assertContentEquals(imageBytes, result)
+        assertArrayEquals(imageBytes, result)
     }
 
     @Test

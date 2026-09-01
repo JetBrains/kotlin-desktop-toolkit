@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.macos.tests
 
+import org.assertj.core.api.Assertions.assertThat
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.KeyCode
@@ -11,16 +12,15 @@ import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyDown
 import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyUp
 import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Disabled
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertNotNull
+import org.junit.jupiter.api.assertNull
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
-import kotlin.test.Ignore
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 
 @EnabledOnOs(OS.MAC)
 class RobotTest : KDTApplicationTestBase() {
@@ -132,7 +132,8 @@ class RobotTest : KDTApplicationTestBase() {
     @Test
     fun `input source test`() {
         val inputSource = ui { TextInputSource.current() }
-        assert(inputSource?.startsWith("com.apple.keylayout") == true) {
+        checkNotNull(inputSource)
+        assertTrue(inputSource.startsWith("com.apple.keylayout")) {
             "$inputSource should start with 'com.apple.keylayout'"
         }
     }
@@ -141,8 +142,8 @@ class RobotTest : KDTApplicationTestBase() {
     fun `list input sources test`() {
         val inputSources = ui { TextInputSource.list() }
         Logger.info { "Input sources: $inputSources" }
-        assert(inputSources.isNotEmpty()) { "Input sources list should not be empty" }
-        assert(inputSources.any { it.startsWith("com.apple.keylayout.") }) {
+        assertTrue(inputSources.isNotEmpty()) { "Input sources list should not be empty" }
+        assertTrue(inputSources.any { it.startsWith("com.apple.keylayout.") }) {
             "Should contain at least one keyboard layout"
         }
     }
@@ -164,7 +165,7 @@ class RobotTest : KDTApplicationTestBase() {
             "com.apple.inputmethod.Korean.2SetKorean",
         )
         val inputSources = ui { TextInputSource.list(includeAll = true) }
-        layouts.forEach { assertContains(inputSources, it) }
+        assertThat(inputSources).containsAll(layouts)
     }
 
     @Test
@@ -188,7 +189,7 @@ class RobotTest : KDTApplicationTestBase() {
             try {
                 ui { sources.select(inputSourceName) }
                 val inputSources = ui { TextInputSource.list(includeAll = false) }
-                assertContains(inputSources, inputSourceName)
+                assertThat(inputSources).contains(inputSourceName)
             } finally {
                 ui { sources.close() }
             }
@@ -222,8 +223,8 @@ class RobotTest : KDTApplicationTestBase() {
     fun `current input source is in the list of input sources`() {
         val currentLayout = ui { TextInputSource.current() }
         val inputSources = ui { TextInputSource.list() }
-        assert(currentLayout != null) { "Current keyboard layout should not be null" }
-        assertContains(inputSources, currentLayout, "Current keyboard layout should be in the list of input sources")
+        checkNotNull(currentLayout) { "Current keyboard layout should not be null" }
+        assertThat(inputSources).contains(currentLayout)
     }
 
     @Test
@@ -236,14 +237,14 @@ class RobotTest : KDTApplicationTestBase() {
 
         if (anotherLayout != null) {
             val switched = ui { TextInputSource.select(anotherLayout) }
-            assert(switched) { "Failed to switch to $anotherLayout" }
+            assertTrue(switched) { "Failed to switch to $anotherLayout" }
 
             val currentAfterSwitch = ui { TextInputSource.current() }
             assertEquals(anotherLayout, currentAfterSwitch)
 
             // Restore original layout
             val restored = ui { TextInputSource.select(originalLayout) }
-            assert(restored) { "Failed to restore to $originalLayout" }
+            assertTrue(restored) { "Failed to restore to $originalLayout" }
 
             val currentAfterRestore = ui { TextInputSource.current() }
             assertEquals(originalLayout, currentAfterRestore)
@@ -258,7 +259,7 @@ class RobotTest : KDTApplicationTestBase() {
             "com.apple.keylayout.ABC",
         )
         selectCapableLayouts.forEach { layout ->
-            assert(ui { TextInputSource.isSelectCapable(layout) }) {
+            assertTrue(ui { TextInputSource.isSelectCapable(layout) }) {
                 "$layout should be select capable"
             }
         }
@@ -270,7 +271,7 @@ class RobotTest : KDTApplicationTestBase() {
             "com.apple.keylayout.ABC",
         )
         enableCapableLayouts.forEach { layout ->
-            assert(ui { TextInputSource.isEnableCapable(layout) }) {
+            assertTrue(ui { TextInputSource.isEnableCapable(layout) }) {
                 "$layout should be enable capable"
             }
         }
@@ -287,12 +288,12 @@ class RobotTest : KDTApplicationTestBase() {
             "com.apple.keylayout.Serbian",
         )
         asciiCapableLayouts.forEach { layout ->
-            assert(ui { TextInputSource.isAsciiCapable(layout) }) {
+            assertTrue(ui { TextInputSource.isAsciiCapable(layout) }) {
                 "$layout should be ASCII capable"
             }
         }
         nonAsciiCapableLayouts.forEach { layout ->
-            assert(!ui { TextInputSource.isAsciiCapable(layout) }) {
+            assertTrue(!ui { TextInputSource.isAsciiCapable(layout) }) {
                 "$layout should NOT be ASCII capable"
             }
         }
@@ -307,7 +308,7 @@ class RobotTest : KDTApplicationTestBase() {
         assertNull(noParent, "Keyboard layout should not have a parent")
     }
 
-    @Ignore("Only for debugging")
+    @Disabled("Only for debugging")
     @Test
     fun `dump all input source properties`() {
         val allSources = ui { TextInputSource.list(includeAll = true) }

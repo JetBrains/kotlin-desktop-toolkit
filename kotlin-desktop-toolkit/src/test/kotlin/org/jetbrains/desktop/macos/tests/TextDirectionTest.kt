@@ -3,10 +3,10 @@ package org.jetbrains.desktop.macos.tests
 import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.TextDirection
 import org.jetbrains.desktop.macos.Window
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
-import kotlin.test.Test
-import kotlin.test.assertEquals
 
 @EnabledOnOs(OS.MAC)
 class TextDirectionTest : KDTApplicationTestBase() {
