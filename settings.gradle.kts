@@ -1,6 +1,6 @@
 pluginManagement {
     plugins {
-        kotlin("jvm") version "2.3.21"
+        kotlin("jvm") version "2.4.0"
     }
 }
 /*
@@ -14,7 +14,7 @@ plugins {
     // Apply the foojay-resolver plugin to allow automatic download of JDKs
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
     id("org.jlleitschuh.gradle.ktlint") version "14.2.0" apply false
-    id("org.jetbrains.kotlin.jvm") version "2.3.21" apply false
+    id("org.jetbrains.kotlin.jvm") version "2.4.0" apply false
 }
 
 rootProject.name = "kotlin-desktop-toolkit"
