@@ -35,7 +35,7 @@ use desktop_linux::linux::{
     desktop_settings_api::FfiDesktopSetting,
     events::{
         DataTransferContent, Event, KeyDownEvent, KeyModifiers, RequestId, SoftwareDrawData, TextInputEvent, WindowDecorationMode,
-        WindowFrame, WindowFrameSide, WindowId,
+        WindowFrame, WindowFramePadding, WindowFrameResizerThickness, WindowId,
     },
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPixelsInt, LogicalRect, LogicalSize, PhysicalSize, Scale},
@@ -303,25 +303,17 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> O
         (KEY_MODIFIER_CTRL_SHIFT, keycode::KeyMappingCode::KeyG) => Some(Action::WindowSetClientFrame {
             window_id,
             frame: WindowFrame {
-                left: WindowFrameSide {
-                    padding: LogicalPixelsInt::new(5),
-                    resizer_thickness: LogicalPixelsInt::new(5),
-                    tiled: false,
+                padding: WindowFramePadding {
+                    left: LogicalPixelsInt::new(5),
+                    right: LogicalPixelsInt::new(40),
+                    top: LogicalPixelsInt::new(20),
+                    bottom: LogicalPixelsInt::new(50),
                 },
-                right: WindowFrameSide {
-                    padding: LogicalPixelsInt::new(40),
-                    resizer_thickness: LogicalPixelsInt::new(20),
-                    tiled: false,
-                },
-                top: WindowFrameSide {
-                    padding: LogicalPixelsInt::new(20),
-                    resizer_thickness: LogicalPixelsInt::new(10),
-                    tiled: false,
-                },
-                bottom: WindowFrameSide {
-                    padding: LogicalPixelsInt::new(50),
-                    resizer_thickness: LogicalPixelsInt::new(25),
-                    tiled: false,
+                resizer_thickness: WindowFrameResizerThickness {
+                    left: LogicalPixelsInt::new(5),
+                    right: LogicalPixelsInt::new(20),
+                    top: LogicalPixelsInt::new(10),
+                    bottom: LogicalPixelsInt::new(25),
                 },
             },
         }),
@@ -449,25 +441,17 @@ fn on_application_started(state: &mut State) -> Vec<Action> {
             prefer_client_side_decoration: true,
             rendering_mode: RenderingMode::Software,
             client_side_decoration_frame: WindowFrame {
-                left: WindowFrameSide {
-                    padding: LogicalPixelsInt::new(12),
-                    resizer_thickness: LogicalPixelsInt::new(12),
-                    tiled: false,
+                padding: WindowFramePadding {
+                    left: LogicalPixelsInt::new(12),
+                    right: LogicalPixelsInt::new(20),
+                    top: LogicalPixelsInt::new(15),
+                    bottom: LogicalPixelsInt::new(25),
                 },
-                right: WindowFrameSide {
-                    padding: LogicalPixelsInt::new(20),
-                    resizer_thickness: LogicalPixelsInt::new(12),
-                    tiled: false,
-                },
-                top: WindowFrameSide {
-                    padding: LogicalPixelsInt::new(15),
-                    resizer_thickness: LogicalPixelsInt::new(12),
-                    tiled: false,
-                },
-                bottom: WindowFrameSide {
-                    padding: LogicalPixelsInt::new(25),
-                    resizer_thickness: LogicalPixelsInt::new(12),
-                    tiled: false,
+                resizer_thickness: WindowFrameResizerThickness {
+                    left: LogicalPixelsInt::new(12),
+                    right: LogicalPixelsInt::new(12),
+                    top: LogicalPixelsInt::new(12),
+                    bottom: LogicalPixelsInt::new(12),
                 },
             },
         },
@@ -553,7 +537,7 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
                     window_state.maximized = data.maximized;
                     window_state.fullscreen = data.fullscreen;
                     window_state.frame = match &data.decoration_mode {
-                        WindowDecorationMode::Client(frame) => frame.clone(),
+                        WindowDecorationMode::Client { frame, .. } => frame.clone(),
                         WindowDecorationMode::Server => WindowFrame::default(),
                     };
                     window_state.redraw = true;
@@ -593,8 +577,8 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
             Event::MouseDown(data) => match data.button.0 {
                 MOUSE_BUTTON_LEFT => {
                     if let Some(window_state) = state.windows.get_mut(&data.window_id) {
-                        if data.location_in_window.x < window_state.frame.left.padding {
-                        } else if data.location_in_window.x < DRAG_AND_DROP_LEFT_OF + window_state.frame.left.padding {
+                        if data.location_in_window.x < window_state.frame.padding.left {
+                        } else if data.location_in_window.x < DRAG_AND_DROP_LEFT_OF + window_state.frame.padding.left {
                             let mime_types = if state.key_modifiers == KeyModifiers::Shift {
                                 ALL_MIMES
                             } else {
@@ -781,7 +765,7 @@ extern "C" fn query_drag_and_drop_target(data: &DragAndDropQueryData) -> FfiDrag
             window_state.drag_and_drop_target = true;
             window_state.redraw = true;
         }
-        (window_state.frame.left.padding, window_state.frame.top.padding)
+        (window_state.frame.padding.left, window_state.frame.padding.top)
     });
     if data.location_in_window.x > padding_left
         && data.location_in_window.y > padding_top

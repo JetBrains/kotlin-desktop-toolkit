@@ -101,7 +101,12 @@ public data class DragAndDropQueryResponse(public val supportedActionsPerMime: L
 
 public sealed class WindowDecorationMode {
     /** The window should draw client side decorations. */
-    public data class Client(val frame: WindowFrame) : WindowDecorationMode()
+    public data class Client(
+        val frame: WindowFrame,
+        val tiled: WindowFrameTiling,
+    ) : WindowDecorationMode() {
+        internal companion object;
+    }
 
     /** The server will draw window decorations. */
     public object Server : WindowDecorationMode() {
@@ -138,53 +143,48 @@ public data class ScrollData internal constructor(
     internal companion object
 }
 
-@ConsistentCopyVisibility
-public data class WindowFrameSide internal constructor(
-    public val padding: LogicalPixelsInt,
-    public val resizerThickness: LogicalPixelsInt,
-    public val tiled: Boolean,
+public data class WindowFrame(
+    val padding: Padding,
+    val resizerThickness: ResizerThickness,
 ) {
-    public constructor(padding: LogicalPixelsInt, resizerThickness: LogicalPixelsInt) : this(padding, resizerThickness, false)
+    public data class Padding(
+        val left: LogicalPixelsInt,
+        val top: LogicalPixelsInt,
+        val right: LogicalPixelsInt,
+        val bottom: LogicalPixelsInt,
+    ) {
+        public companion object {
+            public fun withAll(value: LogicalPixelsInt): Padding {
+                return Padding(left = value, top = value, right = value, bottom = value)
+            }
+        }
+    }
+
+    public data class ResizerThickness(
+        val left: LogicalPixelsInt,
+        val top: LogicalPixelsInt,
+        val right: LogicalPixelsInt,
+        val bottom: LogicalPixelsInt,
+    ) {
+        public companion object {
+            public fun withAll(value: LogicalPixelsInt): ResizerThickness {
+                return ResizerThickness(left = value, top = value, right = value, bottom = value)
+            }
+        }
+    }
 
     internal companion object;
 }
 
-public data class WindowFrame(
-    public val left: WindowFrameSide,
-    public val top: WindowFrameSide,
-    public val right: WindowFrameSide,
-    public val bottom: WindowFrameSide,
+public data class WindowFrameTiling(
+    val left: Boolean,
+    val top: Boolean,
+    val right: Boolean,
+    val bottom: Boolean,
 ) {
     public companion object {
-        public fun all(frameSide: WindowFrameSide): WindowFrame {
-            return WindowFrame(left = frameSide, top = frameSide, right = frameSide, bottom = frameSide)
-        }
-
-        public fun withSameResizerThickness(
-            resizerThickness: LogicalPixelsInt,
-            left: LogicalPixelsInt,
-            top: LogicalPixelsInt,
-            right: LogicalPixelsInt,
-            bottom: LogicalPixelsInt,
-        ): WindowFrame {
-            return WindowFrame(
-                left = WindowFrameSide(
-                    padding = left,
-                    resizerThickness = resizerThickness,
-                ),
-                top = WindowFrameSide(
-                    padding = top,
-                    resizerThickness = resizerThickness,
-                ),
-                right = WindowFrameSide(
-                    padding = right,
-                    resizerThickness = resizerThickness,
-                ),
-                bottom = WindowFrameSide(
-                    padding = bottom,
-                    resizerThickness = resizerThickness,
-                ),
-            )
+        public fun withAll(value: Boolean): WindowFrameTiling {
+            return WindowFrameTiling(left = value, top = value, right = value, bottom = value)
         }
     }
 }

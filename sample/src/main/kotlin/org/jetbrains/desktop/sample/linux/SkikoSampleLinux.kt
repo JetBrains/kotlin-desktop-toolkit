@@ -1021,7 +1021,7 @@ private class WindowContainer(
     val contentArea: ContentArea,
     private var xdgDesktopSettings: XdgDesktopSettings,
 ) {
-    private var frame: WindowFrame? = null
+    private var decoration: WindowDecorationMode.Client? = null
 
     companion object {
         fun create(xdgDesktopSettings: XdgDesktopSettings): WindowContainer {
@@ -1042,17 +1042,17 @@ private class WindowContainer(
         val h = event.size.height
         val decorationMode = event.decorationMode
         if (decorationMode is WindowDecorationMode.Client && !event.fullscreen) {
-            val frame = decorationMode.frame
-            val contentWidth = w - frame.left.padding - frame.right.padding
-            val contentHeight = h - frame.top.padding - frame.bottom.padding
+            val padding = decorationMode.frame.padding
+            val contentWidth = w - padding.left - padding.right
+            val contentHeight = h - padding.top - padding.bottom
             val headerRect = LogicalDoubleRect(
-                x = frame.left.padding.toLogicalPixels(),
-                y = frame.top.padding.toLogicalPixels(),
+                x = padding.left.toLogicalPixels(),
+                y = padding.top.toLogicalPixels(),
                 width = contentWidth.toLogicalPixels(),
                 height = LogicalPixels(55.0),
             )
 
-            this.frame = frame
+            this.decoration = decorationMode
 
             val titlebar = customTitlebar ?: SkikoCustomTitlebarLinux(
                 headerRect = headerRect,
@@ -1072,7 +1072,7 @@ private class WindowContainer(
                     contentHeight.toLogicalPixels() - headerRect.height,
                 )
         } else {
-            frame = null
+            decoration = null
             customTitlebar = null
             customBorders = null
             contentArea.contentRect = LogicalDoubleRect(LogicalPixels.Zero, LogicalPixels.Zero, w.toLogicalPixels(), h.toLogicalPixels())
@@ -1170,23 +1170,25 @@ private class WindowContainer(
             )
         }
 
-        frame?.let { frame ->
+        decoration?.let { decoration ->
             val size = windowState.size!!
+            val padding = decoration.frame.padding
+            val tiled = decoration.tiled
 
             val rect = Rect.makeLTRB(
-                frame.left.padding.toSkiko(scale),
-                frame.top.padding.toSkiko(scale),
-                (size.width - frame.right.padding).toSkiko(scale),
-                (size.height - frame.bottom.padding).toSkiko(scale),
+                padding.left.toSkiko(scale),
+                padding.top.toSkiko(scale),
+                (size.width - padding.right).toSkiko(scale),
+                (size.height - padding.bottom).toSkiko(scale),
             )
 
             canvas.save()
 
             val clipRect = Rect.makeLTRB(
-                l = if (frame.left.tiled) 0f else rect.left,
-                t = if (frame.top.tiled) 0f else rect.top,
-                r = if (frame.right.tiled) size.width.toSkiko(scale) else rect.right,
-                b = if (frame.bottom.tiled) size.height.toSkiko(scale) else rect.bottom,
+                l = if (tiled.left) 0f else rect.left,
+                t = if (tiled.top) 0f else rect.top,
+                r = if (tiled.right) size.width.toSkiko(scale) else rect.right,
+                b = if (tiled.bottom) size.height.toSkiko(scale) else rect.bottom,
             )
             canvas.clipRect(clipRect, org.jetbrains.skia.ClipMode.DIFFERENCE)
 
@@ -1255,19 +1257,19 @@ private class WindowContainer(
                 paint.color = Color.RED
                 val tiledBorderWidth = LogicalPixelsInt(1).toSkiko(scale)
 
-                if (frame.left.tiled) {
+                if (tiled.left) {
                     canvas.drawRect(Rect.makeLTRB(l = rect.left - tiledBorderWidth, t = rect.top, r = rect.left, b = rect.bottom), paint)
                 }
 
-                if (frame.right.tiled) {
+                if (tiled.right) {
                     canvas.drawRect(Rect.makeLTRB(l = rect.right - tiledBorderWidth, t = rect.top, r = rect.right, b = rect.bottom), paint)
                 }
 
-                if (frame.top.tiled) {
+                if (tiled.top) {
                     canvas.drawRect(Rect.makeLTRB(l = rect.left, t = rect.top - tiledBorderWidth, r = rect.right, b = rect.top), paint)
                 }
 
-                if (frame.bottom.tiled) {
+                if (tiled.bottom) {
                     canvas.drawRect(
                         Rect.makeLTRB(l = rect.left, t = rect.bottom - tiledBorderWidth, r = rect.right, b = rect.bottom),
                         paint,
@@ -1488,12 +1490,14 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
             appId = "org.jetbrains.desktop.linux.skikoSample1",
             preferClientSideDecoration = useCustomTitlebar,
             renderingMode = renderingMode,
-            clientSideDecorationFrame = WindowFrame.withSameResizerThickness(
-                resizerThickness = LogicalPixelsInt(12),
-                left = LogicalPixelsInt(61),
-                top = LogicalPixelsInt(55),
-                right = LogicalPixelsInt(61),
-                bottom = LogicalPixelsInt(67),
+            clientSideDecorationFrame = WindowFrame(
+                padding = WindowFrame.Padding(
+                    left = LogicalPixelsInt(61),
+                    top = LogicalPixelsInt(55),
+                    right = LogicalPixelsInt(61),
+                    bottom = LogicalPixelsInt(67),
+                ),
+                resizerThickness = WindowFrame.ResizerThickness.withAll(LogicalPixelsInt(12)),
             ),
         )
 

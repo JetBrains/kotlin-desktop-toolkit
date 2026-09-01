@@ -78,7 +78,7 @@ pub struct KeyCode(pub u32);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WindowDecorationMode {
     /// The window should draw client side decorations.
-    Client(WindowFrame),
+    Client { frame: WindowFrame, tiling: WindowFrameTiling },
 
     /// The server will draw window decorations.
     Server,
@@ -463,19 +463,36 @@ impl From<WindowClosedEvent> for Event<'_> {
 
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct WindowFrameSide {
-    pub padding: LogicalPixelsInt,
-    pub resizer_thickness: LogicalPixelsInt,
-    pub tiled: bool,
+pub struct WindowFramePadding {
+    pub left: LogicalPixelsInt,
+    pub top: LogicalPixelsInt,
+    pub right: LogicalPixelsInt,
+    pub bottom: LogicalPixelsInt,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct WindowFrameResizerThickness {
+    pub left: LogicalPixelsInt,
+    pub top: LogicalPixelsInt,
+    pub right: LogicalPixelsInt,
+    pub bottom: LogicalPixelsInt,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct WindowFrameTiling {
+    pub left: bool,
+    pub top: bool,
+    pub right: bool,
+    pub bottom: bool,
 }
 
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct WindowFrame {
-    pub left: WindowFrameSide,
-    pub top: WindowFrameSide,
-    pub right: WindowFrameSide,
-    pub bottom: WindowFrameSide,
+    pub padding: WindowFramePadding,
+    pub resizer_thickness: WindowFrameResizerThickness,
 }
 
 #[repr(C)]
