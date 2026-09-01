@@ -130,9 +130,13 @@ internal fun fail(message: String, throwable: Throwable? = null): Nothing {
     org.junit.jupiter.api.fail(message, throwable)
 }
 
+private fun getTempDir(): Path {
+    return Path.of(checkNotNull(System.getenv("XDG_RUNTIME_DIR")))
+}
+
 private fun runCommandImpl(command: List<String>, timeout: Duration = 5.seconds): Result<Path> {
     log("runCommand: $command")
-    val outputFile = Files.createTempFile("${command.first()}-output", ".log")
+    val outputFile = Files.createTempFile(getTempDir(), "${command.first()}-output", ".log")
     val proc = ProcessBuilder(command).redirectOutput(ProcessBuilder.Redirect.to(outputFile.toFile())).start()
     if (!proc.waitFor(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)) {
         fail(withTimestamp("Timed out waiting for $command to finish"))
@@ -210,7 +214,7 @@ private class TestApp(private val cmd: List<String>) {
     }
 
     fun <T> run(windowTitle: String, block: (TestAppData) -> T): T {
-        val outputFile = Files.createTempFile("linux_test_app_output", "log")
+        val outputFile = Files.createTempFile(getTempDir(), "linux_test_app_output", "log")
         val process = createProcessBuilder()
             .redirectOutput(ProcessBuilder.Redirect.to(outputFile.toFile()))
             .start()
@@ -292,8 +296,9 @@ private fun withDataSourceTestAppImpl(
     block: (TestAppData) -> Unit,
 ) {
     val tempFiles = mutableListOf<Path>()
+    val tempDir = getTempDir()
     val args = data.flatMap { (mimeType, inputStream) ->
-        val tempFile = Files.createTempFile("linux_test_app_clipboard_data", ".bin")
+        val tempFile = Files.createTempFile(tempDir, "linux_test_app_clipboard_data", ".bin")
         tempFile.outputStream().use { outStream ->
             for (e in inputStream) {
                 outStream.write(e)

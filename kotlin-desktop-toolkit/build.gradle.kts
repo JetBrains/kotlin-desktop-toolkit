@@ -523,8 +523,13 @@ abstract class X11TestEnv :
     private val homeTempDir by lazy { Files.createTempDirectory("test_home") }
     private val xdgConfigHome by lazy { homeTempDir.resolve(".config").createDirectories() }
     private val xdgDataHome by lazy { homeTempDir.resolve(".local/share").createDirectories() }
+    private val xdgRuntimeDir by lazy {
+        homeTempDir.resolve("xdg_runtime_dir").createDirectory(
+            PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")),
+        )
+    }
 
-    private val ibusTempDir by lazy { Files.createTempDirectory("test_ibus") }
+    private val ibusTempDir by lazy { Files.createTempDirectory(xdgRuntimeDir, "test_ibus") }
     private val ibusAddressFile by lazy {
         ibusTempDir.resolve("ibus-addr").createFile() // suppress the IBus warning about the non-existing file
     }
@@ -551,9 +556,7 @@ abstract class X11TestEnv :
             "HOME" to homeTempDir.absolutePathString(),
             "XAUTHORITY" to homeTempDir.resolve(".Xauthority").also { it.createFile() }.absolutePathString(),
             "XDG_DATA_HOME" to xdgDataHome.absolutePathString(),
-            "XDG_RUNTIME_DIR" to homeTempDir.resolve("xdg_runtime_dir").createDirectory(
-                PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")),
-            ).absolutePathString(),
+            "XDG_RUNTIME_DIR" to xdgRuntimeDir.absolutePathString(),
             "XDG_SESSION_TYPE" to "x11",
         )
     }
@@ -792,6 +795,14 @@ inode/directory=test_app_file_manager.desktop;
         }
 
         runCommand("xauth", "generate", testDisplay, ".", "trusted")
+
+        runCommand(
+            "gsettings",
+            "set",
+            "org.gnome.system.wsdd",
+            "display-mode",
+            "'disabled'",
+        )
 
         ibusComponentFile.writeText(generateIBusXmlFileContent(ibusTestEngineFile.asFile))
         newProcess(
@@ -1163,6 +1174,11 @@ abstract class WaylandTestEnv :
     private val homeTempDir by lazy { Files.createTempDirectory("test_home") }
     private val xdgConfigHome by lazy { homeTempDir.resolve(".config").createDirectories() }
     private val xdgDataHome by lazy { homeTempDir.resolve(".local/share").createDirectories() }
+    private val xdgRuntimeDir by lazy {
+        homeTempDir.resolve("xdg_runtime_dir").createDirectory(
+            PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")),
+        )
+    }
 
     private val newEnv by lazy {
         mutableMapOf(
@@ -1171,9 +1187,7 @@ abstract class WaylandTestEnv :
             "LANG" to "en_US.UTF-8",
             "HOME" to homeTempDir.absolutePathString(),
             "XDG_DATA_HOME" to xdgDataHome.absolutePathString(),
-            "XDG_RUNTIME_DIR" to homeTempDir.resolve("xdg_runtime_dir").createDirectory(
-                PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")),
-            ).absolutePathString(),
+            "XDG_RUNTIME_DIR" to xdgRuntimeDir.absolutePathString(),
             "XDG_SESSION_TYPE" to "wayland",
 //            "WAYLAND_DEBUG" to "1",
         )
@@ -1275,9 +1289,9 @@ x-scheme-handler/https=test_app_browser.desktop;
 """,
         )
 
-        val testSwayOut = Files.createTempDirectory("test_sway_out")
+        val testSwayOut = Files.createTempDirectory(xdgRuntimeDir, "test_sway_out")
         val testSwayDisplayName = testSwayOut.resolve("display_name")
-        val testSwayConfig = Files.createTempFile("test_sway_config", "")
+        val testSwayConfig = Files.createTempFile(xdgRuntimeDir, "test_sway_config", "")
         testSwayConfig.writeLines(
             swayConfig.asFile.readLines() + listOf(
                 $$"""exec echo -n "$WAYLAND_DISPLAY" > $${testSwayDisplayName}.tmp && mv $${testSwayDisplayName}.tmp $$testSwayDisplayName""",
@@ -1332,6 +1346,18 @@ x-scheme-handler/https=test_app_browser.desktop;
         }
 
         newProcess("busctl", "--user", "monitor", logStdOut = true)
+
+        ProcessBuilder(
+            "gsettings",
+            "set",
+            "org.gnome.system.wsdd",
+            "display-mode",
+            "'disabled'",
+        ).also { pb ->
+            val env = pb.environment()
+            env.clear()
+            env.putAll(newEnv)
+        }.start().waitFor()
 
         newProcess(runVirtualDevicesCmd)
 
