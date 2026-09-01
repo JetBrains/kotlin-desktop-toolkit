@@ -502,9 +502,13 @@ private fun log(message: String) {
     println(withTimestamp(message))
 }
 
+private fun getTempDir(): Path {
+    return Path.of(checkNotNull(System.getenv("XDG_RUNTIME_DIR")))
+}
+
 private fun runCommandImpl(command: List<String>, timeout: Duration = 5.seconds): Result<Path> {
     log("runCommand: $command")
-    val outputFile = Files.createTempFile("${command.first()}-output", ".log")
+    val outputFile = Files.createTempFile(getTempDir(), "${command.first()}-output", ".log")
     val proc = ProcessBuilder(command).redirectOutput(ProcessBuilder.Redirect.to(outputFile.toFile())).start()
     if (!proc.waitFor(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)) {
         fail(withTimestamp("Timed out waiting for $command to finish"))
@@ -576,7 +580,7 @@ private class TestApp(private val cmd: List<String>) {
     }
 
     fun run(windowTitle: String, block: (TestAppData) -> Unit) {
-        val outputFile = Files.createTempFile("linux_test_app_output", "log")
+        val outputFile = Files.createTempFile(getTempDir(), "linux_test_app_output", "log")
         val process = createProcessBuilder()
             .redirectOutput(ProcessBuilder.Redirect.to(outputFile.toFile()))
             .start()
@@ -662,8 +666,9 @@ private fun withDataSourceTestAppImpl(
     block: (TestAppData) -> Unit,
 ) {
     val tempFiles = mutableListOf<Path>()
+    val tempDir = getTempDir()
     val args = data.flatMap { (mimeType, inputStream) ->
-        val tempFile = Files.createTempFile("linux_test_app_clipboard_data", ".bin")
+        val tempFile = Files.createTempFile(tempDir, "linux_test_app_clipboard_data", ".bin")
         tempFile.outputStream().use { outStream ->
             for (e in inputStream) {
                 outStream.write(e)
@@ -2429,7 +2434,7 @@ class WaylandTests : WaylandTestsBase() {
         val window = initialWindowData.window
 
         val screenshots = mutableListOf<Path>()
-        val tempDir = Files.createTempDirectory("test_linux_screenshots")
+        val tempDir = Files.createTempDirectory(getTempDir(), "test_linux_screenshots")
         val clientAreaPos = wm.getWindowState(windowParams.title).clientArea.pos
 
         val screenshotRect =
@@ -2484,8 +2489,8 @@ class WaylandTests : WaylandTestsBase() {
         }
 
         assertTrue(errors.isEmpty(), errors.joinToString("\n"))
-//        screenshots.forEach { it.deleteIfExists() }
-//        tempDir.deleteIfExists()
+        screenshots.forEach { it.deleteIfExists() }
+        tempDir.deleteIfExists()
         testSuccessful = true
     }
 
@@ -5057,7 +5062,7 @@ text/plain;charset=utf-8
         assertNotNull(scale)
         val lastScreenSize = checkNotNull(lastScreenSize)
 
-        val tempDir = Files.createTempDirectory("test_linux_rendering")
+        val tempDir = Files.createTempDirectory(getTempDir(), "test_linux_rendering")
         val screenshotPath = tempDir.resolve("1.png")
 
         ui { window.setFullScreen() }
