@@ -1058,13 +1058,7 @@ abstract class X11TestsBase {
         val otherEvents: List<Event>,
     )
 
-    internal fun createWindowAndWaitForFocus(
-        windowParams: WindowParams,
-        previouslyFocusedWindowId: WindowId? = null,
-        onScale: (
-            (Scale) -> Unit
-        )? = null,
-    ): InitialWindowData {
+    internal fun createWindowAndWaitForFocus(windowParams: WindowParams, previouslyFocusedWindowId: WindowId? = null): InitialWindowData {
         val window = ui { app.createWindow(windowParams) }
         var scale: Event.WindowScaleChanged? = null
         var configure: Event.WindowConfigure? = null
@@ -1141,7 +1135,6 @@ abstract class X11TestsBase {
                     if (windowParams.windowId == event.windowId) {
                         scale = event
                         checklist.checkEntry("scale")
-                        onScale?.invoke(scale.newScale)
                     }
                 }
 
@@ -4779,7 +4772,7 @@ text/plain;charset=utf-8
                     canvas.clear(backgroundColor)
                     SkPaint().use { paint ->
                         paint.color = rectColor
-                        log("Draw window: scale=$scale")
+                        log("Draw window ${event.windowId}: scale=$scale")
                         canvas.drawRect(
                             SkRect.makeXYWH(
                                 0f,
@@ -4797,19 +4790,26 @@ text/plain;charset=utf-8
 
         eventHandler = { event ->
             assertTrue(app.isEventLoopThread())
-            if (event is Event.WindowDraw) {
-                draw(event)
-                EventHandlerResult.Stop
-            } else {
-                EventHandlerResult.Continue
+            when (event) {
+                is Event.WindowScaleChanged -> {
+                    scale = event.newScale
+                    EventHandlerResult.Stop
+                }
+
+                is Event.WindowDraw -> {
+                    draw(event)
+                    EventHandlerResult.Stop
+                }
+
+                else -> {
+                    EventHandlerResult.Continue
+                }
             }
         }
         run(defaultApplicationConfig())
 
         val windowParams = defaultWindowParams()
-        val initialWindowData = createWindowAndWaitForFocus(windowParams, onScale = { drawScale ->
-            scale = drawScale
-        })
+        val initialWindowData = createWindowAndWaitForFocus(windowParams)
 
         assertNotNull(scale)
 

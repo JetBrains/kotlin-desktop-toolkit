@@ -190,20 +190,12 @@ fn report_alloc_size(
 }
 
 fn on_realize(
-    window: &gtk4::ApplicationWindow,
+    toplevel: &gdk4::Toplevel,
     window_id: WindowId,
     event_handler: EventHandler,
     last_window_configure_event: Rc<RefCell<WindowConfigureEvent>>,
 ) {
-    let scale = window.scale_factor();
-    let scale_event = WindowScaleChangedEvent {
-        window_id,
-        new_scale: Scale::new(scale),
-    };
-    send_event(event_handler, scale_event);
-
     update_window_configure(event_handler, &last_window_configure_event, |event| {
-        let toplevel = get_toplevel(window).unwrap();
         let toplevel_state = toplevel.state();
         debug!("window state={:b}", toplevel_state.bits());
 
@@ -211,9 +203,7 @@ fn on_realize(
         true
     });
 
-    let toplevel = get_toplevel(window).unwrap();
-
-    if let Some(monitor) = toplevel.display().monitor_at_surface(&toplevel) {
+    if let Some(monitor) = toplevel.display().monitor_at_surface(toplevel) {
         let new_screen_id = ScreenId::new(&monitor);
         let event = WindowScreenChangeEvent { window_id, new_screen_id };
         send_event(event_handler, event);
@@ -372,7 +362,7 @@ impl SimpleWindow {
 
         set_window_configure_event_handlers(&window, event_handler, last_window_configure_event.clone(), overlay_controls);
 
-        window.connect_scale_factor_notify(move |window| {
+        gl_widget.connect_scale_factor_notify(move |window| {
             let scale = window.scale_factor();
             let event = WindowScaleChangedEvent {
                 window_id,
@@ -384,6 +374,13 @@ impl SimpleWindow {
         {
             let im_context_weak_ref = im_context_weak_ref.clone();
             gl_widget.connect_realize(move |gl_widget| {
+                let scale = gl_widget.scale_factor();
+                let scale_event = WindowScaleChangedEvent {
+                    window_id,
+                    new_scale: Scale::new(scale),
+                };
+                send_event(event_handler, scale_event);
+
                 if let Some(im_context) = im_context_weak_ref.upgrade() {
                     im_context.set_client_widget(Some(gl_widget));
                 }
@@ -396,7 +393,10 @@ impl SimpleWindow {
             }
         });
 
-        window.connect_realize(move |window| on_realize(window, window_id, event_handler, last_window_configure_event.clone()));
+        window.connect_realize(move |window| {
+            let toplevel = get_toplevel(window).unwrap();
+            on_realize(&toplevel, window_id, event_handler, last_window_configure_event.clone());
+        });
 
         window.connect_close_request(move |_window| {
             if window_close_request() {
