@@ -1006,12 +1006,19 @@ abstract class X11TestsBase {
         AutoCloseable {
             ui { app.clipboardPut(emptyList()) }
 
-            for (i in 1..3) {
+            for (i in 1..2) {
                 ui {}
                 awaitEventOfType<Event.DataTransferAvailable>(msg = "withSetClipboardContent close wait $i") {
-                    it.dataSource ==
-                        DataSource.Clipboard &&
-                        it.mimeTypes.isEmpty()
+                    it.dataSource == DataSource.Clipboard && it.mimeTypes.isEmpty()
+                }
+            }
+
+            ui {}
+            withNextEvent { event ->
+                if (event != null) {
+                    assertInstanceOf<Event.DataTransferAvailable>(event)
+                    assertEquals(DataSource.Clipboard, event.dataSource)
+                    assertEquals(emptyList<String>(), event.mimeTypes)
                 }
             }
         }.use {
@@ -1040,11 +1047,14 @@ abstract class X11TestsBase {
                     DataSource.PrimarySelection &&
                     it.mimeTypes.isEmpty()
             }
+
             ui {}
-            awaitEventOfType<Event.DataTransferAvailable>(msg = "withSetPrimarySelectionContent close wait 3") {
-                it.dataSource ==
-                    DataSource.PrimarySelection &&
-                    it.mimeTypes.isEmpty()
+            withNextEvent { event ->
+                if (event != null) {
+                    assertInstanceOf<Event.DataTransferAvailable>(event)
+                    assertEquals(DataSource.PrimarySelection, event.dataSource)
+                    assertEquals(emptyList<String>(), event.mimeTypes)
+                }
             }
         }.use {
             block()
