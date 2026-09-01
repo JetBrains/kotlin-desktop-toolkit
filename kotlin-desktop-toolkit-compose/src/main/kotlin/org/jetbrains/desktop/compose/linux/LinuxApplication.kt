@@ -184,7 +184,7 @@ internal class LinuxApplication(private val params: ComposeApplicationParams) : 
             )
         } catch (throwable: Throwable) {
             eventLoopFailure = throwable
-            Logger.error { "The event loop stopped with an error: $throwable" }
+            Logger.error(throwable) { "The event loop stopped with an error" }
         } finally {
             // Releases a constructor still waiting to be told the application launched, so a loop that
             // never started fails the caller instead of hanging it.
@@ -323,7 +323,7 @@ internal class LinuxApplication(private val params: ComposeApplicationParams) : 
         } catch (throwable: Throwable) {
             // A handler that throws must not take the event loop with it; let the event fall through to the
             // toolkit's own handling instead.
-            Logger.error { "Failed to handle event $event: $throwable" }
+            Logger.error(throwable) { "Failed to handle event $event" }
             EventHandlerResult.Continue
         }
     }

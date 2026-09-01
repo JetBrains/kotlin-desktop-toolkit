@@ -80,7 +80,7 @@ class MetalViewContext(
             } catch (_: InterruptedException) {
                 break
             } catch (e: Throwable) {
-                Logger.error { "Error during rendering: $e" }
+                Logger.error(e) { "Error during rendering" }
             } finally {
                 renderTaskLock.withLock {
                     pendingTask = null

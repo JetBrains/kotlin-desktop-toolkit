@@ -49,12 +49,12 @@ internal class DisplayLinkFramePump<P : AutoCloseable>(
                         frameInFlight.set(null)
                     }
                 } catch (throwable: Throwable) {
-                    Logger.error { "Could not schedule frame presentation: $throwable" }
+                    Logger.error(throwable) { "Could not schedule frame presentation" }
                     picture.close()
                     retry(token)
                 }
             } catch (throwable: Throwable) {
-                Logger.error { "Could not record frame: $throwable" }
+                Logger.error(throwable) { "Could not record frame" }
                 retry(token)
             }
         }

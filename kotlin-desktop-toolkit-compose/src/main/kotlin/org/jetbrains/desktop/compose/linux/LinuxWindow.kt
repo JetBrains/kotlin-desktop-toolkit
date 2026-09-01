@@ -817,7 +817,7 @@ internal class LinuxWindow(
                 pixelsPtr = softwareDrawData.canvas,
                 rowBytes = softwareDrawData.stride,
             ).use { surface ->
-                surface.canvas.clear(SkiaColor.WHITE)
+                surface.canvas.clear(SkiaColor.TRANSPARENT)
                 scene.render(surface.canvas.asComposeCanvas(), now)
                 surface.flushAndSubmit()
             }
@@ -840,7 +840,7 @@ internal class LinuxWindow(
                 colorSpace = ColorSpace.sRGB,
                 surfaceProps = null,
             )!!.use { surface ->
-                surface.canvas.clear(SkiaColor.WHITE)
+                surface.canvas.clear(SkiaColor.TRANSPARENT)
                 scene.render(surface.canvas.asComposeCanvas(), now)
                 surface.flushAndSubmit()
             }

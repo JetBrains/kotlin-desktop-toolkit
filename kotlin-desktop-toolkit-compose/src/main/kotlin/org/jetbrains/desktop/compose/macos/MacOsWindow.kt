@@ -783,7 +783,7 @@ internal class MacOsWindow(
             try {
                 renderWindowlessFrame()
             } catch (throwable: Throwable) {
-                Logger.error { "Could not render a frame without a display link: $throwable" }
+                Logger.error(throwable) { "Could not render a frame without a display link" }
                 requestFrame()
             }
         }
@@ -806,7 +806,7 @@ internal class MacOsWindow(
         if (isDisposed) return null
         val size = viewContext.view.size()
         val canvas = pictureRecorder.beginRecording(Rect.makeWH(size.width.toFloat(), size.height.toFloat()))
-        canvas.clear(Color.White.toArgb())
+        canvas.clear(Color.Transparent.toArgb())
         scene.render(canvas.asComposeCanvas(), System.nanoTime())
         return PresentablePicture(pictureRecorder.finishRecordingAsPicture(), size)
     }
@@ -828,7 +828,7 @@ internal class MacOsWindow(
                 picture.use { viewContext.presentSync(it, waitForCATransaction = true) }
             }
         } catch (throwable: Throwable) {
-            Logger.error { "Could not present frame synchronously: $throwable" }
+            Logger.error(throwable) { "Could not present frame synchronously" }
             requestFrame()
         } finally {
             displayLink?.setRunning(true)
