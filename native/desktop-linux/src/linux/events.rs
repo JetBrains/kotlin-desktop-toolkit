@@ -281,7 +281,7 @@ pub enum Event<'a> {
         mime_types: BorrowedUtf8<'a>,
     },
 
-    /// Data transfer for data from our application was canceled
+    /// Data source is no longer linked to our application.
     DataTransferCancelled {
         data_source: DataSource,
     },

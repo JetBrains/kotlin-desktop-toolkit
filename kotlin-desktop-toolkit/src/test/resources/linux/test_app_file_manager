@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+import logging
+import os
+
+# Needed to fix the focus issues on Mutter
+os.putenv("GTK_CSD", "1")
+
+import sys
+import traceback
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+from gi.repository import Gio, GLib, Gtk
+
+XML = """<?xml version="1.0" encoding="UTF-8"?>
+<node>
+<interface name='org.freedesktop.FileManager1'>
+  <method name='ShowFolders'>
+    <arg type='as' name='URIs' direction='in'/>
+    <arg type='s' name='StartupId' direction='in'/>
+  </method>
+  <method name='ShowItems'>
+    <arg type='as' name='URIs' direction='in'/>
+    <arg type='s' name='StartupId' direction='in'/>
+  </method>
+  <method name='ShowItemProperties'>
+    <arg type='as' name='URIs' direction='in'/>
+    <arg type='s' name='StartupId' direction='in'/>
+  </method>
+</interface>
+</node>"""
+
+
+def eprint(msg):
+    print(msg)
+    sys.stdout.flush()
+
+def on_is_active_changed(w: Gtk.Window, *_args, **_kwargs):
+    if w.is_active:
+        eprint("ready")
+
+def on_name_acquired(connection: Gio.DBusConnection, name):
+    logging.debug(f"on_name_acquired: {name}: {connection.get_unique_name()}")
+    pass
+
+def on_name_lost(_connection: Gio.DBusConnection | None, name):
+    logging.debug(f"on_name_lost: {name}")
+    exit(0)
+
+class MyApplication(Gtk.Application):
+    def __init__(self):
+        super().__init__(application_id="org.jetbrains.desktop.linux.tests.TestAppFileManager")
+        GLib.set_application_name("File Manager Test App")
+        self.node = Gio.DBusNodeInfo.new_for_xml(XML)
+        self.window: Gtk.Window | None = None
+
+        self.owner_id = Gio.bus_own_name(
+            Gio.BusType.SESSION,
+            "org.freedesktop.FileManager1",
+            Gio.BusNameOwnerFlags.NONE,
+            self.on_bus_acquired,
+            on_name_acquired,
+            on_name_lost,
+        )
+
+    def handle_method_call(
+            self,
+            _connection: Gio.DBusConnection,
+            _sender: str,
+            _object_path: str,
+            _interface_name: str,
+            method_name: str,
+            params: GLib.Variant,
+            invocation: Gio.DBusMethodInvocation
+    ):
+        startup_id: str
+        uris: list[str]
+        uris, startup_id = params
+        has_startup_id = 0 if startup_id == "" else 1
+
+        files = [Gio.File.new_for_uri(uri) for uri in uris]
+        file_paths = "\n".join([file.get_path() for file in files if file.query_exists(None)])
+        uris_str = "\n".join(uris)
+        logging.debug(f"handle_method_call: method_name={method_name}, startup_id={startup_id}, uris={uris_str}, file_paths={file_paths}")
+        home_dir = os.environ.get("HOME")
+        with open(f"{home_dir}/test_app_file_manager.log", "w") as f:
+            f.write(f"has_startup_id={has_startup_id}, method_name={method_name}, uris={uris_str}, file_paths={file_paths}")
+
+        window = self.window
+        if window is None:
+            window = Gtk.ApplicationWindow(application=self, title="File Manager")
+            self.window = window
+            window.connect("notify::is-active", on_is_active_changed)
+            window.connect("map", lambda w: logging.debug(f"window mapped"))
+
+        if startup_id != "":
+            window.set_startup_id(startup_id)
+        window.present()
+        invocation.return_value(None)
+        return None
+
+    def on_bus_acquired(self, connection: Gio.DBusConnection, name: str):
+        activation_id = connection.register_object(
+            "/org/freedesktop/FileManager1", self.node.interfaces[0], self.handle_method_call
+        )
+        logging.debug(f"on_bus_acquired: {name}: {connection.get_unique_name()}, activation_id={activation_id}")
+        assert activation_id > 0
+
+    def do_activate(self):
+        logging.debug(f"application do_activate start")
+        Gtk.Application.do_activate(self)
+        try:
+            logging.debug(f"application do_activate end")
+        except Exception:
+            eprint(traceback.format_exc())
+            exit(1)
+
+    def do_shutdown(self):
+        Gio.bus_unown_name(self.owner_id)
+        Gtk.Application.do_shutdown(self)
+
+def main():
+    logging.basicConfig(format='[%(asctime)s.%(msecs)03d %(levelname)s jb_kdt_ibus_test_engine] %(message)s', level=logging.DEBUG, datefmt='%Y%m%d %H:%M:%S')
+    app = MyApplication()
+    app.hold()
+    app.run()
+
+
+if __name__ == "__main__":
+    main()
