@@ -83,6 +83,7 @@ import kotlin.io.path.outputStream
 import kotlin.io.path.readBytes
 import kotlin.io.path.readLines
 import kotlin.io.path.readText
+import kotlin.math.round
 import kotlin.math.roundToInt
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -119,19 +120,25 @@ internal data class WmVersion(
     val major: Int,
     val minor: Int,
     val patch: Int,
+    val checkWindowCapabilities: (WindowCapabilities) -> Unit,
+    val checkWindowScale: (WmOutputState, Scale) -> Unit,
 )
 
-internal interface WmWindowState {
-    fun getWindowId(): Int
-    fun getTitle(): String
-    fun getClientAreaTopLeftGlobalPosition(): TestMousePosition
-    fun getClientAreaSize(): LogicalSize
-}
+internal data class WmOutputState(val scale: Float)
+
+internal data class WmWindowState(
+    val output: WmOutputState,
+    val windowId: Int,
+    val title: String,
+    val clientAreaTopLeftGlobalPosition: TestMousePosition,
+    val clientAreaSize: LogicalSize,
+    val maximizedWindowSize: LogicalSize,
+)
 
 internal interface WmInteractions {
-    fun getMaximizedWindowSize(screenName: String): LogicalSize
-    fun getFocusedWindowState(): WmWindowState?
-    fun getVersion(): WmVersion?
+    fun getFocusedWindowState(): WmWindowState
+    fun getWindowState(windowId: Int): WmWindowState
+    fun getVersion(): WmVersion
     fun fullScreenFocusedWindow()
     fun unsetFullScreenFocusedWindow()
     fun tileWindows(windowIds: List<Int>)
@@ -139,23 +146,78 @@ internal interface WmInteractions {
 }
 
 internal class SwayWm : WmInteractions {
-    override fun getMaximizedWindowSize(screenName: String): LogicalSize {
-        return getSwayTree().getWorkspace(screenName).rect.toLogicalSize()
-    }
-
-    override fun getFocusedWindowState(): WmWindowState? {
-        return getSwayTree().getFocusedNode()
-    }
-
-    override fun getVersion(): WmVersion? {
-        return getSwayVersion()?.let {
-            WmVersion(
-                name = it.variant,
-                major = it.major,
-                minor = it.minor,
-                patch = it.patch,
-            )
+    private fun getWindowStateImpl(predicate: (SwayIpcWindow) -> Boolean): WmWindowState? {
+        for (output in getSwayTree().nodes) {
+            if (output.current_workspace == null) {
+                continue
+            }
+            for (workspace in output.nodes) {
+                for (window in workspace.nodes + workspace.floating_nodes) {
+                    if (predicate(window)) {
+                        return swayWindowState(output, workspace, window)
+                    }
+                }
+            }
         }
+        return null
+    }
+
+    override fun getFocusedWindowState(): WmWindowState {
+        return getWindowStateImpl { it.focused } ?: fail("Cannot find focused window")
+    }
+
+    override fun getWindowState(windowId: Int): WmWindowState {
+        return getWindowStateImpl { it.id == windowId } ?: fail("Cannot find WM window with ID $windowId")
+    }
+
+    override fun getVersion(): WmVersion {
+        val swayVersion = getSwayVersion()
+
+        val checkWindowCapabilities: (WindowCapabilities) -> Unit =
+            if (swayVersion.major > 1 || swayVersion.minor > 11 || (swayVersion.minor == 11 && swayVersion.patch > 0)) {
+                { capabilities ->
+                    assertFalse(capabilities.windowMenu)
+                    assertFalse(capabilities.maximize)
+                    assertTrue(capabilities.fullscreen)
+                    assertFalse(capabilities.minimize)
+                }
+            } else if (swayVersion.major == 1 && (swayVersion.minor == 10 || (swayVersion.minor == 11 && swayVersion.patch == 0))) {
+                // See https://github.com/swaywm/sway/commit/516a3de4ca6c2378b875f62ffa6008d1cfa0cba9
+                // and https://github.com/swaywm/sway/commit/c5456be7506adece2cdf922ed6d919db597944ab
+                { capabilities ->
+                    assertTrue(capabilities.windowMenu)
+                    assertTrue(capabilities.maximize)
+                    assertFalse(capabilities.fullscreen)
+                    assertFalse(capabilities.minimize)
+                }
+            } else {
+                { capabilities ->
+                    assertTrue(capabilities.windowMenu)
+                    assertTrue(capabilities.maximize)
+                    assertTrue(capabilities.fullscreen)
+                    assertTrue(capabilities.minimize)
+                }
+            }
+
+        // https://github.com/swaywm/sway/commit/9162b536f69cb69466fb4fcfa24d282fa54b122b
+        val checkWindowScale: (WmOutputState, Scale) -> Unit = if (swayVersion.major > 1 || swayVersion.minor > 8) {
+            { output, scale ->
+                assertEquals(output.scale, scale.rawScale.toFloat())
+            }
+        } else {
+            { output, scale ->
+                assertEquals(round(output.scale), scale.rawScale.toFloat())
+            }
+        }
+
+        return WmVersion(
+            name = swayVersion.variant,
+            major = swayVersion.major,
+            minor = swayVersion.minor,
+            patch = swayVersion.patch,
+            checkWindowCapabilities = checkWindowCapabilities,
+            checkWindowScale = checkWindowScale,
+        )
     }
 
     override fun tileWindows(windowIds: List<Int>) {
@@ -188,21 +250,23 @@ internal class SwayWm : WmInteractions {
             val loaded_config_file_name: String,
         )
 
-        private fun getSwayVersion(): SwayVersionModel? {
+        private fun getSwayVersion(): SwayVersionModel {
 //            log("getSwayVersion")
-            val json = runCommandWithOutput(listOf("swaymsg", "--raw", "-t", "get_version"))?.decodeToString() ?: return null
+            val json = runCommandWithOutput(listOf("swaymsg", "--raw", "-t", "get_version"))!!.decodeToString()
 //            log(json)
             val moshi: Moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
             val jsonAdapter = moshi.adapter(SwayVersionModel::class.java)
-            return jsonAdapter.fromJson(json)
+            return jsonAdapter.fromJson(json)!!
         }
 
-        private fun getSwayTree(): Tree {
+        private fun getSwayTree(): SwayIpcRoot {
+            val outputsJson = runCommandWithOutput(listOf("swaymsg", "--raw", "-t", "get_outputs"))!!.decodeToString()
+            log(outputsJson)
 //            log("getSwayTree")
-            val json = runCommandWithOutput(listOf("swaymsg", "--raw", "-t", "get_tree"))?.decodeToString()!!
-//            log(json)
+            val json = runCommandWithOutput(listOf("swaymsg", "--raw", "-t", "get_tree"))!!.decodeToString()
+            log(json)
             val moshi: Moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
-            val jsonAdapter = moshi.adapter(Tree::class.java)
+            val jsonAdapter = moshi.adapter(SwayIpcRoot::class.java).lenient()
             return jsonAdapter.fromJson(json)!!
         }
 
@@ -225,8 +289,72 @@ internal class SwayWm : WmInteractions {
             }
         }
 
+        private data class SwayIpcRoot(val nodes: List<SwayIpcOutput>)
+
+        // From https://raw.githubusercontent.com/swaywm/sway/refs/tags/1.7/sway/sway-ipc.7.scd
+        @Suppress("PropertyName")
+        private data class SwayIpcOutput(
+            /** The internal unique ID for this node */
+            val id: Int,
+
+            /** The name of the node such as the output name or window title. */
+            val name: String,
+
+            /** The node type. It can be "root", "output", "workspace", "con", or "floating_con" */
+            val type: String,
+
+            /** Whether this output is active/enabled */
+            val active: Boolean = false,
+
+            /** The scale currently in use on the output or -1 for disabled outputs */
+            val scale: Float = -1f,
+
+            /** The workspace currently visible on the output or null for disabled outputs */
+            val current_workspace: String?,
+
+            /** The bounds for the output consisting of x, y, width, and height */
+            val rect: Rect,
+
+            val nodes: List<SwayIpcWorkspace>,
+        )
+
+        // From https://raw.githubusercontent.com/swaywm/sway/refs/tags/1.7/sway/sway-ipc.7.scd
+        @Suppress("PropertyName", "SpellCheckingInspection")
+        private data class SwayIpcWorkspace(
+            /** The internal unique ID for this node */
+            val id: Int,
+
+            /** The name of the node such as the output name or window title. */
+            val name: String,
+
+            /** The node type. It can be "root", "output", "workspace", "con", or "floating_con" */
+            val type: String,
+
+            /** The node's layout. It can either be "splith", "splitv", "stacked", "tabbed", or "output" */
+            val layout: String,
+
+            /** The node's orientation. It can be "vertical", "horizontal", or "none" */
+            val orientation: String,
+
+            /** The absolute geometry of the node. The window decorations are excluded from this, but borders are included. */
+            val rect: Rect,
+
+            /** Whether the node is currently focused by the default seat (seat0) */
+            val focused: Boolean,
+
+            /** Array of child node IDs in the current focus order */
+            val focus: List<Int>,
+
+            /** The tiling children nodes for the node */
+            val nodes: List<SwayIpcWindow>,
+
+            /** The floating children nodes for the node */
+            val floating_nodes: List<SwayIpcWindow>,
+        )
+
+        // From https://raw.githubusercontent.com/swaywm/sway/refs/tags/1.7/sway/sway-ipc.7.scd
         @Suppress("PropertyName", "SpellCheckingInspection", "GrazieInspection")
-        private data class Tree(
+        private data class SwayIpcWindow(
             /** The internal unique ID for this node */
             val id: Int,
 
@@ -279,15 +407,6 @@ internal class SwayWm : WmInteractions {
             /** Whether the node is currently focused by the default seat (seat0) */
             val focused: Boolean,
 
-            /** Array of child node IDs in the current focus order */
-            val focus: List<Int>,
-
-            /** The tiling children nodes for the node */
-            val nodes: List<Tree>,
-
-            /** The floating children nodes for the node */
-            val floating_nodes: List<Tree>,
-
             /** Floating state of container. Can be either "auto_off" or "user_on" */
             val floating: String?,
 
@@ -308,34 +427,25 @@ internal class SwayWm : WmInteractions {
 
             /** (Only windows) An object containing the state of the application and user idle inhibitors. */
             val idle_inhibitors: IdleInhibitors?,
-        ) : WmWindowState {
-            fun getFocusedNode(): Tree? {
-                if (focused) {
-                    return this
-                }
-                return nodes.firstNotNullOfOrNull { it.getFocusedNode() } ?: floating_nodes.firstNotNullOfOrNull { it.getFocusedNode() }
-            }
+        )
 
-            fun getWorkspace(screenName: String): Tree {
-                log("getWorkspace(screenName=$screenName)")
-                val outputNode = nodes.first { it.type == "output" && it.name == screenName }
-                return outputNode.nodes.first { it.type == "workspace" }
-            }
+        private fun swayWindowState(output: SwayIpcOutput, workspace: SwayIpcWorkspace, window: SwayIpcWindow): WmWindowState {
+            val clientAreaTopLeftGlobalPosition = TestMousePosition(
+                LogicalPixelsInt((window.rect.x + window.current_border_width)),
+                LogicalPixelsInt((window.rect.y + window.current_border_width)),
+            )
 
-            override fun getWindowId(): Int = id
+            val clientAreaSize = window.window_rect.toLogicalSize()
+            val maximizedWindowSize = workspace.rect.toLogicalSize()
 
-            override fun getTitle(): String = name
-
-            override fun getClientAreaTopLeftGlobalPosition(): TestMousePosition {
-                return TestMousePosition(
-                    LogicalPixelsInt((rect.x + current_border_width)),
-                    LogicalPixelsInt((rect.y + current_border_width)),
-                )
-            }
-
-            override fun getClientAreaSize(): LogicalSize {
-                return window_rect.toLogicalSize()
-            }
+            return WmWindowState(
+                output = WmOutputState(output.scale),
+                windowId = window.id,
+                title = window.name,
+                clientAreaTopLeftGlobalPosition = clientAreaTopLeftGlobalPosition,
+                clientAreaSize = clientAreaSize,
+                maximizedWindowSize = maximizedWindowSize,
+            )
         }
     }
 }
@@ -489,8 +599,12 @@ fun withDropTargetTestApp(block: ((Duration) -> String?) -> Unit) {
 
 private enum class TestAppOperationMode(val value: String) {
     Normal("normal"),
+
     Slow("slow"),
+
+    @Suppress("unused")
     ExitImmediately("exit-immediately"),
+
     ExitAfterStartWriting("exit-after-start-writing"),
 }
 
@@ -1082,43 +1196,6 @@ abstract class WaylandTestsBase {
         internal val DEFAULT_MOUSE_POS = TestMousePosition(LogicalPixelsInt(50), LogicalPixelsInt(50))
 
         internal val wm by lazy { SwayWm() }
-
-        internal val checkWindowCapabilities: (WindowCapabilities) -> Unit by lazy {
-            val wmVersion = wm.getVersion()
-            if (wmVersion != null && wmVersion.name == "sway") {
-                if (wmVersion.major > 1 || wmVersion.minor > 11 || (wmVersion.minor == 11 && wmVersion.patch > 1)) {
-                    { capabilities ->
-                        assertFalse(capabilities.windowMenu)
-                        assertFalse(capabilities.maximize)
-                        assertTrue(capabilities.fullscreen)
-                        assertFalse(capabilities.minimize)
-                    }
-                } else if (wmVersion.major == 1 && (wmVersion.minor == 10 || (wmVersion.minor == 11 && wmVersion.patch == 0))) {
-                    // See https://github.com/swaywm/sway/commit/516a3de4ca6c2378b875f62ffa6008d1cfa0cba9
-                    // and https://github.com/swaywm/sway/commit/c5456be7506adece2cdf922ed6d919db597944ab
-                    { capabilities ->
-                        assertTrue(capabilities.windowMenu)
-                        assertTrue(capabilities.maximize)
-                        assertFalse(capabilities.fullscreen)
-                        assertFalse(capabilities.minimize)
-                    }
-                } else {
-                    { capabilities ->
-                        assertTrue(capabilities.windowMenu)
-                        assertTrue(capabilities.maximize)
-                        assertTrue(capabilities.fullscreen)
-                        assertTrue(capabilities.minimize)
-                    }
-                }
-            } else {
-                { capabilities ->
-                    assertTrue(capabilities.windowMenu)
-                    assertTrue(capabilities.maximize)
-                    assertTrue(capabilities.fullscreen)
-                    assertTrue(capabilities.minimize)
-                }
-            }
-        }
 
         private val appExecutor = SingleThreadTaskQueue()
 
@@ -2085,9 +2162,10 @@ class WaylandTests : WaylandTestsBase() {
         )
         val requestedSize = assertNotNull(windowParams.size)
         val window = ui { app.createWindow(windowParams) }
+        val wmVersion = wm.getVersion()
 
         var expectedConfigureEvent = ExpectedWindowConfigure(
-            checkWindowCapabilities,
+            wmVersion.checkWindowCapabilities,
             windowId = windowParams.windowId,
             size = requestedSize,
             active = false,
@@ -2117,7 +2195,6 @@ class WaylandTests : WaylandTestsBase() {
         withNextEvent { event ->
             val keyboardEnteredEvent = if (event is Event.WindowScaleChanged) {
                 assertEquals(windowParams.windowId, event.windowId)
-//                assertEquals(1.5, event.newScale)
                 scale = event.newScale
                 getNextEvent()
             } else {
@@ -2196,6 +2273,8 @@ class WaylandTests : WaylandTestsBase() {
             ),
         )
 
+        wmVersion.checkWindowScale(wm.getFocusedWindowState().output, scale)
+
         var mousePos = DEFAULT_MOUSE_POS.shifted(LogicalPixelsInt(10), LogicalPixelsInt(10))
         moveMouseTo(mousePos)
 
@@ -2248,10 +2327,10 @@ class WaylandTests : WaylandTestsBase() {
             true
         }
 
-        assertEquals(windowParams.title, wm.getFocusedWindowState()?.getTitle())
+        assertEquals(windowParams.title, wm.getFocusedWindowState().title)
         "New title 🙂".also {
             ui { window.setTitle(it) }
-            waitUntilEq(it) { wm.getFocusedWindowState()?.getTitle() }
+            waitUntilEq(it) { wm.getFocusedWindowState().title }
         }
 
         for (useWm in listOf(true, false)) {
@@ -2540,9 +2619,10 @@ class WaylandTests : WaylandTestsBase() {
         val requestedWindowSize = assertNotNull(windowParams.size)
         val window = createWindowAndWaitForFocus(windowParams).window
 
+        val wmVersion = wm.getVersion()
         wm.moveFocusedWindow(LogicalPixelsInt(200), LogicalPixelsInt(200))
         var expectedWindowConfigure = ExpectedWindowConfigure(
-            checkWindowCapabilities,
+            wmVersion.checkWindowCapabilities,
             windowId = windowParams.windowId,
             size = requestedWindowSize,
             active = true,
@@ -2625,10 +2705,10 @@ class WaylandTests : WaylandTestsBase() {
         ui {
             window.setPreferClientSideDecoration(false)
         }
-        awaitEventOfType<Event.WindowConfigure>(msg = "Change window 1 decoration mode to server-side") { event ->
+        awaitEventOfType<Event.WindowConfigure>(msg = "Change window decoration mode to server-side") { event ->
             windowParams.windowId == event.windowId &&
                 run {
-                    expectedWindowConfigure.assertEquals(event, "Change window 1 decoration mode to server-side")
+                    expectedWindowConfigure.assertEquals(event, "Change window decoration mode to server-side")
                     true
                 }
         }
@@ -2647,8 +2727,9 @@ class WaylandTests : WaylandTestsBase() {
             true
         }
 
+        val wmVersion = wm.getVersion()
         var expectedWindow1ConfigureEvent = ExpectedWindowConfigure(
-            checkWindowCapabilities,
+            wmVersion.checkWindowCapabilities,
             windowId = window1Params.windowId,
             size = requestedWindow1Size,
             active = true,
@@ -2671,7 +2752,7 @@ class WaylandTests : WaylandTestsBase() {
             }
         }
 
-        val window1WmId = wm.getFocusedWindowState()!!.getWindowId()
+        val window1WmId = wm.getFocusedWindowState().windowId
 
         val requestedWindow2Size = LogicalSize(width = LogicalPixelsInt(300), height = LogicalPixelsInt(200))
         val window2Params = WindowParams(
@@ -2696,7 +2777,7 @@ class WaylandTests : WaylandTestsBase() {
         }
 
         var expectedWindow2ConfigureEvent = ExpectedWindowConfigure(
-            checkWindowCapabilities,
+            wmVersion.checkWindowCapabilities,
             windowId = window2Params.windowId,
             size = requestedWindow2Size.copy(
                 width = requestedWindow2Size.width +
@@ -2738,7 +2819,7 @@ class WaylandTests : WaylandTestsBase() {
             ),
         )
 
-        val window2WmId = wm.getFocusedWindowState()!!.getWindowId()
+        val window2WmId = wm.getFocusedWindowState().windowId
 
         withKeyPress(KeyCode.Tab) {
             awaitEvent({ it as? Event.KeyDown }) { event ->
@@ -2813,16 +2894,11 @@ class WaylandTests : WaylandTestsBase() {
         }
         awaitEventOfType<Event.KeyUp> { true }
 
-        val screens = ui { app.allScreens() }.screens
-        val screen = screens.firstOrNull()
-        assertNotNull(screen)
-
         wm.tileWindows(listOf(window2WmId, window1WmId))
 
-        val tiledWindowSize = wm.getMaximizedWindowSize(screen.name!!).let { LogicalSize(width = it.width / 2, height = it.height) }
         expectedWindow1ConfigureEvent =
             expectedWindow1ConfigureEvent.copy(
-                size = tiledWindowSize,
+                size = wm.getWindowState(window1WmId).clientAreaSize,
                 tiledLeft = true,
                 tiledRight = true,
                 tiledTop = true,
@@ -2832,7 +2908,7 @@ class WaylandTests : WaylandTestsBase() {
         expectedWindow2ConfigureEvent =
             expectedWindow2ConfigureEvent.copy(
                 decorationMode = WindowDecorationMode.Server,
-                size = tiledWindowSize,
+                size = wm.getWindowState(window2WmId).clientAreaSize,
                 tiledLeft = true,
                 tiledRight = true,
                 tiledTop = true,
@@ -2842,7 +2918,10 @@ class WaylandTests : WaylandTestsBase() {
         checkNextEvents(
             checks = mapOf(
                 "Window 1 tiled" to { event, _ ->
-                    if (event is Event.WindowConfigure && event.windowId == window1Params.windowId && event.size == tiledWindowSize) {
+                    if (event is Event.WindowConfigure &&
+                        event.windowId == window1Params.windowId &&
+                        event.size == expectedWindow1ConfigureEvent.size
+                    ) {
                         expectedWindow1ConfigureEvent.assertEquals(event)
                         true
                     } else {
@@ -2850,7 +2929,10 @@ class WaylandTests : WaylandTestsBase() {
                     }
                 },
                 "Window 2 tiled" to { event, _ ->
-                    if (event is Event.WindowConfigure && event.windowId == window2Params.windowId && event.size == tiledWindowSize) {
+                    if (event is Event.WindowConfigure &&
+                        event.windowId == window2Params.windowId &&
+                        event.size == expectedWindow2ConfigureEvent.size
+                    ) {
                         expectedWindow2ConfigureEvent.assertEquals(event)
                         true
                     } else {
@@ -4149,7 +4231,7 @@ text/plain;charset=utf-8
         // See https://gitlab.freedesktop.org/wlroots/wlroots/-/commit/08e779bd85b738d993007fa6a7f3f32bebc19649
         // and https://gitlab.freedesktop.org/wlroots/wlroots/-/commit/4da4269d8f707dec3691e2ffaacc106db96780d1
         val wmVersion = wm.getVersion()
-        if (wmVersion != null && wmVersion.name == "sway" && (wmVersion.major <= 1 && wmVersion.minor < 11)) {
+        if (wmVersion.name == "sway" && (wmVersion.major <= 1 && wmVersion.minor < 11)) {
             log("Trying to fix stuck pressed button state in compositor")
             val event = withMouseButtonDown(button) {
                 awaitAnyEvent { event ->
@@ -4173,7 +4255,7 @@ text/plain;charset=utf-8
         assertEquals(requestedWindowSize, initialWindowData.configure.size)
 
         val stateBefore = assertNotNull(wm.getFocusedWindowState())
-        assertEquals(requestedWindowSize, stateBefore.getClientAreaSize())
+        assertEquals(requestedWindowSize, stateBefore.clientAreaSize)
 
         withMouseButtonDown(button) {
             val mouseDown = awaitEventOfType<Event.MouseDown> { true }
@@ -4184,10 +4266,10 @@ text/plain;charset=utf-8
         awaitEventOfType<Event.MouseEntered> { true }
 
         val stateAfter = assertNotNull(wm.getFocusedWindowState())
-        assertEquals(stateBefore.getClientAreaSize(), stateAfter.getClientAreaSize())
+        assertEquals(stateBefore.clientAreaSize, stateAfter.clientAreaSize)
         assertEquals(
-            stateBefore.getClientAreaTopLeftGlobalPosition().shifted(LogicalPixelsInt(100), LogicalPixelsInt(50)),
-            stateAfter.getClientAreaTopLeftGlobalPosition(),
+            stateBefore.clientAreaTopLeftGlobalPosition.shifted(LogicalPixelsInt(100), LogicalPixelsInt(50)),
+            stateAfter.clientAreaTopLeftGlobalPosition,
         )
 
         fixStuckPressedButtons(button)
@@ -4225,7 +4307,7 @@ text/plain;charset=utf-8
         assertEquals(requestedWindowSize, initialWindowData.configure.size)
 
         val stateBefore = assertNotNull(wm.getFocusedWindowState())
-        assertEquals(requestedWindowSize, stateBefore.getClientAreaSize())
+        assertEquals(requestedWindowSize, stateBefore.clientAreaSize)
 
         val expectedSize = LogicalSize(
             width = (requestedWindowSize.width - expectedDecreaseX),
@@ -4233,7 +4315,7 @@ text/plain;charset=utf-8
         )
 
         // Move the mouse to the top-left part of the window
-        val mousePos = stateBefore.getClientAreaTopLeftGlobalPosition().shifted(LogicalPixelsInt(5), LogicalPixelsInt(5))
+        val mousePos = stateBefore.clientAreaTopLeftGlobalPosition.shifted(LogicalPixelsInt(5), LogicalPixelsInt(5))
         moveMouseTo(mousePos)
         withMouseButtonDown(button) {
             val mouseDown = awaitEventOfType<Event.MouseDown> { true }
@@ -4247,15 +4329,15 @@ text/plain;charset=utf-8
         }
         val stateAfter = assertNotNull(wm.getFocusedWindowState())
 
-        moveMouseTo(stateAfter.getClientAreaTopLeftGlobalPosition().shifted(LogicalPixelsInt(4), LogicalPixelsInt(4)))
+        moveMouseTo(stateAfter.clientAreaTopLeftGlobalPosition.shifted(LogicalPixelsInt(4), LogicalPixelsInt(4)))
         awaitAnyEvent { event ->
             event is Event.MouseMoved || event is Event.MouseEntered
         }
 
-        assertEquals(expectedSize, stateAfter.getClientAreaSize())
+        assertEquals(expectedSize, stateAfter.clientAreaSize)
         assertEquals(
-            stateBefore.getClientAreaTopLeftGlobalPosition().shifted(expectedDecreaseX, expectedDecreaseY),
-            stateAfter.getClientAreaTopLeftGlobalPosition(),
+            stateBefore.clientAreaTopLeftGlobalPosition.shifted(expectedDecreaseX, expectedDecreaseY),
+            stateAfter.clientAreaTopLeftGlobalPosition,
         )
 
         fixStuckPressedButtons(button)
