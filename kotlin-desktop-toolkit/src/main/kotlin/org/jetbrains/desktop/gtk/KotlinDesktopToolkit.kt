@@ -16,10 +16,10 @@ public object KotlinDesktopToolkit {
         fileLogLevel: LogLevel = LogLevel.Info,
         appenderInterface: AppenderInterface = DefaultConsoleAppender.fromLevel(consoleLogLevel),
     ) {
+        // todo check that native library version is consistent with Kotlin code
+        val libraryPath = libraryFolderPath.resolve(libraryName(useDebugBuild = useDebugBuild))
+        load(libraryPath)
         if (isInitialized.compareAndSet(false, true)) {
-            // todo check that native library version is consistent with Kotlin code
-            val libraryPath = libraryFolderPath.resolve(libraryName(useDebugBuild = useDebugBuild))
-            load(libraryPath)
             initLogger(
                 logFile = logFilePath,
                 consoleLogLevel = consoleLogLevel,
