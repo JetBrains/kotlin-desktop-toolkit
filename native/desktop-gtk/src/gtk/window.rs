@@ -118,7 +118,7 @@ fn set_window_configure_event_handlers(
     window: &gtk4::ApplicationWindow,
     event_handler: EventHandler,
     last_window_configure_event: Rc<RefCell<WindowConfigureEvent>>,
-    overlay_controls: Rc<RefCell<Vec<gtk4::Widget>>>,
+    overlay_controls: Vec<gtk4::Widget>,
 ) {
     {
         let event = last_window_configure_event.clone();
@@ -133,8 +133,7 @@ fn set_window_configure_event_handlers(
     window.connect_fullscreened_notify(move |window| {
         update_window_configure(event_handler, &last_window_configure_event, |event| {
             event.fullscreen = window.is_fullscreen();
-            let overlay_controls_borrow = overlay_controls.borrow();
-            let controls: &Vec<_> = overlay_controls_borrow.as_ref();
+            let controls: &Vec<_> = overlay_controls.as_ref();
             for control in controls {
                 control.set_visible(!event.fullscreen);
             }
@@ -244,8 +243,8 @@ fn set_custom_titlebar(
     event_handler: EventHandler,
     overlay: gtk4::Overlay,
     last_window_configure_event: &Rc<RefCell<WindowConfigureEvent>>,
-    overlay_controls: &mut Vec<gtk4::Widget>,
-) {
+) -> Vec<gtk4::Widget> {
+    let mut overlay_controls = Vec::new();
     let fake_titlebar = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
     window.set_titlebar(Some(&fake_titlebar));
     fake_titlebar.set_visible(false);
@@ -294,12 +293,12 @@ fn set_custom_titlebar(
     overlay.add_overlay(&window_handle);
     overlay_controls.push(window_handle.upcast());
     overlay_controls.push(overlay.upcast());
+    overlay_controls
 }
 
 pub struct SimpleWindow {
     pub window_id: WindowId,
     pub window: glib::WeakRef<gtk4::ApplicationWindow>,
-    _overlay_controls: Rc<RefCell<Vec<gtk4::Widget>>>,
     gl_widget: glib::WeakRef<GlWidget>,
     event_controller_key_weak: glib::WeakRef<gtk4::EventControllerKey>,
     im_context: gtk4::IMMulticontext,
@@ -333,7 +332,6 @@ impl SimpleWindow {
         let window = window_builder.build();
 
         let last_window_configure_event = Rc::new(RefCell::new(WindowConfigureEvent::new(&window, window_id, decoration_mode)));
-        let overlay_controls = Rc::new(RefCell::new(Vec::new()));
 
         let gl_widget = create_gl_widget(
             window_id,
@@ -345,25 +343,19 @@ impl SimpleWindow {
         let im_context = create_im_context(window_id, event_handler, retrieve_surrounding_text);
         let im_context_weak_ref = im_context.downgrade();
 
-        match decoration_mode {
+        let overlay_controls = match decoration_mode {
             WindowDecorationMode::Server => {
                 window.set_child(Some(&gl_widget));
                 set_mouse_event_handlers(gl_widget.upcast_ref(), window_id, event_handler);
+                Vec::new()
             }
             WindowDecorationMode::CustomTitlebar(height) => {
                 let overlay = gtk4::Overlay::builder().child(&gl_widget).build();
                 window.set_child(Some(&overlay));
                 set_mouse_event_handlers(overlay.upcast_ref(), window_id, event_handler);
-                set_custom_titlebar(
-                    &window,
-                    height,
-                    event_handler,
-                    overlay,
-                    &last_window_configure_event,
-                    overlay_controls.borrow_mut().as_mut(),
-                );
+                set_custom_titlebar(&window, height, event_handler, overlay, &last_window_configure_event)
             }
-        }
+        };
 
         set_drag_and_drop_event_handlers(&gl_widget, window_id, event_handler, query_drag_and_drop_target, cancellable);
         let event_controller_key = set_keyboard_event_handlers(window_id, event_handler);
@@ -378,12 +370,7 @@ impl SimpleWindow {
             }
         });
 
-        set_window_configure_event_handlers(
-            &window,
-            event_handler,
-            last_window_configure_event.clone(),
-            overlay_controls.clone(),
-        );
+        set_window_configure_event_handlers(&window, event_handler, last_window_configure_event.clone(), overlay_controls);
 
         window.connect_scale_factor_notify(move |window| {
             let scale = window.scale_factor();
@@ -437,7 +424,6 @@ impl SimpleWindow {
         Self {
             window_id,
             window: window.downgrade(),
-            _overlay_controls: overlay_controls,
             gl_widget: gl_widget.downgrade(),
             event_controller_key_weak,
             im_context,
