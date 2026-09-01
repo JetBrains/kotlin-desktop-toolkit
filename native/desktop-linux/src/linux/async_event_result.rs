@@ -1,9 +1,8 @@
 use desktop_common::ffi_utils::BorrowedUtf8;
 use log::error;
 
-use crate::linux::events::{EventHandler, FileChooserResponse, NotificationShownEvent, RequestId};
+use crate::linux::events::{Event, EventHandler, RequestId};
 
-#[allow(clippy::enum_variant_names)]
 pub enum AsyncEventResult {
     UrlOpenResponse {
         request_id: RequestId,
@@ -30,11 +29,11 @@ impl AsyncEventResult {
             }
             Self::FileChooserResponse { request_id, result } => {
                 let send = |newline_separated_files| {
-                    let response = FileChooserResponse {
+                    let response = Event::FileChooserResponse {
                         request_id,
                         newline_separated_files,
                     };
-                    event_handler(&response.into())
+                    event_handler(&response)
                 };
                 match result {
                     Ok(files) => {
@@ -52,11 +51,11 @@ impl AsyncEventResult {
                     error!("request_show_notification error: {e}");
                     0
                 });
-                let event = NotificationShownEvent {
+                let event = Event::NotificationShown {
                     request_id,
                     notification_id,
                 };
-                event_handler(&event.into());
+                event_handler(&event);
             }
         }
     }

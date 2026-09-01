@@ -1,7 +1,7 @@
 use crate::linux::text_input_api::{TextInputContentHints, TextInputContentPurpose, TextInputContext};
 use crate::linux::{
     application_state::ApplicationState,
-    events::{TextInputAvailabilityEvent, TextInputDeleteSurroundingTextData, TextInputEvent, TextInputPreeditStringData},
+    events::{Event, TextInputDeleteSurroundingTextData, TextInputPreeditStringData},
 };
 use anyhow::{Context, bail};
 use desktop_common::ffi_utils::BorrowedUtf8;
@@ -125,7 +125,7 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
                     warn!("Couldn't find window for: {event:?}");
                     return;
                 };
-                this.send_event(TextInputAvailabilityEvent {
+                this.send_event(&Event::TextInputAvailability {
                     window_id,
                     available: true,
                 });
@@ -139,7 +139,7 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
                     warn!("Couldn't find window for: {event:?}");
                     return;
                 };
-                this.send_event(TextInputAvailabilityEvent {
+                this.send_event(&Event::TextInputAvailability {
                     window_id,
                     available: false,
                 });
@@ -190,7 +190,7 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
                     }) => Some((text, cursor_begin, cursor_end)),
                     _ => None,
                 };
-                let e = TextInputEvent {
+                let e = Event::TextInput {
                     has_preedit_string: preedit_data.is_some(),
                     preedit_string: if let Some((preedit_text, preedit_begin, preedit_end)) = &preedit_data {
                         TextInputPreeditStringData {
@@ -206,7 +206,7 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
                     has_delete_surrounding_text: delete_surrounding_text.is_some(),
                     delete_surrounding_text: delete_surrounding_text.unwrap_or_default(),
                 };
-                this.send_event(e);
+                this.send_event(&e);
             }
             _ => {
                 warn!("Unknown event: {event:?}");

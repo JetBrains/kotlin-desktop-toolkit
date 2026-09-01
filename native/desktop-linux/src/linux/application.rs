@@ -6,10 +6,7 @@ use crate::linux::{
     desktop_settings::init_desktop_settings_notifier_task,
     desktop_settings_api::FfiDesktopSetting,
     drag_icon::DragIcon,
-    events::{
-        DataTransferContent, DataTransferEvent, Event, EventHandler, EventSerial, NotificationClosedEvent, RequestId, WindowClosedEvent,
-        WindowId,
-    },
+    events::{DataTransferContent, Event, EventHandler, EventSerial, RequestId, WindowId},
     file_dialog::{show_open_file_dialog_impl, show_save_file_dialog_impl},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPoint, LogicalSize},
@@ -19,6 +16,7 @@ use crate::linux::{
     window_resize_edge_api::WindowResizeEdge,
 };
 use anyhow::{Context, anyhow, bail};
+use desktop_common::ffi_utils::BorrowedUtf8;
 use desktop_common::logger::catch_panic;
 use log::{debug, warn};
 use smithay_client_toolkit::activation::RequestData;
@@ -98,14 +96,12 @@ fn create_run_async_sender(event_loop: &EventLoop<'static, ApplicationState>) ->
     sender
 }
 
-#[allow(clippy::needless_pass_by_value)]
-pub fn send_event<'a, T: Into<Event<'a>>>(event_handler: EventHandler, event_data: T) -> bool {
-    let event: Event = event_data.into();
+pub fn send_event(event_handler: EventHandler, event: &Event) -> bool {
     match event {
-        Event::MouseMoved(_) | Event::WindowDraw(_) | Event::DragIconDraw(_) => {}
+        Event::MouseMoved { .. } | Event::WindowDraw { .. } | Event::DragIconDraw { .. } => {}
         _ => debug!("Sending event: {event:?}"),
     }
-    catch_panic(|| Ok(event_handler(&event))).unwrap_or(false)
+    catch_panic(|| Ok(event_handler(event))).unwrap_or(false)
 }
 
 impl Application {
@@ -192,7 +188,7 @@ impl Application {
             .insert_source(desktop_settings_channel, move |event, (), state| {
                 if let channel::Event::Msg(e) = event {
                     FfiDesktopSetting::with(e, |s| {
-                        state.send_event(Event::DesktopSettingChange(s));
+                        state.send_event(&Event::DesktopSettingChange(s));
                     });
                 }
             })
@@ -231,12 +227,12 @@ impl Application {
             debug!("Closing window {window_id:?} ({k})");
             drop(v);
             self.state.window_id_to_surface_id.remove(&window_id);
-            send_event(event_handler, WindowClosedEvent { window_id });
+            send_event(event_handler, &Event::WindowClosed { window_id });
         }
 
-        if self.exit.load(Ordering::Acquire) && !send_event(event_handler, Event::ApplicationWantsToTerminate) {
+        if self.exit.load(Ordering::Acquire) && !send_event(event_handler, &Event::ApplicationWantsToTerminate) {
             debug!("Exiting");
-            send_event(event_handler, Event::ApplicationWillTerminate);
+            send_event(event_handler, &Event::ApplicationWillTerminate);
             self.state.windows.clear();
             self.state.window_id_to_surface_id.clear();
             // Actually close the windows before stopping the event loop
@@ -253,7 +249,7 @@ impl Application {
         self.init_run_on_event_loop();
 
         self.event_loop_thread_id = Some(std::thread::current().id());
-        self.state.send_event(Event::ApplicationStarted);
+        self.state.send_event(&Event::ApplicationStarted);
 
         let desktop_settings_task_info = self.init_desktop_settings_notifier();
 
@@ -394,7 +390,7 @@ impl Application {
         let event_handler = self.state.callbacks.event_handler;
         self.state
             .read_from_pipe("application_primary_selection_paste", read_pipe, mime_type, move |content| {
-                let event = DataTransferEvent {
+                let event = &Event::DataTransfer {
                     serial,
                     content: content.unwrap_or(DataTransferContent::null()),
                 };
@@ -405,7 +401,7 @@ impl Application {
 
     pub fn primary_selection_paste(&self, serial: i32, supported_mime_types: &str) {
         if !self.primary_selection_paste_impl(serial, supported_mime_types) {
-            self.state.send_event(DataTransferEvent {
+            self.state.send_event(&Event::DataTransfer {
                 serial,
                 content: DataTransferContent::null(),
             });
@@ -443,18 +439,18 @@ impl Application {
         let event_handler = self.state.callbacks.event_handler;
         self.state
             .read_from_pipe("application_clipboard_paste", read_pipe, mime_type, move |content| {
-                let event = DataTransferEvent {
+                let event = Event::DataTransfer {
                     serial,
                     content: content.unwrap_or(DataTransferContent::null()),
                 };
-                send_event(event_handler, event);
+                send_event(event_handler, &event);
             });
         true
     }
 
     pub fn clipboard_paste(&self, serial: i32, supported_mime_types: &str) {
         if !self.clipboard_paste_impl(serial, supported_mime_types) {
-            self.state.send_event(DataTransferEvent {
+            self.state.send_event(&Event::DataTransfer {
                 serial,
                 content: DataTransferContent::null(),
             });
@@ -683,11 +679,11 @@ impl Application {
             .handle()
             .insert_source(event_c, move |event: channel::Event<NotificationData>, (), state| {
                 if let channel::Event::Msg(notification_data) = event {
-                    let e = NotificationClosedEvent::new(
-                        notification_data.id,
-                        notification_data.action.as_ref(),
-                        notification_data.activation_token.as_ref(),
-                    );
+                    let e = &Event::NotificationClosed {
+                        notification_id: notification_data.id,
+                        action: BorrowedUtf8::optional(notification_data.action.as_ref()),
+                        activation_token: BorrowedUtf8::optional(notification_data.activation_token.as_ref()),
+                    };
                     state.send_event(e);
                 }
             })

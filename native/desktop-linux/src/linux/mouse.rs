@@ -1,18 +1,6 @@
 use crate::linux::{
     application_state::ApplicationState,
-    events::{
-        EventSerial,
-        MouseButton,
-        MouseDownEvent,
-        MouseEnteredEvent,
-        MouseExitedEvent,
-        MouseMovedEvent,
-        MouseUpEvent,
-        ScrollData,
-        ScrollWheelEvent,
-        Timestamp,
-        //
-    },
+    events::{Event, EventSerial, MouseButton, ScrollData, Timestamp},
     geometry::{LogicalPixels, LogicalPoint},
 };
 use log::debug;
@@ -57,7 +45,7 @@ impl PointerHandler for ApplicationState {
                 PointerEventKind::Enter { serial } => {
                     window.num_pointer_buttons_down = 0;
                     window.set_cursor = true;
-                    let res = self.send_event(MouseEnteredEvent {
+                    let res = self.send_event(&Event::MouseEntered {
                         serial: EventSerial(serial),
                         window_id,
                         location_in_window: LogicalPoint::new(event.position),
@@ -84,13 +72,13 @@ impl PointerHandler for ApplicationState {
                 }
                 PointerEventKind::Leave { serial } => {
                     window.num_pointer_buttons_down = 0;
-                    self.send_event(MouseExitedEvent {
+                    self.send_event(&Event::MouseExited {
                         serial: EventSerial(serial),
                         window_id,
                         location_in_window: LogicalPoint::new(event.position),
                     })
                 }
-                PointerEventKind::Motion { time } => self.send_event(MouseMovedEvent {
+                PointerEventKind::Motion { time } => self.send_event(&Event::MouseMoved {
                     window_id,
                     location_in_window: LogicalPoint::new(event.position),
                     timestamp: Timestamp(time),
@@ -100,7 +88,7 @@ impl PointerHandler for ApplicationState {
                         self.last_pointer_down_event_serial = Some(serial);
                     }
                     window.num_pointer_buttons_down += 1;
-                    self.send_event(MouseDownEvent {
+                    self.send_event(&Event::MouseDown {
                         serial: EventSerial(serial),
                         window_id,
                         button: MouseButton(button),
@@ -113,7 +101,7 @@ impl PointerHandler for ApplicationState {
                     if window.num_pointer_buttons_down > 0 {
                         window.num_pointer_buttons_down -= 1;
                     }
-                    self.send_event(MouseUpEvent {
+                    self.send_event(&Event::MouseUp {
                         serial: EventSerial(serial),
                         window_id,
                         button: MouseButton(button),
@@ -128,7 +116,7 @@ impl PointerHandler for ApplicationState {
                     ..
                 } => {
                     debug!("wl_pointer vertical={vertical:?}");
-                    self.send_event(ScrollWheelEvent {
+                    self.send_event(&Event::ScrollWheel {
                         window_id,
                         location_in_window: LogicalPoint::new(event.position),
                         timestamp: Timestamp(time),

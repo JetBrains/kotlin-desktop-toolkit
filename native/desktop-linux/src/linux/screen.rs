@@ -34,7 +34,7 @@ impl ScreenInfo {
             screen_id: info.id,
             name: info
                 .name
-                .map_or_else(AutoDropArray::null, |s| AutoDropArray::new(s.into_bytes().into())),
+                .map_or_else(AutoDropArray::null, |s| AutoDropArray::new(s.into_bytes().into_boxed_slice())),
             origin: info
                 .logical_position
                 .map(|(x, y)| LogicalPoint::new((x.into(), y.into())))

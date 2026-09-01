@@ -3,16 +3,7 @@ use crate::linux::geometry::LogicalPoint;
 use crate::linux::{
     application_api::{DataSource, DragAndDropAction, DragAndDropActions, DragAndDropQueryData},
     application_state::ApplicationState,
-    events::{
-        DataTransferAvailableEvent,
-        DataTransferCancelledEvent,
-        DataTransferContent,
-        DragAndDropFinishedEvent,
-        DragAndDropLeaveEvent,
-        DropPerformedEvent,
-        WindowId,
-        //
-    },
+    events::{DataTransferContent, Event, WindowId},
 };
 use desktop_common::ffi_utils::{BorrowedArray, BorrowedUtf8};
 use futures_lite::{AsyncReadExt, AsyncWriteExt};
@@ -185,7 +176,7 @@ impl DataDeviceHandler for ApplicationState {
         // DataDeviceData::drag_offer is always None here
 
         if let Some(window_id) = self.current_drag_target_window_id.take() {
-            self.send_event(DragAndDropLeaveEvent { window_id });
+            self.send_event(&Event::DragAndDropLeave { window_id });
         }
     }
 
@@ -201,7 +192,10 @@ impl DataDeviceHandler for ApplicationState {
         selection_offer.with_mime_types(|mime_types| {
             debug!("DataDeviceHandler::selection: mime_types={mime_types:?}");
             let mime_types = mime_types.join(",");
-            self.send_event(DataTransferAvailableEvent::new(DataSource::Clipboard, &mime_types));
+            self.send_event(&Event::DataTransferAvailable {
+                data_source: DataSource::Clipboard,
+                mime_types: BorrowedUtf8::new(&mime_types),
+            });
         });
     }
 
@@ -228,7 +222,7 @@ impl DataDeviceHandler for ApplicationState {
         let mime_type_and_actions = self.get_drag_offer_actions(&drag_offer, location_in_window, window_id);
         let Some(mime_type) = mime_type_and_actions.mime_type else {
             debug!("DataDeviceHandler::drop_performed: no matching MIME type");
-            self.send_event(DropPerformedEvent {
+            self.send_event(&Event::DropPerformed {
                 window_id,
                 content: DataTransferContent::null(),
                 action: DragAndDropAction::None,
@@ -243,7 +237,7 @@ impl DataDeviceHandler for ApplicationState {
             Ok(v) => v,
             Err(e) => {
                 warn!("DataDeviceHandler::drop_performed: failed receiving data offer: {e}");
-                self.send_event(DropPerformedEvent {
+                self.send_event(&Event::DropPerformed {
                     window_id,
                     content: DataTransferContent::null(),
                     action: DragAndDropAction::None,
@@ -263,7 +257,7 @@ impl DataDeviceHandler for ApplicationState {
 
             send_event(
                 event_handler,
-                DropPerformedEvent {
+                &Event::DropPerformed {
                     window_id,
                     content: data.unwrap_or(DataTransferContent::null()),
                     action,
@@ -337,7 +331,7 @@ impl DataSourceHandler for ApplicationState {
             None
         };
         if let Some(data_source) = data_source {
-            self.send_event(DataTransferCancelledEvent { data_source });
+            self.send_event(&Event::DataTransferCancelled { data_source });
         }
         source.destroy();
     }
@@ -352,7 +346,7 @@ impl DataSourceHandler for ApplicationState {
         self.drag_icon = None;
         let window_id = self.current_drag_source_window_id.take().unwrap();
         let action = self.current_drag_source_action.take().unwrap();
-        self.send_event(DragAndDropFinishedEvent {
+        self.send_event(&Event::DragAndDropFinished {
             window_id,
             action: DragAndDropAction::from(action),
         });
@@ -394,7 +388,10 @@ impl PrimarySelectionDeviceHandler for ApplicationState {
         selection_offer.with_mime_types(|mime_types| {
             debug!("PrimarySelectionDeviceHandler::selection: mime_types={mime_types:?}");
             let mime_types = mime_types.join(",");
-            self.send_event(DataTransferAvailableEvent::new(DataSource::PrimarySelection, &mime_types));
+            self.send_event(&Event::DataTransferAvailable {
+                data_source: DataSource::PrimarySelection,
+                mime_types: BorrowedUtf8::new(&mime_types),
+            });
         });
     }
 }
@@ -435,7 +432,7 @@ impl PrimarySelectionSourceHandler for ApplicationState {
         debug!("PrimarySelectionSourceHandler::cancelled");
         self.primary_selection_source = None;
         source.destroy();
-        self.send_event(DataTransferCancelledEvent {
+        self.send_event(&Event::DataTransferCancelled {
             data_source: DataSource::PrimarySelection,
         });
     }

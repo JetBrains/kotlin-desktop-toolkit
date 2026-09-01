@@ -1,10 +1,8 @@
 use crate::linux::{
     application_state::ApplicationState,
-    events::{
-        EventSerial, KeyCode, KeyDownEvent, KeyModifiers, KeyUpEvent, ModifiersChangedEvent, WindowKeyboardEnterEvent,
-        WindowKeyboardLeaveEvent,
-    },
+    events::{Event, EventSerial, KeyCode, KeyModifiers},
 };
+use desktop_common::ffi_utils::{BorrowedArray, BorrowedUtf8};
 use log::debug;
 use smithay_client_toolkit::{
     reexports::client::{
@@ -16,7 +14,15 @@ use smithay_client_toolkit::{
 
 pub fn send_key_down_event(state: &ApplicationState, event: &KeyEvent, serial: EventSerial, is_repeat: bool) {
     let code = KeyCode(event.raw_code + 8);
-    state.send_event(KeyDownEvent::new(serial, code, event.keysym.raw(), event.utf8.as_ref(), is_repeat));
+    let key = event.keysym.raw();
+    let characters = event.utf8.as_ref();
+    state.send_event(&Event::KeyDown {
+        serial,
+        code,
+        characters: BorrowedUtf8::optional(characters.filter(|&s| !s.is_empty())),
+        key,
+        is_repeat,
+    });
 }
 
 impl KeyboardHandler for ApplicationState {
@@ -33,15 +39,20 @@ impl KeyboardHandler for ApplicationState {
         self.last_keyboard_event_serial = Some(serial);
         if let Some(window_id) = self.get_window_id(surface) {
             debug!("Keyboard focus on window with pressed syms: {keysyms:?}");
-            let xkb_codes = raw.iter().map(|v| v + 8).collect();
+            let xkb_codes = raw.iter().map(|v| v + 8).collect::<Box<_>>();
             let ks: Vec<u32> = keysyms.iter().map(|e| e.raw()).collect();
-            self.send_event(WindowKeyboardEnterEvent::new(EventSerial(serial), window_id, &xkb_codes, &ks));
+            self.send_event(&Event::WindowKeyboardEnter {
+                serial: EventSerial(serial),
+                window_id,
+                raw: BorrowedArray::from_slice(&xkb_codes),
+                keysyms: BorrowedArray::from_slice(&ks),
+            });
         }
     }
 
     fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlKeyboard, surface: &WlSurface, serial: u32) {
         if let Some(window_id) = self.get_window_id(surface) {
-            self.send_event(WindowKeyboardLeaveEvent {
+            self.send_event(&Event::WindowKeyboardLeave {
                 serial: EventSerial(serial),
                 window_id,
             });
@@ -60,7 +71,7 @@ impl KeyboardHandler for ApplicationState {
     fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlKeyboard, serial: u32, event: KeyEvent) {
         self.last_keyboard_event_serial = Some(serial);
         debug!("KeyboardHandler::release_key");
-        self.send_event(KeyUpEvent {
+        self.send_event(&Event::KeyUp {
             serial: EventSerial(serial),
             code: KeyCode(event.raw_code + 8),
             key: event.keysym.raw(),
@@ -98,11 +109,11 @@ impl KeyboardHandler for ApplicationState {
             if modifiers.num_lock {
                 key_modifiers |= KeyModifiers::NumLock;
             }
-            ModifiersChangedEvent {
+            Event::ModifiersChanged {
                 serial: EventSerial(serial),
                 modifiers: key_modifiers,
             }
         };
-        self.send_event(event);
+        self.send_event(&event);
     }
 }

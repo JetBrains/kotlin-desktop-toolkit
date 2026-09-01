@@ -1,10 +1,10 @@
+use crate::linux::events::{
+    Event, EventSerial, SoftwareDrawData, WindowCapabilities, WindowConfigureData, WindowDecorationMode, WindowDrawEvent, WindowFrame,
+    WindowFrameTiling, WindowId,
+};
 use crate::linux::{
     application_api::RenderingMode,
     application_state::{ApplicationState, EGLData},
-    events::{
-        EventSerial, SoftwareDrawData, WindowCapabilities, WindowConfigureEvent, WindowDecorationMode, WindowDrawEvent, WindowFrame,
-        WindowFrameTiling, WindowId,
-    },
     geometry::{LogicalPixelsInt, LogicalPoint, LogicalRect, LogicalSize, PhysicalSize, Scale},
     pointer_shapes_api::PointerShape,
     rendering_egl::EglRendering,
@@ -69,7 +69,7 @@ pub struct SimpleWindow {
     pub rendering_mode: RenderingMode,
     pub num_pointer_buttons_down: u32,
     default_client_side_decoration_frame: WindowFrame,
-    last_configure_event: Option<WindowConfigureEvent>,
+    last_configure_event: Option<Event<'static>>,
 }
 
 impl SimpleWindow {
@@ -151,15 +151,14 @@ impl SimpleWindow {
         self.close = true;
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn configure(
-        &mut self,
+    pub fn configure<'a>(
+        &'a mut self,
         shm: &Shm,
         compositor_state: &CompositorState,
         window: &Window,
         configure: &WindowConfigure,
         egl: Option<Rc<EGLData>>,
-    ) -> (bool, Option<WindowConfigureEvent>) {
+    ) -> (bool, Option<&'a Event<'a>>) {
         const DEFAULT_WIDTH: LogicalPixelsInt = LogicalPixelsInt::new(640);
         const DEFAULT_HEIGHT: LogicalPixelsInt = LogicalPixelsInt::new(480);
         debug!("{:?}: configure start: {configure:?}", self.window_id);
@@ -246,7 +245,7 @@ impl SimpleWindow {
             DecorationMode::Server => WindowDecorationMode::Server,
         };
 
-        let event = WindowConfigureEvent {
+        let new_configure_data = WindowConfigureData {
             window_id: self.window_id,
             size: self.surface_size.unwrap(),
             active: configure.is_activated(),
@@ -261,10 +260,14 @@ impl SimpleWindow {
             },
         };
 
-        let event = if self.last_configure_event.replace(event.clone()).is_none_or(|e| e != event) {
-            Some(event)
-        } else {
+        let event = if matches!(
+            &self.last_configure_event,
+            Some(Event::WindowConfigure(last_configure_data)) if *last_configure_data == new_configure_data
+        ) {
             None
+        } else {
+            self.last_configure_event = Some(Event::WindowConfigure(new_configure_data));
+            self.last_configure_event.as_ref()
         };
 
         (is_first_configure, event)
@@ -460,12 +463,12 @@ impl SimpleWindow {
     }
 
     #[must_use]
-    pub fn set_client_side_decoration_frame(
-        &mut self,
+    pub fn set_client_side_decoration_frame<'a>(
+        &'a mut self,
         frame: WindowFrame,
         compositor_state: &CompositorState,
         shm: &Shm,
-    ) -> Option<WindowConfigureEvent> {
+    ) -> Option<&'a Event<'a>> {
         debug!("{:?}: set_client_side_decoration_frame: {frame:?}", self.window_id);
 
         if self.default_client_side_decoration_frame == frame {
@@ -474,21 +477,30 @@ impl SimpleWindow {
 
         self.default_client_side_decoration_frame = frame.clone();
 
-        if let Some(mut event) = self.last_configure_event.clone()
-            && let WindowDecorationMode::Client {
-                frame: last_configure_event_frame,
-                ..
-            } = &mut event.decoration_mode
-            && !event.maximized
-            && !event.fullscreen
+        let Some(Event::WindowConfigure(mut last_configure_data)) = self.last_configure_event.take() else {
+            return None;
+        };
+
+        let report_new_event = if let WindowDecorationMode::Client {
+            frame: last_configure_data_frame,
+            ..
+        } = &mut last_configure_data.decoration_mode
+            && !last_configure_data.maximized
+            && !last_configure_data.fullscreen
         {
             if let Some(content_size) = self.content_size {
-                event.size = self.update_window_geometry(content_size, &frame, compositor_state, shm);
+                last_configure_data.size = self.update_window_geometry(content_size, &frame, compositor_state, shm);
             }
-            *last_configure_event_frame = frame;
+            *last_configure_data_frame = frame;
+            true
+        } else {
+            false
+        };
 
-            self.last_configure_event = Some(event.clone());
-            Some(event)
+        self.last_configure_event = Some(Event::WindowConfigure(last_configure_data));
+
+        if report_new_event {
+            self.last_configure_event.as_ref()
         } else {
             None
         }

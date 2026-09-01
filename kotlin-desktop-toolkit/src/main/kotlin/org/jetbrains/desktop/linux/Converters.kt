@@ -1,6 +1,5 @@
 package org.jetbrains.desktop.linux
 
-import org.jetbrains.desktop.linux.generated.NativeActivationTokenResponse
 import org.jetbrains.desktop.linux.generated.NativeAutoDropArray_u8
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_BorrowedUtf8
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_FfiSupportedActionsForMime
@@ -9,48 +8,54 @@ import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.linux.generated.NativeBorrowedUtf8
 import org.jetbrains.desktop.linux.generated.NativeColor
 import org.jetbrains.desktop.linux.generated.NativeCommonFileDialogParams
-import org.jetbrains.desktop.linux.generated.NativeDataTransferAvailableEvent
-import org.jetbrains.desktop.linux.generated.NativeDataTransferCancelledEvent
 import org.jetbrains.desktop.linux.generated.NativeDataTransferContent
-import org.jetbrains.desktop.linux.generated.NativeDataTransferEvent
-import org.jetbrains.desktop.linux.generated.NativeDragAndDropFinishedEvent
-import org.jetbrains.desktop.linux.generated.NativeDragAndDropLeaveEvent
 import org.jetbrains.desktop.linux.generated.NativeDragAndDropQueryData
 import org.jetbrains.desktop.linux.generated.NativeDragIconDrawEvent
-import org.jetbrains.desktop.linux.generated.NativeDropPerformedEvent
 import org.jetbrains.desktop.linux.generated.NativeEvent
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeActivationTokenResponse_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeDataTransferAvailable_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeDataTransferCancelled_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeDataTransfer_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeDragAndDropFinished_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeDragAndDropLeave_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeDropPerformed_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeFileChooserResponse_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeKeyDown_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeKeyUp_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeModifiersChanged_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeMouseDown_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeMouseEntered_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeMouseExited_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeMouseMoved_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeMouseUp_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeNotificationClosed_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeNotificationShown_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeScrollWheel_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeTextInputAvailability_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeTextInput_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeWindowCloseRequest_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeWindowClosed_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeWindowKeyboardEnter_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeWindowKeyboardLeave_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeWindowScaleChanged_Body
+import org.jetbrains.desktop.linux.generated.NativeEvent_NativeWindowScreenChange_Body
 import org.jetbrains.desktop.linux.generated.NativeFfiDesktopSetting
 import org.jetbrains.desktop.linux.generated.NativeFfiDragAndDropQueryResponse
 import org.jetbrains.desktop.linux.generated.NativeFfiSupportedActionsForMime
 import org.jetbrains.desktop.linux.generated.NativeFfiTransferDataResponse
-import org.jetbrains.desktop.linux.generated.NativeFileChooserResponse
-import org.jetbrains.desktop.linux.generated.NativeKeyDownEvent
-import org.jetbrains.desktop.linux.generated.NativeKeyUpEvent
 import org.jetbrains.desktop.linux.generated.NativeLogicalPoint
 import org.jetbrains.desktop.linux.generated.NativeLogicalRect
 import org.jetbrains.desktop.linux.generated.NativeLogicalSize
-import org.jetbrains.desktop.linux.generated.NativeModifiersChangedEvent
-import org.jetbrains.desktop.linux.generated.NativeMouseDownEvent
-import org.jetbrains.desktop.linux.generated.NativeMouseEnteredEvent
-import org.jetbrains.desktop.linux.generated.NativeMouseExitedEvent
-import org.jetbrains.desktop.linux.generated.NativeMouseMovedEvent
-import org.jetbrains.desktop.linux.generated.NativeMouseUpEvent
-import org.jetbrains.desktop.linux.generated.NativeNotificationClosedEvent
-import org.jetbrains.desktop.linux.generated.NativeNotificationShownEvent
 import org.jetbrains.desktop.linux.generated.NativeOpenFileDialogParams
 import org.jetbrains.desktop.linux.generated.NativePhysicalSize
 import org.jetbrains.desktop.linux.generated.NativeSaveFileDialogParams
 import org.jetbrains.desktop.linux.generated.NativeScrollData
-import org.jetbrains.desktop.linux.generated.NativeScrollWheelEvent
 import org.jetbrains.desktop.linux.generated.NativeSoftwareDrawData
-import org.jetbrains.desktop.linux.generated.NativeTextInputAvailabilityEvent
 import org.jetbrains.desktop.linux.generated.NativeTextInputContext
 import org.jetbrains.desktop.linux.generated.NativeTextInputDeleteSurroundingTextData
-import org.jetbrains.desktop.linux.generated.NativeTextInputEvent
 import org.jetbrains.desktop.linux.generated.NativeTextInputPreeditStringData
 import org.jetbrains.desktop.linux.generated.NativeWindowCapabilities
-import org.jetbrains.desktop.linux.generated.NativeWindowCloseRequestEvent
-import org.jetbrains.desktop.linux.generated.NativeWindowConfigureEvent
+import org.jetbrains.desktop.linux.generated.NativeWindowConfigureData
 import org.jetbrains.desktop.linux.generated.NativeWindowDecorationMode
 import org.jetbrains.desktop.linux.generated.NativeWindowDecorationMode_NativeClient_Body
 import org.jetbrains.desktop.linux.generated.NativeWindowDrawEvent
@@ -58,10 +63,6 @@ import org.jetbrains.desktop.linux.generated.NativeWindowFrame
 import org.jetbrains.desktop.linux.generated.NativeWindowFramePadding
 import org.jetbrains.desktop.linux.generated.NativeWindowFrameResizerThickness
 import org.jetbrains.desktop.linux.generated.NativeWindowFrameTiling
-import org.jetbrains.desktop.linux.generated.NativeWindowKeyboardEnterEvent
-import org.jetbrains.desktop.linux.generated.NativeWindowKeyboardLeaveEvent
-import org.jetbrains.desktop.linux.generated.NativeWindowScaleChangedEvent
-import org.jetbrains.desktop.linux.generated.NativeWindowScreenChangeEvent
 import org.jetbrains.desktop.linux.generated.desktop_linux_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -739,133 +740,132 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         }
 
         desktop_linux_h.NativeEvent_DesktopSettingChange() -> {
-            val nativeEvent = NativeEvent.desktop_setting_change(s)
+            val body = NativeEvent.desktop_setting_change(s)
             Event.DesktopSettingChange(
-                setting = DesktopSetting.fromNative(nativeEvent),
+                setting = DesktopSetting.fromNative(body),
             )
         }
 
         desktop_linux_h.NativeEvent_DataTransferAvailable() -> {
-            val nativeEvent = NativeEvent.data_transfer_available(s)
-            val mimeTypesString = readStringFromNativeU8Array(NativeDataTransferAvailableEvent.mime_types(nativeEvent))!!
+            val body = NativeEvent.data_transfer_available(s)
+            val mimeTypesString = readStringFromNativeU8Array(NativeEvent_NativeDataTransferAvailable_Body.mime_types(body))!!
             Event.DataTransferAvailable(
-                dataSource = DataSource.fromNative(NativeDataTransferAvailableEvent.data_source(nativeEvent)),
+                dataSource = DataSource.fromNative(NativeEvent_NativeDataTransferAvailable_Body.data_source(body)),
                 mimeTypes = mimeTypesString.split(","),
             )
         }
 
         desktop_linux_h.NativeEvent_DataTransferCancelled() -> {
-            val nativeEvent = NativeEvent.data_transfer_cancelled(s)
+            val body = NativeEvent.data_transfer_cancelled(s)
             Event.DataTransferCancelled(
-                dataSource = DataSource.fromNative(NativeDataTransferCancelledEvent.data_source(nativeEvent)),
+                dataSource = DataSource.fromNative(NativeEvent_NativeDataTransferCancelled_Body.data_source(body)),
             )
         }
 
         desktop_linux_h.NativeEvent_DataTransfer() -> {
-            val nativeEvent = NativeEvent.data_transfer(s)
-            val content = DataTransferContent.fromNative(NativeDataTransferEvent.content(nativeEvent))
+            val body = NativeEvent.data_transfer(s)
             Event.DataTransfer(
-                serial = NativeDataTransferEvent.serial(nativeEvent),
-                content = content,
+                serial = NativeEvent_NativeDataTransfer_Body.serial(body),
+                content = DataTransferContent.fromNative(NativeEvent_NativeDataTransfer_Body.content(body)),
             )
         }
 
         desktop_linux_h.NativeEvent_DragAndDropLeave() -> {
-            val nativeEvent = NativeEvent.drag_and_drop_leave(s)
-            Event.DragAndDropLeave(windowId = NativeDragAndDropLeaveEvent.window_id(nativeEvent))
+            val body = NativeEvent.drag_and_drop_leave(s)
+            Event.DragAndDropLeave(windowId = NativeEvent_NativeDragAndDropLeave_Body.window_id(body))
         }
 
         desktop_linux_h.NativeEvent_DropPerformed() -> {
-            val nativeEvent = NativeEvent.drop_performed(s)
+            val body = NativeEvent.drop_performed(s)
             Event.DropPerformed(
-                windowId = NativeDropPerformedEvent.window_id(nativeEvent),
-                content = DataTransferContent.fromNative(NativeDropPerformedEvent.content(nativeEvent)),
-                action = DragAndDropAction.fromNative(NativeDropPerformedEvent.action(nativeEvent).toInt()),
-                locationInWindow = LogicalPoint.fromNative(NativeDropPerformedEvent.location_in_window(nativeEvent)),
+                windowId = NativeEvent_NativeDropPerformed_Body.window_id(body),
+                content = DataTransferContent.fromNative(NativeEvent_NativeDropPerformed_Body.content(body)),
+                action = DragAndDropAction.fromNative(NativeEvent_NativeDropPerformed_Body.action(body).toInt()),
+                locationInWindow = LogicalPoint.fromNative(NativeEvent_NativeDropPerformed_Body.location_in_window(body)),
             )
         }
 
         desktop_linux_h.NativeEvent_DragIconDraw() -> {
-            val nativeEvent = NativeEvent.drag_icon_draw(s)
+            val body = NativeEvent.drag_icon_draw(s)
             Event.DragIconDraw(
-                softwareDrawData = SoftwareDrawData.fromNative(NativeDragIconDrawEvent.software_draw_data(nativeEvent)),
-                size = PhysicalSize.fromNative(NativeDragIconDrawEvent.physical_size(nativeEvent)),
-                scale = Scale.fromValue120(NativeDragIconDrawEvent.scale(nativeEvent)),
+                softwareDrawData = SoftwareDrawData.fromNative(NativeDragIconDrawEvent.software_draw_data(body)),
+                size = PhysicalSize.fromNative(NativeDragIconDrawEvent.physical_size(body)),
+                scale = Scale.fromValue120(NativeDragIconDrawEvent.scale(body)),
             )
         }
 
         desktop_linux_h.NativeEvent_DragAndDropFinished() -> {
-            val nativeEvent = NativeEvent.drag_and_drop_finished(s)
+            val body = NativeEvent.drag_and_drop_finished(s)
             Event.DragAndDropFinished(
-                windowId = NativeDragAndDropFinishedEvent.window_id(nativeEvent),
-                action = DragAndDropAction.fromNative(NativeDragAndDropFinishedEvent.action(nativeEvent).toInt()),
+                windowId = NativeEvent_NativeDragAndDropFinished_Body.window_id(body),
+                action = DragAndDropAction.fromNative(NativeEvent_NativeDragAndDropFinished_Body.action(body).toInt()),
             )
         }
 
         desktop_linux_h.NativeEvent_FileChooserResponse() -> {
-            val nativeEvent = NativeEvent.file_chooser_response(s)
-            val filesString = readStringFromNativeU8Array(NativeFileChooserResponse.newline_separated_files(nativeEvent))
+            val body = NativeEvent.file_chooser_response(s)
+            val filesString = readStringFromNativeU8Array(NativeEvent_NativeFileChooserResponse_Body.newline_separated_files(body))
             Event.FileChooserResponse(
-                requestId = RequestId.fromNativeField(NativeFileChooserResponse.request_id(nativeEvent)),
+                requestId = RequestId.fromNativeField(NativeEvent_NativeFileChooserResponse_Body.request_id(body)),
                 files = filesString?.trimEnd()?.split("\r\n") ?: emptyList(),
             )
         }
 
         desktop_linux_h.NativeEvent_ActivationTokenResponse() -> {
-            val nativeEvent = NativeEvent.activation_token_response(s)
+            val body = NativeEvent.activation_token_response(s)
             Event.ActivationTokenResponse(
-                requestId = RequestId.fromNativeField(NativeActivationTokenResponse.request_id(nativeEvent)),
-                token = readStringFromNativeU8Array(NativeActivationTokenResponse.token(nativeEvent))!!,
+                requestId = RequestId.fromNativeField(NativeEvent_NativeActivationTokenResponse_Body.request_id(body)),
+                token = readStringFromNativeU8Array(NativeEvent_NativeActivationTokenResponse_Body.token(body))!!,
             )
         }
 
         desktop_linux_h.NativeEvent_KeyDown() -> {
-            val nativeEvent = NativeEvent.key_down(s)
-            val nativeU8Array = NativeKeyDownEvent.characters(nativeEvent)
+            val body = NativeEvent.key_down(s)
+            val nativeU8Array = NativeEvent_NativeKeyDown_Body.characters(body)
             val characters = readNativeU8Array(nativeU8Array)?.decodeToString()
             Event.KeyDown(
-                serial = EventSerial.fromNative(NativeKeyDownEvent.serial(nativeEvent)),
-                keyCode = KeyCode(NativeKeyDownEvent.code(nativeEvent).toUInt()),
+                serial = EventSerial.fromNative(NativeEvent_NativeKeyDown_Body.serial(body)),
+                keyCode = KeyCode(NativeEvent_NativeKeyDown_Body.code(body).toUInt()),
                 characters = characters,
-                key = KeySym(NativeKeyDownEvent.key(nativeEvent).toUInt()),
-                isRepeat = NativeKeyDownEvent.is_repeat(nativeEvent),
+                key = KeySym(NativeEvent_NativeKeyDown_Body.key(body).toUInt()),
+                isRepeat = NativeEvent_NativeKeyDown_Body.is_repeat(body),
             )
         }
 
         desktop_linux_h.NativeEvent_KeyUp() -> {
-            val nativeEvent = NativeEvent.key_up(s)
+            val body = NativeEvent.key_up(s)
             Event.KeyUp(
-                serial = EventSerial.fromNative(NativeKeyUpEvent.serial(nativeEvent)),
-                key = KeySym(NativeKeyUpEvent.key(nativeEvent).toUInt()),
-                keyCode = KeyCode(NativeKeyUpEvent.code(nativeEvent).toUInt()),
+                serial = EventSerial.fromNative(NativeEvent_NativeKeyUp_Body.serial(body)),
+                key = KeySym(NativeEvent_NativeKeyUp_Body.key(body).toUInt()),
+                keyCode = KeyCode(NativeEvent_NativeKeyUp_Body.code(body).toUInt()),
             )
         }
 
         desktop_linux_h.NativeEvent_TextInputAvailability() -> {
-            val nativeEvent = NativeEvent.text_input(s)
+            val body = NativeEvent.text_input(s)
             Event.TextInputAvailability(
-                windowId = NativeTextInputAvailabilityEvent.window_id(nativeEvent),
-                available = NativeTextInputAvailabilityEvent.available(nativeEvent),
+                windowId = NativeEvent_NativeTextInputAvailability_Body.window_id(body),
+                available = NativeEvent_NativeTextInputAvailability_Body.available(body),
             )
         }
 
         desktop_linux_h.NativeEvent_TextInput() -> {
-            val nativeEvent = NativeEvent.text_input(s)
+            val body = NativeEvent.text_input(s)
             Event.TextInput(
-                preeditStringData = if (NativeTextInputEvent.has_preedit_string(nativeEvent)) {
-                    TextInputPreeditStringData.fromNative(NativeTextInputEvent.preedit_string(nativeEvent))
+                preeditStringData = if (NativeEvent_NativeTextInput_Body.has_preedit_string(body)) {
+                    TextInputPreeditStringData.fromNative(NativeEvent_NativeTextInput_Body.preedit_string(body))
                 } else {
                     null
                 },
-                commitStringData = if (NativeTextInputEvent.has_commit_string(nativeEvent)) {
+                commitStringData = if (NativeEvent_NativeTextInput_Body.has_commit_string(body)) {
                     TextInputCommitStringData(
-                        text = readStringFromNativeU8Array(NativeTextInputEvent.commit_string(nativeEvent)),
+                        text = readStringFromNativeU8Array(NativeEvent_NativeTextInput_Body.commit_string(body)),
                     )
                 } else {
                     null
                 },
-                deleteSurroundingTextData = if (NativeTextInputEvent.has_delete_surrounding_text(nativeEvent)) {
-                    TextInputDeleteSurroundingTextData.fromNative(NativeTextInputEvent.delete_surrounding_text(nativeEvent))
+                deleteSurroundingTextData = if (NativeEvent_NativeTextInput_Body.has_delete_surrounding_text(body)) {
+                    TextInputDeleteSurroundingTextData.fromNative(NativeEvent_NativeTextInput_Body.delete_surrounding_text(body))
                 } else {
                     null
                 },
@@ -873,163 +873,160 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         }
 
         desktop_linux_h.NativeEvent_ModifiersChanged() -> {
-            val nativeEvent = NativeEvent.modifiers_changed(s)
-            val nativeModifiers = NativeModifiersChangedEvent.modifiers(nativeEvent)
+            val body = NativeEvent.modifiers_changed(s)
             Event.ModifiersChanged(
-                serial = EventSerial.fromNative(NativeModifiersChangedEvent.serial(nativeEvent)),
-                modifiers = keyModifiersFromNative(nativeModifiers),
+                serial = EventSerial.fromNative(NativeEvent_NativeModifiersChanged_Body.serial(body)),
+                modifiers = keyModifiersFromNative(NativeEvent_NativeModifiersChanged_Body.modifiers(body)),
             )
         }
 
         desktop_linux_h.NativeEvent_MouseMoved() -> {
-            val nativeEvent = NativeEvent.mouse_moved(s)
+            val body = NativeEvent.mouse_moved(s)
             Event.MouseMoved(
-                windowId = NativeMouseMovedEvent.window_id(nativeEvent),
-                locationInWindow = LogicalPoint.fromNative(NativeMouseMovedEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp.fromNative(NativeMouseMovedEvent.timestamp(nativeEvent)),
+                windowId = NativeEvent_NativeMouseMoved_Body.window_id(body),
+                locationInWindow = LogicalPoint.fromNative(NativeEvent_NativeMouseMoved_Body.location_in_window(body)),
+                timestamp = Timestamp.fromNative(NativeEvent_NativeMouseMoved_Body.timestamp(body)),
             )
         }
 
         desktop_linux_h.NativeEvent_MouseEntered() -> {
-            val nativeEvent = NativeEvent.mouse_entered(s)
+            val body = NativeEvent.mouse_entered(s)
             Event.MouseEntered(
-                serial = EventSerial.fromNative(NativeMouseEnteredEvent.serial(nativeEvent)),
-                windowId = NativeMouseEnteredEvent.window_id(nativeEvent),
-                locationInWindow = LogicalPoint.fromNative(NativeMouseEnteredEvent.location_in_window(nativeEvent)),
+                serial = EventSerial.fromNative(NativeEvent_NativeMouseEntered_Body.serial(body)),
+                windowId = NativeEvent_NativeMouseEntered_Body.window_id(body),
+                locationInWindow = LogicalPoint.fromNative(NativeEvent_NativeMouseEntered_Body.location_in_window(body)),
             )
         }
 
         desktop_linux_h.NativeEvent_MouseExited() -> {
-            val nativeEvent = NativeEvent.mouse_exited(s)
+            val body = NativeEvent.mouse_exited(s)
             Event.MouseExited(
-                serial = EventSerial.fromNative(NativeMouseExitedEvent.serial(nativeEvent)),
-                windowId = NativeMouseExitedEvent.window_id(nativeEvent),
-                locationInWindow = LogicalPoint.fromNative(NativeMouseExitedEvent.location_in_window(nativeEvent)),
+                serial = EventSerial.fromNative(NativeEvent_NativeMouseExited_Body.serial(body)),
+                windowId = NativeEvent_NativeMouseExited_Body.window_id(body),
+                locationInWindow = LogicalPoint.fromNative(NativeEvent_NativeMouseExited_Body.location_in_window(body)),
             )
         }
 
         desktop_linux_h.NativeEvent_MouseUp() -> {
-            val nativeEvent = NativeEvent.mouse_up(s)
+            val body = NativeEvent.mouse_up(s)
             Event.MouseUp(
-                serial = EventSerial.fromNative(NativeMouseUpEvent.serial(nativeEvent)),
-                windowId = NativeMouseUpEvent.window_id(nativeEvent),
-                button = MouseButton(NativeMouseUpEvent.button(nativeEvent)),
-                locationInWindow = LogicalPoint.fromNative(NativeMouseUpEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp.fromNative(NativeMouseUpEvent.timestamp(nativeEvent)),
+                serial = EventSerial.fromNative(NativeEvent_NativeMouseUp_Body.serial(body)),
+                windowId = NativeEvent_NativeMouseUp_Body.window_id(body),
+                button = MouseButton(NativeEvent_NativeMouseUp_Body.button(body)),
+                locationInWindow = LogicalPoint.fromNative(NativeEvent_NativeMouseUp_Body.location_in_window(body)),
+                timestamp = Timestamp.fromNative(NativeEvent_NativeMouseUp_Body.timestamp(body)),
             )
         }
 
         desktop_linux_h.NativeEvent_MouseDown() -> {
-            val nativeEvent = NativeEvent.mouse_down(s)
+            val body = NativeEvent.mouse_down(s)
             Event.MouseDown(
-                serial = EventSerial.fromNative(NativeMouseDownEvent.serial(nativeEvent)),
-                windowId = NativeMouseDownEvent.window_id(nativeEvent),
-                button = MouseButton(NativeMouseDownEvent.button(nativeEvent)),
-                locationInWindow = LogicalPoint.fromNative(NativeMouseDownEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp.fromNative(NativeMouseDownEvent.timestamp(nativeEvent)),
+                serial = EventSerial.fromNative(NativeEvent_NativeMouseDown_Body.serial(body)),
+                windowId = NativeEvent_NativeMouseDown_Body.window_id(body),
+                button = MouseButton(NativeEvent_NativeMouseDown_Body.button(body)),
+                locationInWindow = LogicalPoint.fromNative(NativeEvent_NativeMouseDown_Body.location_in_window(body)),
+                timestamp = Timestamp.fromNative(NativeEvent_NativeMouseDown_Body.timestamp(body)),
             )
         }
 
         desktop_linux_h.NativeEvent_NotificationClosed() -> {
-            val nativeEvent = NativeEvent.notification_closed(s)
+            val body = NativeEvent.notification_closed(s)
             Event.NotificationClosed(
-                notificationId = NativeNotificationClosedEvent.notification_id(nativeEvent).toUInt(),
-                action = readStringFromNativeU8Array(NativeNotificationClosedEvent.action(nativeEvent)),
-                activationToken = readStringFromNativeU8Array(NativeNotificationClosedEvent.activation_token(nativeEvent)),
+                notificationId = NativeEvent_NativeNotificationClosed_Body.notification_id(body).toUInt(),
+                action = readStringFromNativeU8Array(NativeEvent_NativeNotificationClosed_Body.action(body)),
+                activationToken = readStringFromNativeU8Array(NativeEvent_NativeNotificationClosed_Body.activation_token(body)),
             )
         }
 
         desktop_linux_h.NativeEvent_NotificationShown() -> {
-            val nativeEvent = NativeEvent.notification_shown(s)
-            val nativeNotificationId = NativeNotificationShownEvent.notification_id(nativeEvent)
+            val body = NativeEvent.notification_shown(s)
+            val nativeNotificationId = NativeEvent_NativeNotificationShown_Body.notification_id(body)
             Event.NotificationShown(
-                requestId = RequestId.fromNativeField(NativeNotificationShownEvent.request_id(nativeEvent)),
+                requestId = RequestId.fromNativeField(NativeEvent_NativeNotificationShown_Body.request_id(body)),
                 notificationId = if (nativeNotificationId == 0) null else nativeNotificationId.toUInt(),
             )
         }
 
         desktop_linux_h.NativeEvent_ScrollWheel() -> {
-            val nativeEvent = NativeEvent.scroll_wheel(s)
-            val horizontalScroll = ScrollData.fromNative(NativeScrollWheelEvent.horizontal_scroll(nativeEvent))
-            val verticalScroll = ScrollData.fromNative(NativeScrollWheelEvent.vertical_scroll(nativeEvent))
+            val body = NativeEvent.scroll_wheel(s)
             Event.ScrollWheel(
-                windowId = NativeScrollWheelEvent.window_id(nativeEvent),
-                locationInWindow = LogicalPoint.fromNative(NativeScrollWheelEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp.fromNative(NativeScrollWheelEvent.timestamp(nativeEvent)),
-                horizontalScroll = horizontalScroll,
-                verticalScroll = verticalScroll,
+                windowId = NativeEvent_NativeScrollWheel_Body.window_id(body),
+                locationInWindow = LogicalPoint.fromNative(NativeEvent_NativeScrollWheel_Body.location_in_window(body)),
+                timestamp = Timestamp.fromNative(NativeEvent_NativeScrollWheel_Body.timestamp(body)),
+                horizontalScroll = ScrollData.fromNative(NativeEvent_NativeScrollWheel_Body.horizontal_scroll(body)),
+                verticalScroll = ScrollData.fromNative(NativeEvent_NativeScrollWheel_Body.vertical_scroll(body)),
             )
         }
 
         desktop_linux_h.NativeEvent_WindowScreenChange() -> {
-            val nativeEvent = NativeEvent.window_screen_change(s)
+            val body = NativeEvent.window_screen_change(s)
             Event.WindowScreenChange(
-                windowId = NativeWindowScreenChangeEvent.window_id(nativeEvent),
-                newScreenId = NativeWindowScreenChangeEvent.new_screen_id(nativeEvent),
+                windowId = NativeEvent_NativeWindowScreenChange_Body.window_id(body),
+                newScreenId = NativeEvent_NativeWindowScreenChange_Body.new_screen_id(body),
             )
         }
 
         desktop_linux_h.NativeEvent_WindowClosed() -> {
-            val nativeEvent = NativeEvent.window_closed(s)
+            val body = NativeEvent.window_closed(s)
             Event.WindowClosed(
-                windowId = NativeWindowConfigureEvent.window_id(nativeEvent),
+                windowId = NativeEvent_NativeWindowClosed_Body.window_id(body),
             )
         }
 
         desktop_linux_h.NativeEvent_WindowConfigure() -> {
-            val nativeEvent = NativeEvent.window_configure(s)
+            val body = NativeEvent.window_configure(s)
             Event.WindowConfigure(
-                windowId = NativeWindowConfigureEvent.window_id(nativeEvent),
-                size = LogicalSize.fromNative(NativeWindowConfigureEvent.size(nativeEvent)),
-                active = NativeWindowConfigureEvent.active(nativeEvent),
-                maximized = NativeWindowConfigureEvent.maximized(nativeEvent),
-                fullscreen = NativeWindowConfigureEvent.fullscreen(nativeEvent),
-                decorationMode = WindowDecorationMode.fromNative(NativeWindowConfigureEvent.decoration_mode(nativeEvent)),
-                capabilities = WindowCapabilities.fromNative(NativeWindowConfigureEvent.capabilities(nativeEvent)),
+                windowId = NativeWindowConfigureData.window_id(body),
+                size = LogicalSize.fromNative(NativeWindowConfigureData.size(body)),
+                active = NativeWindowConfigureData.active(body),
+                maximized = NativeWindowConfigureData.maximized(body),
+                fullscreen = NativeWindowConfigureData.fullscreen(body),
+                decorationMode = WindowDecorationMode.fromNative(NativeWindowConfigureData.decoration_mode(body)),
+                capabilities = WindowCapabilities.fromNative(NativeWindowConfigureData.capabilities(body)),
             )
         }
 
         desktop_linux_h.NativeEvent_WindowKeyboardEnter() -> {
-            val nativeEvent = NativeEvent.window_keyboard_enter(s)
+            val body = NativeEvent.window_keyboard_enter(s)
 
-            val keyCodes = readNativeU32Array(NativeWindowKeyboardEnterEvent.raw(nativeEvent))!!.map { KeyCode(it.toUInt()) }
-            val keySyms = readNativeU32Array(NativeWindowKeyboardEnterEvent.keysyms(nativeEvent))!!.map { KeySym(it.toUInt()) }
+            val keyCodes = readNativeU32Array(NativeEvent_NativeWindowKeyboardEnter_Body.raw(body))!!.map { KeyCode(it.toUInt()) }
+            val keySyms = readNativeU32Array(NativeEvent_NativeWindowKeyboardEnter_Body.keysyms(body))!!.map { KeySym(it.toUInt()) }
 
             Event.WindowKeyboardEnter(
-                serial = EventSerial.fromNative(NativeWindowKeyboardEnterEvent.serial(nativeEvent)),
-                windowId = NativeWindowKeyboardEnterEvent.window_id(nativeEvent),
+                serial = EventSerial.fromNative(NativeEvent_NativeWindowKeyboardEnter_Body.serial(body)),
+                windowId = NativeEvent_NativeWindowKeyboardEnter_Body.window_id(body),
                 keyCodes = keyCodes,
                 keySyms = keySyms,
             )
         }
 
         desktop_linux_h.NativeEvent_WindowKeyboardLeave() -> {
-            val nativeEvent = NativeEvent.window_keyboard_leave(s)
+            val body = NativeEvent.window_keyboard_leave(s)
             Event.WindowKeyboardLeave(
-                serial = EventSerial.fromNative(NativeWindowKeyboardLeaveEvent.serial(nativeEvent)),
-                windowId = NativeWindowKeyboardLeaveEvent.window_id(nativeEvent),
+                serial = EventSerial.fromNative(NativeEvent_NativeWindowKeyboardLeave_Body.serial(body)),
+                windowId = NativeEvent_NativeWindowKeyboardLeave_Body.window_id(body),
             )
         }
 
         desktop_linux_h.NativeEvent_WindowCloseRequest() -> {
-            val nativeEvent = NativeEvent.window_close_request(s)
-            Event.WindowCloseRequest(windowId = NativeWindowCloseRequestEvent.window_id(nativeEvent))
+            val body = NativeEvent.window_close_request(s)
+            Event.WindowCloseRequest(windowId = NativeEvent_NativeWindowCloseRequest_Body.window_id(body))
         }
 
         desktop_linux_h.NativeEvent_WindowDraw() -> {
-            val nativeEvent = NativeEvent.window_draw(s)
+            val body = NativeEvent.window_draw(s)
             Event.WindowDraw(
-                windowId = NativeWindowDrawEvent.window_id(nativeEvent),
-                softwareDrawData = SoftwareDrawData.fromNative(NativeWindowDrawEvent.software_draw_data(nativeEvent)),
-                size = PhysicalSize.fromNative(NativeWindowDrawEvent.physical_size(nativeEvent)),
+                windowId = NativeWindowDrawEvent.window_id(body),
+                softwareDrawData = SoftwareDrawData.fromNative(NativeWindowDrawEvent.software_draw_data(body)),
+                size = PhysicalSize.fromNative(NativeWindowDrawEvent.physical_size(body)),
             )
         }
 
         desktop_linux_h.NativeEvent_WindowScaleChanged() -> {
-            val nativeEvent = NativeEvent.window_scale_changed(s)
+            val body = NativeEvent.window_scale_changed(s)
             Event.WindowScaleChanged(
-                windowId = NativeWindowScaleChangedEvent.window_id(nativeEvent),
-                newScale = Scale.fromValue120(NativeWindowScaleChangedEvent.new_scale(nativeEvent)),
+                windowId = NativeEvent_NativeWindowScaleChanged_Body.window_id(body),
+                newScale = Scale.fromValue120(NativeEvent_NativeWindowScaleChanged_Body.new_scale(body)),
             )
         }
 
