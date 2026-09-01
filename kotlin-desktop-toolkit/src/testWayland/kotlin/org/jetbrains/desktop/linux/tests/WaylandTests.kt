@@ -1749,9 +1749,6 @@ class WaylandTests : WaylandTestsBase() {
         val initialRecentFilesMaxAgeDays = assertNotNull(initialSettings.recentFilesMaxAgeDays, "Initial RecentFilesMaxAgeDays setting")
         val initialTitlebarLayout = assertNotNull(initialSettings.titlebarLayout, "Initial TitlebarLayout setting")
 
-        val windowParams = defaultWindowParams()
-        createWindowAndWaitForFocus(windowParams)
-
         initialSettings.accentColor?.let { initialAccentColor ->
             val newColors = mutableSetOf<Color>()
             var matchedOriginal = false
