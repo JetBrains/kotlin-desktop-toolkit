@@ -13,6 +13,9 @@ commit archaeology live in the sibling reports:
 
 **Total: 64 findings — 3 P0, 17 P1, 28 P2, 16 P3.**
 
+> A second comparison, run after WS1–WS8 and WS11 had landed, is in [round-2.md](round-2.md).
+> It records what this one missed, what it under-rated, and two defects in code it landed.
+
 ## Porting principle
 
 **Resemble Noria as closely as the difference between the two runtimes allows.** The same people
