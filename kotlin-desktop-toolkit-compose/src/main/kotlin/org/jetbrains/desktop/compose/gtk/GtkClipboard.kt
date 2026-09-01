@@ -107,7 +107,11 @@ internal class GtkClipboard(private val application: GtkApplication) : Clipboard
                 application.onEventLoopAsync {
                     val serial = serials.incrementAndGet()
                     pendingReads[serial] = { content ->
-                        continuation.resume(content?.let { decodeLinuxMimeData(it.data, format) }.orEmpty())
+                        // Only the types we asked for can be decoded as this format; anything else would
+                        // be read as garbage. Empty rather than an exception: this resumes inside a
+                        // Compose paste handler.
+                        val answered = content?.takeIf { it.mimeType in mimeTypes }
+                        continuation.resume(answered?.let { decodeLinuxMimeData(it.data, format) }.orEmpty())
                     }
                     continuation.invokeOnCancellation { pendingReads.remove(serial) }
                     clipboardPaste(serial, mimeTypes)

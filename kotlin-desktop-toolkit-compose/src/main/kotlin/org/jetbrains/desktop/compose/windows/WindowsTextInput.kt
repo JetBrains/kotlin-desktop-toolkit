@@ -103,7 +103,7 @@ internal class WindowsTextInput(
      * AltGr reaches the layouts that type real characters with it.
      */
     fun offerKeyDownToInputMethod(event: Event.KeyDown): Boolean {
-        if (activeClient == null) {
+        if (!isSessionActive) {
             return false
         }
         val producesText = event.toUnicode().firstOrNull()?.isISOControl() == false
