@@ -8,9 +8,7 @@ on:
     branches: [ main ]
 
 env:
-  RUST_VERSION: 1.94.0 # the same as in rust-toolchain
   ACTIONS_STEP_DEBUG: true
-  CARGO_INCREMENTAL: 1
 
 jobs:
   build_all:
@@ -28,7 +26,7 @@ jobs:
     runs-on: ${{ matrix.targets.os }}
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install Dependencies
         if: "${{ matrix.targets.package_manager == 'apt' }}"
@@ -39,10 +37,9 @@ jobs:
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: ${{ env.RUST_VERSION }}
           target: ${{ matrix.targets.rust_targets }}
           components: rustfmt, clippy
-          cache-workspaces: "./native -> target"
+          rust-src-dir: "native"
           cache: true
 
       - name: Setup Java
@@ -52,7 +49,7 @@ jobs:
           java-version: 25
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 #      - name: Lint with Gradle
 #        run: ./gradlew lint
       - name: Test with Gradle
@@ -60,10 +57,9 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew build
 
-
       - name: Publish Test Report
         if: always() # Ensure this step runs even if the test step fails
-        uses: dorny/test-reporter@v2
+        uses: dorny/test-reporter@v3
         with:
           name: Tests Report (${{ matrix.os }})
           path: kotlin-desktop-toolkit/build/test-results/test/*.xml
