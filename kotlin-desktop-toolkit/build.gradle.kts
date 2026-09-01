@@ -548,6 +548,7 @@ abstract class X11TestEnv :
             "TEST_IBUS_ENGINE_CURSOR_LOCATION_OUT_FILE" to ibusEngineTmpCursorLocationOutputFile.absolutePathString(),
             "LANG" to "en_US.UTF-8",
             "HOME" to homeTempDir.absolutePathString(),
+            "XAUTHORITY" to homeTempDir.resolve(".Xauthority").also { it.createFile() }.absolutePathString(),
             "XDG_DATA_HOME" to xdgDataHome.absolutePathString(),
             "XDG_RUNTIME_DIR" to homeTempDir.resolve("xdg_runtime_dir").createDirectory(
                 PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")),
@@ -748,6 +749,8 @@ Exec=/bin/true
             }
         }
 
+        runCommand("xauth", "generate", testDisplay, ".", "trusted")
+
         ibusComponentFile.writeText(generateIBusXmlFileContent(ibusTestEngineFile.asFile))
         newProcess(
             "ibus-daemon",
@@ -903,7 +906,7 @@ dependencies {
     testGtkImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testGtkImplementation(libs.junit.jupiter.engine)
     testGtkImplementation("org.jetbrains.skiko:skiko-awt-runtime-$skikoTargetOs-$skikoTargetArch:$skikoVersion")
-    testGtkImplementation("net.java.dev.jna:jna-platform:5.18.1")
+    testGtkImplementation("com.github.moaxcp.x11:x11-client:0.22.0")
     testGtkImplementation("com.squareup.moshi:moshi-kotlin:1.15.2")
     testGtkRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
