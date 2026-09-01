@@ -5100,7 +5100,7 @@ text/plain;charset=utf-8
             "Expected ${rectColor.toHexString()}, got ${bottomRightRectColor.toHexString()} for $path",
         )
 
-        val bottomRightColor = bitmap.getColor(image.width - 1, image.height - 1)
+        val bottomRightColor = bitmap.getColor(image.width - 2, image.height - 2)
         assertEquals(
             backgroundColor,
             bottomRightColor,
