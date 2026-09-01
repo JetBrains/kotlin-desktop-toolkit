@@ -116,6 +116,10 @@ internal class LinuxInputStateTracker(
 
             is Event.MouseUp -> {
                 startPointerEvent(event.timestamp.toDuration().inWholeMilliseconds)
+                // A native grab -- an interactive move, resize or drag -- takes the pointer and leaves
+                // `MouseExited` behind, so the release can be the first event back without an intervening
+                // `MouseEntered`. Without this the sends below drop out and hover stays stale.
+                isPointerInWindow = true
                 movePointerTo(event.locationInWindow, PointerEventType.Move, event, density)
                 pointerButtons -= event.button.toComposePointerButton()
                 sendPointerEvent(

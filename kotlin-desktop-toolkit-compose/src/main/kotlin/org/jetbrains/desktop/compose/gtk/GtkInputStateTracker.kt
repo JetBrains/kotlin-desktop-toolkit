@@ -118,6 +118,10 @@ internal class GtkInputStateTracker(
 
             is Event.MouseUp -> {
                 startPointerEvent(event.timestamp.toDuration().inWholeMilliseconds)
+                // A native grab -- an interactive move, resize or drag -- takes the pointer and leaves
+                // `MouseExited` behind, so the release can be the first event back without an intervening
+                // `MouseEntered`. Without this the sends below drop out and hover stays stale.
+                isPointerInWindow = true
                 movePointerTo(event.locationInWindow, PointerEventType.Move, event, density)
                 pointerButtons -= event.button.toComposePointerButton()
                 sendPointerEvent(
@@ -155,6 +159,10 @@ internal class GtkInputStateTracker(
                 // GTK's Leave carries no position, so the Exit replays the last one we saw. It is sent
                 // before the state below is cleared, because Compose reads it as "hover ended with these
                 // buttons held" and a drag that leaves the window has to keep them.
+                // Forced true first: a duplicate Leave, or one arriving after a grab already cleared the
+                // flag, would otherwise be swallowed by the guard in `sendPointerEventWithCurrentState`
+                // and leave the last hovered element highlighted for good.
+                isPointerInWindow = true
                 sendPointerEventWithCurrentState(PointerEventType.Exit, event)
                 isPointerInWindow = false
                 // A native grab — an interactive resize, or a drag — takes the pointer when the grab
