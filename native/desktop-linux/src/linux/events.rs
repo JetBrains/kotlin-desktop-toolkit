@@ -222,7 +222,7 @@ impl<'a> KeyDownEvent<'a> {
         Self {
             serial,
             code,
-            characters: BorrowedUtf8::optional(characters.and_then(|s| if s.is_empty() { None } else { Some(s) })),
+            characters: BorrowedUtf8::optional(characters.filter(|&s| !s.is_empty())),
             key,
             is_repeat,
         }
