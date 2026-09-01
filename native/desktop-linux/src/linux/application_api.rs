@@ -76,7 +76,7 @@ pub struct FfiTransferDataResponse {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 pub enum DataSource {
     Clipboard,
     DragAndDrop,

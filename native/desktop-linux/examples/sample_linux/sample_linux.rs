@@ -8,6 +8,7 @@ use desktop_common::{
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
 use desktop_linux::linux::application_api::{FfiDragAndDropQueryResponse, FfiSupportedActionsForMime, FfiTransferDataResponse};
+use desktop_linux::linux::events::{EventSerial, KeyCode, TextInputDeleteSurroundingTextData, TextInputPreeditStringData};
 use desktop_linux::linux::screen::screen_list;
 use desktop_linux::linux::{
     application_api::{
@@ -34,8 +35,8 @@ use desktop_linux::linux::{
     },
     desktop_settings_api::FfiDesktopSetting,
     events::{
-        DataTransferContent, Event, KeyDownEvent, KeyModifiers, RequestId, SoftwareDrawData, TextInputEvent, WindowDecorationMode,
-        WindowFrame, WindowFramePadding, WindowFrameResizerThickness, WindowId,
+        DataTransferContent, Event, KeyModifiers, RequestId, SoftwareDrawData, WindowDecorationMode, WindowFrame, WindowFramePadding,
+        WindowFrameResizerThickness, WindowId,
     },
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPixelsInt, LogicalRect, LogicalSize, PhysicalSize, Scale},
@@ -190,14 +191,22 @@ const fn shortcut_modifiers(all_modifiers: KeyModifiers) -> KeyModifiers {
 }
 
 #[allow(clippy::too_many_lines)]
-fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> Option<Action> {
+fn on_keydown(
+    app_ptr: AppPtr<'_>,
+    state: &mut State,
+    _serial: EventSerial,
+    characters: Option<&str>,
+    code: KeyCode,
+    _key: u32,
+    _is_repeat: bool,
+) -> Option<Action> {
     const KEY_MODIFIER_NONE: KeyModifiers = KeyModifiers::empty();
     const KEY_MODIFIER_CTRL: KeyModifiers = KeyModifiers::Ctrl;
     const KEY_MODIFIER_CTRL_SHIFT: KeyModifiers = KeyModifiers::Ctrl.or(KeyModifiers::Shift);
 
     let modifiers = shortcut_modifiers(state.key_modifiers);
     let window_id = state.key_window_id.expect("Key window not found");
-    let key_code = decode_key_code(event.code.0)?;
+    let key_code = decode_key_code(code.0)?;
     let window_state = state.windows.get_mut(&window_id).unwrap();
 
     match (modifiers, key_code) {
@@ -339,7 +348,7 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> O
             Some(Action::Dummy)
         }
         (_, _) => {
-            if let Some(s) = event.characters.get_optional("KeyDownEvent: characters").unwrap() {
+            if let Some(s) = characters {
                 let window_state = state.windows.get_mut(&window_id).unwrap();
                 window_state.text += s;
             }
@@ -358,28 +367,37 @@ fn on_text_input_availability_changed(available: bool, app_ptr: AppPtr<'_>, wind
     window_state.text_input_available = available;
 }
 
-fn on_text_input(event: &TextInputEvent, app_ptr: AppPtr<'_>, window_id: WindowId, window_state: &mut WindowState) {
+#[allow(clippy::too_many_arguments)]
+fn on_text_input<'a>(
+    app_ptr: AppPtr<'_>,
+    window_id: WindowId,
+    window_state: &mut WindowState,
+    has_preedit_string: bool,
+    preedit_string: &TextInputPreeditStringData<'a>,
+    has_commit_string: bool,
+    commit_string: &BorrowedUtf8<'a>,
+    has_delete_surrounding_text: bool,
+    delete_surrounding_text: &TextInputDeleteSurroundingTextData,
+) {
     window_state.composed_text.clear();
-    if event.has_delete_surrounding_text {
+    if has_delete_surrounding_text {
         let cursor_pos = window_state.text.len();
-        let range = (cursor_pos - event.delete_surrounding_text.before_length_in_bytes as usize)
-            ..(cursor_pos + event.delete_surrounding_text.after_length_in_bytes as usize);
+        let range = (cursor_pos - delete_surrounding_text.before_length_in_bytes as usize)
+            ..(cursor_pos + delete_surrounding_text.after_length_in_bytes as usize);
         window_state.text.drain(range);
     }
-    if event.has_commit_string
-        && let Some(commit_string) = event.commit_string.get_optional("TextInputEvent.commit_string").unwrap()
-    {
+    if has_commit_string && let Some(commit_string) = commit_string.get_optional("TextInputEvent.commit_string").unwrap() {
         debug!("{window_id:?} commit_string: {commit_string}");
         window_state.text += commit_string;
     }
-    if event.has_delete_surrounding_text || event.has_commit_string {
+    if has_delete_surrounding_text || has_commit_string {
         update_text_input_context(app_ptr, &window_state.text, true);
     }
 
-    if event.has_preedit_string {
-        if event.preedit_string.cursor_begin_byte_pos == -1 && event.preedit_string.cursor_end_byte_pos == -1 {
+    if has_preedit_string {
+        if preedit_string.cursor_begin_byte_pos == -1 && preedit_string.cursor_end_byte_pos == -1 {
             // TODO: hide cursor
-        } else if let Some(preedit_string) = event.preedit_string.text.get_optional("TextInputEvent.preedit_string").unwrap() {
+        } else if let Some(preedit_string) = preedit_string.text.get_optional("TextInputEvent.preedit_string").unwrap() {
             window_state.composed_text.push_str(preedit_string);
         }
     }
@@ -503,7 +521,7 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
     let mut actions = Vec::new();
 
     match event {
-        Event::WindowDraw(_) | Event::MouseMoved(_) => {}
+        Event::WindowDraw { .. } | Event::MouseMoved { .. } => {}
         _ => {
             debug!("event_handler: {event:?}");
         }
@@ -526,9 +544,9 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
             Event::DesktopSettingChange(data) => {
                 on_desktop_settings_change(data, state);
             }
-            Event::WindowScaleChanged(data) => {
-                if let Some(window_state) = state.windows.get_mut(&data.window_id) {
-                    window_state.scale = data.new_scale;
+            Event::WindowScaleChanged { window_id, new_scale } => {
+                if let Some(window_state) = state.windows.get_mut(window_id) {
+                    window_state.scale = *new_scale;
                 }
             }
             Event::WindowConfigure(data) => {
@@ -561,24 +579,30 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
                 actions.push(Action::Dummy);
                 window_state.redraw = false;
             }
-            Event::WindowCloseRequest(data) => {
-                actions.push(Action::WindowClose(data.window_id));
+            Event::WindowCloseRequest { window_id } => {
+                actions.push(Action::WindowClose(*window_id));
             }
-            Event::WindowClosed(data) => {
-                state.windows.retain(|&k, _v| k != data.window_id);
-                state.request_sources.retain(|_k, &mut v| v != data.window_id);
-                for (notification_id, _window_id) in state.notification_sources.extract_if(|_k, &mut v| v != data.window_id) {
+            Event::WindowClosed { window_id } => {
+                state.windows.retain(|k, _v| k != window_id);
+                state.request_sources.retain(|_k, v| v != window_id);
+                for (notification_id, _window_id) in state.notification_sources.extract_if(|_k, v| v != window_id) {
                     application_close_notification(app_ptr.clone(), notification_id);
                 }
                 if state.windows.is_empty() {
                     actions.push(Action::ApplicationStopEventLoop);
                 }
             }
-            Event::MouseDown(data) => match data.button.0 {
+            Event::MouseDown {
+                serial: _,
+                window_id,
+                button,
+                location_in_window,
+                timestamp: _,
+            } => match button.0 {
                 MOUSE_BUTTON_LEFT => {
-                    if let Some(window_state) = state.windows.get_mut(&data.window_id) {
-                        if data.location_in_window.x < window_state.frame.padding.left {
-                        } else if data.location_in_window.x < DRAG_AND_DROP_LEFT_OF + window_state.frame.padding.left {
+                    if let Some(window_state) = state.windows.get_mut(window_id) {
+                        if location_in_window.x < window_state.frame.padding.left {
+                        } else if location_in_window.x < DRAG_AND_DROP_LEFT_OF + window_state.frame.padding.left {
                             let mime_types = if state.key_modifiers == KeyModifiers::Shift {
                                 ALL_MIMES
                             } else {
@@ -588,13 +612,13 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
                             let drag_icon_size = LogicalSize::wh(300, 300);
                             window_start_drag_and_drop(
                                 app_ptr,
-                                data.window_id,
+                                *window_id,
                                 BorrowedUtf8::new(mime_types),
                                 dnd_actions,
                                 RenderingMode::Auto,
                                 drag_icon_size,
                             );
-                            if let Some(window_state) = state.windows.get_mut(&data.window_id) {
+                            if let Some(window_state) = state.windows.get_mut(window_id) {
                                 window_state.drag_and_drop_source = true;
                                 window_state.redraw = true;
                             }
@@ -604,30 +628,51 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
                 }
                 MOUSE_BUTTON_MIDDLE => {
                     actions.push(Action::ApplicationPrimarySelectionPaste {
-                        serial: state.add_data_request_source(data.window_id),
+                        serial: state.add_data_request_source(*window_id),
                         supported_mime_types: TEXT_MIME_TYPE,
                     });
                 }
                 _ => {}
             },
-            Event::ModifiersChanged(data) => {
-                state.key_modifiers = data.modifiers;
+            Event::ModifiersChanged { serial: _, modifiers } => {
+                state.key_modifiers = *modifiers;
             }
-            Event::WindowKeyboardEnter(event) => {
-                state.key_window_id = Some(event.window_id);
+            Event::WindowKeyboardEnter {
+                serial: _,
+                window_id,
+                raw: _,
+                keysyms: _,
+            } => {
+                state.key_window_id = Some(*window_id);
             }
-            Event::WindowKeyboardLeave(event) => {
-                assert_eq!(state.key_window_id, Some(event.window_id));
+            Event::WindowKeyboardLeave { serial: _, window_id } => {
+                assert_eq!(state.key_window_id, Some(*window_id));
                 state.key_window_id = None;
             }
-            Event::KeyDown(event) => {
-                if let Some(action) = on_keydown(event, app_ptr, state) {
+            Event::KeyDown {
+                serial,
+                characters,
+                code,
+                key,
+                is_repeat,
+            } => {
+                if let Some(action) = on_keydown(
+                    app_ptr,
+                    state,
+                    *serial,
+                    characters.get_optional("KeyDownEvent: characters").unwrap(),
+                    *code,
+                    *key,
+                    *is_repeat,
+                ) {
                     actions.push(action);
                 }
             }
-            Event::FileChooserResponse(file_chooser_response) => {
-                if let Some(s) = file_chooser_response
-                    .newline_separated_files
+            Event::FileChooserResponse {
+                request_id: _,
+                newline_separated_files,
+            } => {
+                if let Some(s) = newline_separated_files
                     .get_optional("FileChooserResponse.newline_separated_files")
                     .unwrap()
                 {
@@ -635,34 +680,39 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
                     info!("Selected files: {files:?}");
                 }
             }
-            Event::DataTransfer(data) => {
-                if let Some(window_id) = state.get_window_for_request(data.serial)
+            Event::DataTransfer { serial, content } => {
+                if let Some(window_id) = state.get_window_for_request(*serial)
                     && let Some(window_state) = state.windows.get_mut(&window_id)
                 {
-                    on_data_transfer_received(&data.content, window_state);
+                    on_data_transfer_received(content, window_state);
                 }
             }
-            Event::DropPerformed(data) => {
-                if let Some(window_state) = state.windows.get_mut(&data.window_id) {
-                    on_data_transfer_received(&data.content, window_state);
+            Event::DropPerformed {
+                window_id,
+                content,
+                action: _,
+                location_in_window: _,
+            } => {
+                if let Some(window_state) = state.windows.get_mut(window_id) {
+                    on_data_transfer_received(content, window_state);
                 }
             }
-            Event::DragAndDropLeave(data) => {
-                if let Some(window_state) = state.windows.get_mut(&data.window_id) {
+            Event::DragAndDropLeave { window_id } => {
+                if let Some(window_state) = state.windows.get_mut(window_id) {
                     window_state.drag_and_drop_target = false;
                     window_state.redraw = true;
                 }
             }
-            Event::DragAndDropFinished(data) => {
+            Event::DragAndDropFinished { window_id, action } => {
                 state.drag_icon = None;
-                if let Some(window_state) = state.windows.get_mut(&data.window_id) {
+                if let Some(window_state) = state.windows.get_mut(window_id) {
                     window_state.drag_and_drop_source = false;
                     window_state.redraw = true;
-                    info!("Finished initiated drag and drop with action {:?}", data.action);
+                    info!("Finished initiated drag and drop with action {action:?}");
                 }
             }
-            Event::DataTransferCancelled(data) => {
-                if data.data_source == DataSource::DragAndDrop {
+            Event::DataTransferCancelled { data_source } => {
+                if matches!(data_source, DataSource::DragAndDrop) {
                     for window_state in state.windows.values_mut() {
                         window_state.drag_and_drop_source = false;
                         window_state.redraw = true;
@@ -670,21 +720,38 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
                     state.drag_icon = None;
                 }
             }
-            Event::TextInputAvailability(data) => {
-                if let Some(window_state) = state.windows.get_mut(&data.window_id) {
-                    on_text_input_availability_changed(data.available, app_ptr, window_state);
+            Event::TextInputAvailability { window_id, available } => {
+                if let Some(window_state) = state.windows.get_mut(window_id) {
+                    on_text_input_availability_changed(*available, app_ptr, window_state);
                 }
             }
-            Event::TextInput(event) => {
+            Event::TextInput {
+                has_preedit_string,
+                preedit_string,
+                has_commit_string,
+                commit_string,
+                has_delete_surrounding_text,
+                delete_surrounding_text,
+            } => {
                 if let Some(key_window_id) = state.key_window_id
                     && let Some(window_state) = state.windows.get_mut(&key_window_id)
                 {
-                    on_text_input(event, app_ptr, key_window_id, window_state);
+                    on_text_input(
+                        app_ptr,
+                        key_window_id,
+                        window_state,
+                        *has_preedit_string,
+                        preedit_string,
+                        *has_commit_string,
+                        commit_string,
+                        *has_delete_surrounding_text,
+                        delete_surrounding_text,
+                    );
                 }
             }
-            Event::ActivationTokenResponse(data) => {
-                let token = data.token.get("ActivationTokenResponse.token").unwrap();
-                match state.activation_token_action.remove(&data.request_id).unwrap() {
+            Event::ActivationTokenResponse { request_id, token } => {
+                let token = token.get("ActivationTokenResponse.token").unwrap();
+                match state.activation_token_action.remove(request_id).unwrap() {
                     ActivationTokenAction::ActivateWindow(window_id) => {
                         actions.push(Action::WindowActivate {
                             window_id,
@@ -699,21 +766,27 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
                     }
                 }
             }
-            Event::NotificationShown(data) => {
-                if data.notification_id > 0 {
-                    if let Some(requester) = state.request_sources.remove(&data.request_id) {
-                        state.notification_sources.insert(data.notification_id, requester);
+            Event::NotificationShown {
+                request_id,
+                notification_id,
+            } => {
+                if *notification_id > 0 {
+                    if let Some(requester) = state.request_sources.remove(request_id) {
+                        state.notification_sources.insert(*notification_id, requester);
                     } else {
-                        application_close_notification(app_ptr, data.notification_id);
+                        application_close_notification(app_ptr, *notification_id);
                     }
                 }
             }
-            Event::NotificationClosed(data) => {
-                if data.action.get_optional("NotificationClosedEvent.action").unwrap().is_some()
-                    && let Some(window_id_to_activate) = state.notification_sources.remove(&data.notification_id)
+            Event::NotificationClosed {
+                notification_id,
+                action,
+                activation_token,
+            } => {
+                if action.get_optional("NotificationClosedEvent.action").unwrap().is_some()
+                    && let Some(window_id_to_activate) = state.notification_sources.remove(notification_id)
                 {
-                    let activation_token = data
-                        .activation_token
+                    let activation_token = activation_token
                         .get_optional("NotificationClosedEvent.activation_token")
                         .unwrap()
                         .map(ToOwned::to_owned);

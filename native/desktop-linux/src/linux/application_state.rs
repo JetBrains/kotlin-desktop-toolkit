@@ -4,26 +4,14 @@ use crate::linux::notifications::NotificationAction;
 use crate::linux::{
     application_api::{ApplicationCallbacks, RenderingMode},
     drag_icon::DragIcon,
-    events::{
-        ActivationTokenResponse,
-        Event,
-        EventSerial,
-        RequestId,
-        ScreenId,
-        WindowCloseRequestEvent,
-        WindowDrawEvent,
-        WindowFrame,
-        WindowId,
-        WindowScaleChangedEvent,
-        WindowScreenChangeEvent,
-        //
-    },
+    events::{Event, EventSerial, RequestId, ScreenId, WindowDrawEvent, WindowFrame, WindowId},
     geometry::Scale,
     keyboard::send_key_down_event,
     text_input::PendingTextInputEvent,
     window::SimpleWindow,
 };
 use anyhow::Context;
+use desktop_common::ffi_utils::BorrowedUtf8;
 use khronos_egl as egl;
 use log::{debug, info, warn};
 use smithay_client_toolkit::{
@@ -293,8 +281,8 @@ impl ApplicationState {
         self.update_themed_cursor(qh)
     }
 
-    pub fn send_event<'a, T: Into<Event<'a>>>(&self, event_data: T) -> bool {
-        send_event(self.callbacks.event_handler, event_data)
+    pub fn send_event(&self, event: &Event) -> bool {
+        send_event(self.callbacks.event_handler, event)
     }
 
     pub fn get_default_seat(&self) -> Option<WlSeat> {
@@ -426,15 +414,15 @@ impl OutputHandler for ApplicationState {
     }
 
     fn new_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {
-        self.send_event(Event::DisplayConfigurationChange);
+        self.send_event(&Event::DisplayConfigurationChange);
     }
 
     fn update_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {
-        self.send_event(Event::DisplayConfigurationChange);
+        self.send_event(&Event::DisplayConfigurationChange);
     }
 
     fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {
-        self.send_event(Event::DisplayConfigurationChange);
+        self.send_event(&Event::DisplayConfigurationChange);
     }
 }
 
@@ -456,7 +444,7 @@ impl CompositorHandler for ApplicationState {
 
             _ = send_event(
                 self.callbacks.event_handler,
-                WindowScaleChangedEvent {
+                &Event::WindowScaleChanged {
                     window_id: window.window_id,
                     new_scale,
                 },
@@ -476,12 +464,12 @@ impl CompositorHandler for ApplicationState {
     fn frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, surface: &WlSurface, _time: u32) {
         if let Some(window) = self.windows.get_mut(&surface.id()) {
             window.draw(conn, qh, self.themed_pointer.as_mut(), &|e: WindowDrawEvent| {
-                send_event(self.callbacks.event_handler, e)
+                send_event(self.callbacks.event_handler, &Event::WindowDraw(e))
             });
         } else if let Some(drag_icon) = &mut self.drag_icon
             && drag_icon.surface.wl_surface() == surface
         {
-            drag_icon.draw(qh, &|e| send_event(self.callbacks.event_handler, e));
+            drag_icon.draw(qh, &|e| send_event(self.callbacks.event_handler, &Event::DragIconDraw(e)));
         } else {
             warn!("Draw surface {} is neither a window nor a drag icon", surface.id());
         }
@@ -492,7 +480,7 @@ impl CompositorHandler for ApplicationState {
         if let Some(window_id) = self.get_window_id(surface)
             && let Some(output_info) = self.output_state.info(output)
         {
-            self.send_event(WindowScreenChangeEvent {
+            self.send_event(&Event::WindowScreenChange {
                 window_id,
                 new_screen_id: ScreenId(output_info.id),
             });
@@ -507,7 +495,7 @@ impl CompositorHandler for ApplicationState {
 impl WindowHandler for ApplicationState {
     fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, window: &Window) {
         if let Some(window_id) = self.get_window_id(window.wl_surface()) {
-            self.send_event(WindowCloseRequestEvent { window_id });
+            self.send_event(&Event::WindowCloseRequest { window_id });
         }
     }
 
@@ -527,7 +515,7 @@ impl WindowHandler for ApplicationState {
             if is_first_configure {
                 // Initiate the first draw.
                 w.draw(conn, qh, self.themed_pointer.as_mut(), &|e: WindowDrawEvent| {
-                    send_event(self.callbacks.event_handler, e)
+                    send_event(self.callbacks.event_handler, &Event::WindowDraw(e))
                 });
             }
         }
@@ -556,7 +544,7 @@ impl Dispatch<WpFractionalScaleV1, ObjectId> for ApplicationState {
 
                 _ = send_event(
                     state.callbacks.event_handler,
-                    WindowScaleChangedEvent {
+                    &Event::WindowScaleChanged {
                         window_id: window.window_id,
                         new_scale: scale,
                     },
@@ -576,6 +564,9 @@ impl ActivationHandler for ApplicationState {
     fn new_token(&mut self, token: String, data: &RequestData<Self::RequestUdata>) {
         let request_id = data.udata;
         info!("ActivationHandler::new_token for {data:?}: {token}");
-        self.send_event(ActivationTokenResponse::new(request_id, &token));
+        self.send_event(&Event::ActivationTokenResponse {
+            request_id,
+            token: BorrowedUtf8::new(&token),
+        });
     }
 }

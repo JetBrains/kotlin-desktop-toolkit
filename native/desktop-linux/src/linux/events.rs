@@ -115,244 +115,11 @@ impl<'a> DataTransferContent<'a> {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct DataTransferEvent<'a> {
-    pub serial: i32,
-    pub content: DataTransferContent<'a>,
-}
-
-impl<'a> From<DataTransferEvent<'a>> for Event<'a> {
-    fn from(value: DataTransferEvent<'a>) -> Self {
-        Self::DataTransfer(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct DragAndDropLeaveEvent {
-    pub window_id: WindowId,
-}
-
-impl From<DragAndDropLeaveEvent> for Event<'_> {
-    fn from(value: DragAndDropLeaveEvent) -> Self {
-        Self::DragAndDropLeave(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct DragAndDropFinishedEvent {
-    pub window_id: WindowId,
-    pub action: DragAndDropAction,
-}
-
-impl From<DragAndDropFinishedEvent> for Event<'_> {
-    fn from(value: DragAndDropFinishedEvent) -> Self {
-        Self::DragAndDropFinished(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct DropPerformedEvent<'a> {
-    pub window_id: WindowId,
-    pub content: DataTransferContent<'a>,
-    pub action: DragAndDropAction,
-    pub location_in_window: LogicalPoint,
-}
-
-impl<'a> From<DropPerformedEvent<'a>> for Event<'a> {
-    fn from(value: DropPerformedEvent<'a>) -> Self {
-        Self::DropPerformed(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct DataTransferAvailableEvent<'a> {
-    pub data_source: DataSource,
-    pub mime_types: BorrowedUtf8<'a>,
-}
-
-impl<'a> From<DataTransferAvailableEvent<'a>> for Event<'a> {
-    fn from(value: DataTransferAvailableEvent<'a>) -> Self {
-        Self::DataTransferAvailable(value)
-    }
-}
-
-impl<'a> DataTransferAvailableEvent<'a> {
-    #[must_use]
-    pub const fn new(data_source: DataSource, mime_types: &'a str) -> Self {
-        Self {
-            data_source,
-            mime_types: BorrowedUtf8::new(mime_types),
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct DataTransferCancelledEvent {
-    pub data_source: DataSource,
-}
-
-impl From<DataTransferCancelledEvent> for Event<'_> {
-    fn from(value: DataTransferCancelledEvent) -> Self {
-        Self::DataTransferCancelled(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct KeyDownEvent<'a> {
-    pub serial: EventSerial,
-    pub characters: BorrowedUtf8<'a>,
-    pub code: KeyCode,
-    pub key: u32,
-    pub is_repeat: bool,
-}
-
-impl<'a> From<KeyDownEvent<'a>> for Event<'a> {
-    fn from(value: KeyDownEvent<'a>) -> Self {
-        Self::KeyDown(value)
-    }
-}
-
-impl<'a> KeyDownEvent<'a> {
-    pub(crate) fn new(serial: EventSerial, code: KeyCode, key: u32, characters: Option<&'a String>, is_repeat: bool) -> Self {
-        Self {
-            serial,
-            code,
-            characters: BorrowedUtf8::optional(characters.filter(|&s| !s.is_empty())),
-            key,
-            is_repeat,
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct KeyUpEvent {
-    pub serial: EventSerial,
-    pub code: KeyCode,
-    pub key: u32,
-}
-
-impl From<KeyUpEvent> for Event<'_> {
-    fn from(value: KeyUpEvent) -> Self {
-        Self::KeyUp(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct ModifiersChangedEvent {
-    pub serial: EventSerial,
-    pub modifiers: KeyModifiers,
-}
-
-impl From<ModifiersChangedEvent> for Event<'_> {
-    fn from(value: ModifiersChangedEvent) -> Self {
-        Self::ModifiersChanged(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct MouseEnteredEvent {
-    pub serial: EventSerial,
-    pub window_id: WindowId,
-    pub location_in_window: LogicalPoint,
-}
-
-impl From<MouseEnteredEvent> for Event<'_> {
-    fn from(value: MouseEnteredEvent) -> Self {
-        Self::MouseEntered(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct MouseExitedEvent {
-    pub serial: EventSerial,
-    pub window_id: WindowId,
-    pub location_in_window: LogicalPoint,
-}
-
-impl From<MouseExitedEvent> for Event<'_> {
-    fn from(value: MouseExitedEvent) -> Self {
-        Self::MouseExited(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct MouseMovedEvent {
-    pub window_id: WindowId,
-    pub location_in_window: LogicalPoint,
-    pub timestamp: Timestamp,
-}
-
-impl From<MouseMovedEvent> for Event<'_> {
-    fn from(value: MouseMovedEvent) -> Self {
-        Self::MouseMoved(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct MouseDownEvent {
-    pub serial: EventSerial,
-    pub window_id: WindowId,
-    pub button: MouseButton,
-    pub location_in_window: LogicalPoint,
-    pub timestamp: Timestamp,
-}
-
-impl From<MouseDownEvent> for Event<'_> {
-    fn from(value: MouseDownEvent) -> Self {
-        Self::MouseDown(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct MouseUpEvent {
-    pub serial: EventSerial,
-    pub window_id: WindowId,
-    pub button: MouseButton,
-    pub location_in_window: LogicalPoint,
-    pub timestamp: Timestamp,
-}
-
-impl From<MouseUpEvent> for Event<'_> {
-    fn from(value: MouseUpEvent) -> Self {
-        Self::MouseUp(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
 pub struct ScrollData {
     pub delta: LogicalPixels,
     pub wheel_value120: i32,
     pub is_inverted: bool,
     pub is_stop: bool,
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct ScrollWheelEvent {
-    pub window_id: WindowId,
-    pub location_in_window: LogicalPoint,
-    pub timestamp: Timestamp,
-    pub horizontal_scroll: ScrollData,
-    pub vertical_scroll: ScrollData,
-}
-
-impl From<ScrollWheelEvent> for Event<'_> {
-    fn from(value: ScrollWheelEvent) -> Self {
-        Self::ScrollWheel(value)
-    }
 }
 
 #[repr(C)]
@@ -382,47 +149,7 @@ pub struct TextInputDeleteSurroundingTextData {
 }
 
 #[repr(C)]
-#[derive(Debug)]
-pub struct TextInputAvailabilityEvent {
-    pub window_id: WindowId,
-    /// Indicates if the Text Input support is available.
-    /// Call `application_text_input_enable` to enable it or `application_text_input_disable` to disable it afterward.
-    pub available: bool,
-}
-
-impl From<TextInputAvailabilityEvent> for Event<'_> {
-    fn from(value: TextInputAvailabilityEvent) -> Self {
-        Self::TextInputAvailability(value)
-    }
-}
-
-/// The application must proceed by evaluating the changes in the following order:
-/// 1. Replace the existing preedit string with the cursor.
-/// 2. Delete the requested surrounding text.
-/// 3. Insert the commit string with the cursor at its end.
-/// 4. Calculate surrounding text to send.
-/// 5. Insert the new preedit text in the cursor position.
-/// 6. Place the cursor inside the preedit text.
-#[repr(C)]
-#[derive(Debug)]
-pub struct TextInputEvent<'a> {
-    pub has_preedit_string: bool,
-    pub preedit_string: TextInputPreeditStringData<'a>,
-    pub has_commit_string: bool,
-    /// Can be null
-    pub commit_string: BorrowedUtf8<'a>,
-    pub has_delete_surrounding_text: bool,
-    pub delete_surrounding_text: TextInputDeleteSurroundingTextData,
-}
-
-impl<'a> From<TextInputEvent<'a>> for Event<'a> {
-    fn from(value: TextInputEvent<'a>) -> Self {
-        Self::TextInput(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct WindowCapabilities {
     /// `show_window_menu` is available.
     pub window_menu: bool,
@@ -435,30 +162,6 @@ pub struct WindowCapabilities {
 
     /// Window can be minimized.
     pub minimize: bool,
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct WindowCloseRequestEvent {
-    pub window_id: WindowId,
-}
-
-impl From<WindowCloseRequestEvent> for Event<'_> {
-    fn from(value: WindowCloseRequestEvent) -> Self {
-        Self::WindowCloseRequest(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct WindowClosedEvent {
-    pub window_id: WindowId,
-}
-
-impl From<WindowClosedEvent> for Event<'_> {
-    fn from(value: WindowClosedEvent) -> Self {
-        Self::WindowClosed(value)
-    }
 }
 
 #[repr(C)]
@@ -496,8 +199,8 @@ pub struct WindowFrame {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct WindowConfigureEvent {
+#[derive(Debug, PartialEq, Eq)]
+pub struct WindowConfigureData {
     pub window_id: WindowId,
     pub size: LogicalSize,
     pub active: bool,
@@ -505,12 +208,6 @@ pub struct WindowConfigureEvent {
     pub fullscreen: bool,
     pub decoration_mode: WindowDecorationMode,
     pub capabilities: WindowCapabilities,
-}
-
-impl From<WindowConfigureEvent> for Event<'_> {
-    fn from(value: WindowConfigureEvent) -> Self {
-        Self::WindowConfigure(value)
-    }
 }
 
 #[repr(C)]
@@ -529,169 +226,12 @@ pub struct WindowDrawEvent {
     pub physical_size: PhysicalSize,
 }
 
-impl From<WindowDrawEvent> for Event<'_> {
-    fn from(value: WindowDrawEvent) -> Self {
-        Self::WindowDraw(value)
-    }
-}
-
 #[repr(C)]
 #[derive(Debug)]
 pub struct DragIconDrawEvent {
     pub software_draw_data: SoftwareDrawData,
     pub physical_size: PhysicalSize,
     pub scale: Scale,
-}
-
-impl From<DragIconDrawEvent> for Event<'_> {
-    fn from(value: DragIconDrawEvent) -> Self {
-        Self::DragIconDraw(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct WindowKeyboardEnterEvent<'a> {
-    pub serial: EventSerial,
-    pub window_id: WindowId,
-    pub raw: BorrowedArray<'a, u32>,
-    pub keysyms: BorrowedArray<'a, u32>,
-}
-
-impl<'a> WindowKeyboardEnterEvent<'a> {
-    pub(crate) const fn new(serial: EventSerial, window_id: WindowId, raw: &'a Vec<u32>, keysyms: &'a [u32]) -> Self {
-        Self {
-            serial,
-            window_id,
-            raw: BorrowedArray::from_slice(raw.as_slice()),
-            keysyms: BorrowedArray::from_slice(keysyms),
-        }
-    }
-}
-
-impl<'a> From<WindowKeyboardEnterEvent<'a>> for Event<'a> {
-    fn from(value: WindowKeyboardEnterEvent<'a>) -> Self {
-        Self::WindowKeyboardEnter(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct WindowKeyboardLeaveEvent {
-    pub serial: EventSerial,
-    pub window_id: WindowId,
-}
-
-impl From<WindowKeyboardLeaveEvent> for Event<'_> {
-    fn from(value: WindowKeyboardLeaveEvent) -> Self {
-        Self::WindowKeyboardLeave(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct WindowScaleChangedEvent {
-    pub window_id: WindowId,
-    pub new_scale: Scale,
-}
-
-impl From<WindowScaleChangedEvent> for Event<'_> {
-    fn from(value: WindowScaleChangedEvent) -> Self {
-        Self::WindowScaleChanged(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct WindowScreenChangeEvent {
-    pub window_id: WindowId,
-    pub new_screen_id: ScreenId,
-}
-
-impl From<WindowScreenChangeEvent> for Event<'_> {
-    fn from(value: WindowScreenChangeEvent) -> Self {
-        Self::WindowScreenChange(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct FileChooserResponse<'a> {
-    pub request_id: RequestId,
-    pub newline_separated_files: BorrowedUtf8<'a>,
-}
-
-impl<'a> From<FileChooserResponse<'a>> for Event<'a> {
-    fn from(value: FileChooserResponse<'a>) -> Self {
-        Self::FileChooserResponse(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct ActivationTokenResponse<'a> {
-    pub request_id: RequestId,
-    pub token: BorrowedUtf8<'a>,
-}
-
-impl<'a> ActivationTokenResponse<'a> {
-    #[must_use]
-    pub const fn new(request_id: RequestId, token: &'a str) -> Self {
-        Self {
-            request_id,
-            token: BorrowedUtf8::new(token),
-        }
-    }
-}
-
-impl<'a> From<ActivationTokenResponse<'a>> for Event<'a> {
-    fn from(value: ActivationTokenResponse<'a>) -> Self {
-        Self::ActivationTokenResponse(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct NotificationShownEvent {
-    pub request_id: RequestId,
-
-    /// Value `0` indicates an error.
-    pub notification_id: u32,
-}
-
-impl From<NotificationShownEvent> for Event<'_> {
-    fn from(value: NotificationShownEvent) -> Self {
-        Self::NotificationShown(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct NotificationClosedEvent<'a> {
-    pub notification_id: u32,
-
-    /// Optional. Present only if notification was activated. By default, it has a value `"default"`.
-    pub action: BorrowedUtf8<'a>,
-
-    /// Optional. Present only if notification was activated, and the application has an associated `.desktop` file.
-    pub activation_token: BorrowedUtf8<'a>,
-}
-
-impl<'a> NotificationClosedEvent<'a> {
-    #[must_use]
-    pub const fn new(notification_id: u32, action: Option<&'a String>, activation_token: Option<&'a String>) -> Self {
-        Self {
-            notification_id,
-            action: BorrowedUtf8::optional(action),
-            activation_token: BorrowedUtf8::optional(activation_token),
-        }
-    }
-}
-
-impl<'a> From<NotificationClosedEvent<'a>> for Event<'a> {
-    fn from(value: NotificationClosedEvent<'a>) -> Self {
-        Self::NotificationClosed(value)
-    }
 }
 
 #[repr(C)]
@@ -709,53 +249,175 @@ pub enum Event<'a> {
     DesktopSettingChange(FfiDesktopSetting<'a>),
 
     /// Data received from clipboard or primary selection. For drag&drop, see `DropPerformed`.
-    DataTransfer(DataTransferEvent<'a>),
+    DataTransfer {
+        serial: i32,
+        content: DataTransferContent<'a>,
+    },
 
     /// Drag&drop targeting our application left the specified window.
-    DragAndDropLeave(DragAndDropLeaveEvent),
+    DragAndDropLeave {
+        window_id: WindowId,
+    },
 
     /// Drag&drop that was initiated from our window has finished.
-    DragAndDropFinished(DragAndDropFinishedEvent),
+    DragAndDropFinished {
+        window_id: WindowId,
+        action: DragAndDropAction,
+    },
 
     DragIconDraw(DragIconDrawEvent),
 
     /// Drag&drop targeting our window is finished, and we received data from it.
-    DropPerformed(DropPerformedEvent<'a>),
+    DropPerformed {
+        window_id: WindowId,
+        content: DataTransferContent<'a>,
+        action: DragAndDropAction,
+        location_in_window: LogicalPoint,
+    },
 
     /// Reported for clipboard and primary selection.
-    DataTransferAvailable(DataTransferAvailableEvent<'a>),
+    DataTransferAvailable {
+        data_source: DataSource,
+        mime_types: BorrowedUtf8<'a>,
+    },
 
     /// Data transfer for data from our application was canceled
-    DataTransferCancelled(DataTransferCancelledEvent),
+    DataTransferCancelled {
+        data_source: DataSource,
+    },
 
-    FileChooserResponse(FileChooserResponse<'a>),
+    FileChooserResponse {
+        request_id: RequestId,
+        newline_separated_files: BorrowedUtf8<'a>,
+    },
 
-    ActivationTokenResponse(ActivationTokenResponse<'a>),
+    ActivationTokenResponse {
+        request_id: RequestId,
+        token: BorrowedUtf8<'a>,
+    },
 
-    NotificationShown(NotificationShownEvent),
-    NotificationClosed(NotificationClosedEvent<'a>),
+    NotificationShown {
+        request_id: RequestId,
+
+        /// Value `0` indicates an error.
+        notification_id: u32,
+    },
+
+    NotificationClosed {
+        notification_id: u32,
+
+        /// Optional. Present only if notification was activated. By default, it has a value `"default"`.
+        action: BorrowedUtf8<'a>,
+
+        /// Optional. Present only if notification was activated, and the application has an associated `.desktop` file.
+        activation_token: BorrowedUtf8<'a>,
+    },
 
     /// Modifier keys (e.g Ctrl, Shift, etc) are never reported. Use `ModifiersChanged` for them.
-    KeyDown(KeyDownEvent<'a>),
+    KeyDown {
+        serial: EventSerial,
+        characters: BorrowedUtf8<'a>,
+        code: KeyCode,
+        key: u32,
+        is_repeat: bool,
+    },
 
     /// Modifier keys (e.g Ctrl, Shift, etc) are never reported. Use `ModifiersChanged` for them.
-    KeyUp(KeyUpEvent),
+    KeyUp {
+        serial: EventSerial,
+        code: KeyCode,
+        key: u32,
+    },
 
-    ModifiersChanged(ModifiersChangedEvent),
-    MouseEntered(MouseEnteredEvent),
-    MouseExited(MouseExitedEvent),
-    MouseMoved(MouseMovedEvent),
-    MouseDown(MouseDownEvent),
-    MouseUp(MouseUpEvent),
-    ScrollWheel(ScrollWheelEvent),
-    TextInputAvailability(TextInputAvailabilityEvent),
-    TextInput(TextInputEvent<'a>),
-    WindowCloseRequest(WindowCloseRequestEvent),
-    WindowClosed(WindowClosedEvent),
-    WindowConfigure(WindowConfigureEvent),
+    ModifiersChanged {
+        serial: EventSerial,
+        modifiers: KeyModifiers,
+    },
+    MouseEntered {
+        serial: EventSerial,
+        window_id: WindowId,
+        location_in_window: LogicalPoint,
+    },
+    MouseExited {
+        serial: EventSerial,
+        window_id: WindowId,
+        location_in_window: LogicalPoint,
+    },
+    MouseMoved {
+        window_id: WindowId,
+        location_in_window: LogicalPoint,
+        timestamp: Timestamp,
+    },
+    MouseDown {
+        serial: EventSerial,
+        window_id: WindowId,
+        button: MouseButton,
+        location_in_window: LogicalPoint,
+        timestamp: Timestamp,
+    },
+    MouseUp {
+        serial: EventSerial,
+        window_id: WindowId,
+        button: MouseButton,
+        location_in_window: LogicalPoint,
+        timestamp: Timestamp,
+    },
+    ScrollWheel {
+        window_id: WindowId,
+        location_in_window: LogicalPoint,
+        timestamp: Timestamp,
+        horizontal_scroll: ScrollData,
+        vertical_scroll: ScrollData,
+    },
+    TextInputAvailability {
+        window_id: WindowId,
+
+        /// Indicates if the Text Input support is available.
+        /// Call `application_text_input_enable` to enable it or `application_text_input_disable` to disable it afterward.
+        available: bool,
+    },
+
+    /// The application must proceed by evaluating the changes in the following order:
+    /// 1. Replace the existing preedit string with the cursor.
+    /// 2. Delete the requested surrounding text.
+    /// 3. Insert the commit string with the cursor at its end.
+    /// 4. Calculate surrounding text to send.
+    /// 5. Insert the new preedit text in the cursor position.
+    /// 6. Place the cursor inside the preedit text.
+    TextInput {
+        has_preedit_string: bool,
+        preedit_string: TextInputPreeditStringData<'a>,
+        has_commit_string: bool,
+        /// Can be null
+        commit_string: BorrowedUtf8<'a>,
+        has_delete_surrounding_text: bool,
+        delete_surrounding_text: TextInputDeleteSurroundingTextData,
+    },
+
+    WindowCloseRequest {
+        window_id: WindowId,
+    },
+    WindowClosed {
+        window_id: WindowId,
+    },
+    WindowConfigure(WindowConfigureData),
     WindowDraw(WindowDrawEvent),
-    WindowKeyboardEnter(WindowKeyboardEnterEvent<'a>),
-    WindowKeyboardLeave(WindowKeyboardLeaveEvent),
-    WindowScaleChanged(WindowScaleChangedEvent),
-    WindowScreenChange(WindowScreenChangeEvent),
+    WindowKeyboardEnter {
+        serial: EventSerial,
+        window_id: WindowId,
+        raw: BorrowedArray<'a, u32>,
+        keysyms: BorrowedArray<'a, u32>,
+    },
+    WindowKeyboardLeave {
+        serial: EventSerial,
+        window_id: WindowId,
+    },
+    WindowScaleChanged {
+        window_id: WindowId,
+        new_scale: Scale,
+    },
+    WindowScreenChange {
+        window_id: WindowId,
+        new_screen_id: ScreenId,
+    },
 }
