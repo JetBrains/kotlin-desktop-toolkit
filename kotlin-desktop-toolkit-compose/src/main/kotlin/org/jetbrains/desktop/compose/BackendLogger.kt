@@ -34,6 +34,26 @@ internal fun logInfo(backend: DesktopBackend, message: () -> String) {
     }
 }
 
+/**
+ * The backend [initToolkit] booted, for shared code that has to log without being handed one.
+ *
+ * Null until the toolkit is up, which is also the window in which there is no configured appender to log
+ * through, so a message raised that early has nowhere useful to go anyway.
+ */
+@Volatile
+private var bootedBackend: DesktopBackend? = null
+
+/** Logs through whichever backend is up. A no-op before [initToolkit], deliberately — see [bootedBackend]. */
+internal fun logError(throwable: Throwable, message: () -> String) {
+    when (bootedBackend) {
+        DesktopBackend.MacOs -> MacOsLogger.error(throwable, message)
+        DesktopBackend.Wayland -> LinuxLogger.error(throwable, message)
+        DesktopBackend.Gtk -> GtkLogger.error(throwable, message)
+        DesktopBackend.Windows -> WindowsLogger.error(throwable, message)
+        null -> Unit
+    }
+}
+
 internal fun logWarn(backend: DesktopBackend, message: () -> String) {
     when (backend) {
         DesktopBackend.MacOs -> MacOsLogger.warn(message)
@@ -81,6 +101,11 @@ internal fun initToolkit(backend: DesktopBackend, params: ComposeApplicationPara
             appender?.let { WindowsLogger.appender = WindowsLoggerAppender(it) }
         }
     }
+    bootedBackend = backend
+    // Only now, with the level and the appender in place: logged any earlier this goes to the default
+    // console appender, so a caller who asked for `Off` or supplied its own appender neither suppresses
+    // it nor ever sees it.
+    logInfo(backend) { startupInfo(backend) }
 }
 
 /** Matches the toolkit's own message, since these are the properties it would have read itself. */

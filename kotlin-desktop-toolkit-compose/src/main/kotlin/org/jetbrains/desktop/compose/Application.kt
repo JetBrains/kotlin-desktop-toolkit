@@ -172,7 +172,6 @@ fun application(
     backend: DesktopBackend = DesktopBackend.default,
     content: @Composable ApplicationScope.() -> Unit,
 ) {
-    logInfo(backend) { startupInfo(backend) }
     initApplication(params, backend).use { application ->
         val scope = ApplicationScopeImpl(application)
         ApplicationExit.installedWhile(scope::exitApplication) {
@@ -232,7 +231,7 @@ private class ApplicationScopeImpl(override val application: ComposeApplication)
  * The JVM identity is in here because the toolkit needs a recent one — the FFI it is built on is only
  * available from Java 22 — so a mismatch is a likely first suspect when a run fails early.
  */
-private fun startupInfo(backend: DesktopBackend): String {
+internal fun startupInfo(backend: DesktopBackend): String {
     val platform = DesktopPlatform.current
     val windowSystem = if (platform == DesktopPlatform.Linux) ", window system: ${currentLinuxWindowSystem()}" else ""
     val javaVersion = System.getProperty("java.runtime.version", System.getProperty("java.version", "unknown"))
