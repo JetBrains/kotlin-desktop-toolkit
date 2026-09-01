@@ -385,6 +385,18 @@ private object X11Helper {
         val owner = reply.owner
         return owner != 0
     }
+
+    fun getActiveWindow(x11: X11Client): Int? {
+        // https://specifications.freedesktop.org/wm/1.5/ar01s03.html#id-1.4.10
+        val intBuffer = X11Helper.getRootWindowProperty(
+            x11,
+            propertyName = "_NET_ACTIVE_WINDOW",
+            type = Atom.WINDOW,
+        )?.asIntBuffer() ?: return null
+        val res = intBuffer.get()
+        log("getActiveWindow: value=$res")
+        return res
+    }
 }
 
 internal class X11WindowOperations(
@@ -459,22 +471,10 @@ internal class X11WindowOperations(
         log("Moved window $window to $x,$y")
     }
 
-    private fun getActiveWindow(): Int? {
-        // https://specifications.freedesktop.org/wm/1.5/ar01s03.html#id-1.4.10
-        val intBuffer = X11Helper.getRootWindowProperty(
-            x11,
-            propertyName = "_NET_ACTIVE_WINDOW",
-            type = Atom.WINDOW,
-        )?.asIntBuffer() ?: return null
-        val res = intBuffer.get()
-        log("getActiveWindow: value=$res")
-        return res
-    }
-
     fun focus() {
         // https://specifications.freedesktop.org/wm/1.5/ar01s03.html#id-1.4.10
         sendClientMessageToRootWindow(x11, window, "_NET_ACTIVE_WINDOW")
-        waitUntil("Window $window active", getter = { getActiveWindow() }) { it == window }
+        waitUntil("Window $window active", getter = { X11Helper.getActiveWindow(x11) }) { it == window }
     }
 
     private fun rawPhysicalToLogical(rawPhysical: Int): LogicalPixels {
@@ -688,6 +688,12 @@ internal class X11Wm(private val scale: Scale) {
             },
             getter = { getWindowByTitleImpl(title, getTransform) },
         ) { it != null }!!
+    }
+
+    fun closeActiveWindow() {
+        val window = X11Helper.getActiveWindow(x11) ?: return
+        val operations = X11WindowOperations(x11, window, scale) { Pair(LogicalPixels.Zero, LogicalPixels.Zero) }
+        operations.close()
     }
 
     private fun sendFakeInput(detail: Byte, eventType: EventType) {

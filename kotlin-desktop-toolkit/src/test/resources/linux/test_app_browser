@@ -1,0 +1,13 @@
+#!/bin/sh
+
+startup_id=""
+
+if [ "$DESKTOP_STARTUP_ID" ]; then
+   startup_id="DESKTOP_STARTUP_ID"
+fi
+
+if [ "$WAYLAND_DISPLAY" ] && [ "$XDG_ACTIVATION_TOKEN" ]; then
+   startup_id="XDG_ACTIVATION_TOKEN"
+fi
+
+echo "startup_id=$startup_id, url=$1" > "$HOME/test_app_browser.log"

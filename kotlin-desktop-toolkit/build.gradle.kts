@@ -521,6 +521,7 @@ abstract class X11TestEnv :
     private var logFiles = mutableListOf<Path>()
 
     private val homeTempDir by lazy { Files.createTempDirectory("test_home") }
+    private val xdgConfigHome by lazy { homeTempDir.resolve(".config").createDirectories() }
     private val xdgDataHome by lazy { homeTempDir.resolve(".local/share").createDirectories() }
 
     private val ibusTempDir by lazy { Files.createTempDirectory("test_ibus") }
@@ -669,22 +670,63 @@ abstract class X11TestEnv :
         dunstConfigFile: RegularFile,
         baseXSettingsDConfigFile: RegularFile,
         ibusTestEngineFile: RegularFile,
+        testAppBrowser: RegularFile,
+        testAppFileManager: RegularFile,
         testResourcesDir: Directory,
         testAppDataSourceCmd: String,
         headless: Boolean,
     ): Map<String, String> {
         this.test = test
 
-        xdgDataHome
-            .resolve("dbus-1/services")
-            .createDirectories(PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")))
-            .resolve("org.freedesktop.Notifications.service")
-            .writeText(
-                """[D-BUS Service]
+        val dbusServicesDir = xdgDataHome.resolve(
+            "dbus-1/services",
+        ).createDirectories(PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")))
+        dbusServicesDir.resolve("org.freedesktop.Notifications.service").writeText(
+            """[D-BUS Service]
 Name=org.freedesktop.Notifications
 Exec=/bin/true
 """,
-            )
+        )
+
+        dbusServicesDir.resolve("org.freedesktop.FileManager1.service").writeText(
+            """[D-BUS Service]
+Name=org.freedesktop.FileManager1
+Exec=${testAppFileManager.asFile.absolutePath}
+""",
+        )
+
+        val userApplicationsDir = xdgDataHome.resolve("applications").createDirectory()
+
+        userApplicationsDir.resolve("test_app_browser.desktop").writeText(
+            """[Desktop Entry]
+Type=Application
+Exec=${testAppBrowser.asFile.absolutePath} %u
+Terminal=false
+Categories=GNOME;GTK;Network;WebBrowser;
+MimeType=x-scheme-handler/chrome;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/mailto
+StartupNotify=true
+Name=KDT Test Browser
+""",
+        )
+
+        userApplicationsDir.resolve("test_app_file_manager.desktop").writeText(
+            """[Desktop Entry]
+Type=Application
+Exec=${testAppFileManager.asFile.absolutePath} %u
+Terminal=false
+Categories=GNOME;GTK;FileManager;
+MimeType=inode/directory
+StartupNotify=true
+Name=KDT Test File Manager
+""",
+        )
+
+        xdgConfigHome.resolve("mimeapps.list").writeText(
+            """[Default Applications]
+x-scheme-handler/https=test_app_browser.desktop
+inode/directory=test_app_file_manager.desktop;
+""",
+        )
 
         val xSettingsDConfigFilePathString = homeTempDir.resolve(".xsettingsd").also {
             Path.of(baseXSettingsDConfigFile.asFile.absolutePath).copyTo(it)
@@ -939,6 +981,8 @@ val testGtk = tasks.register<Test>("testGtk") {
                     dunstConfigFile = testResourcesDir.file("dunstrc.conf"),
                     baseXSettingsDConfigFile = testResourcesDir.file("xsettingsd.conf"),
                     ibusTestEngineFile = testResourcesDir.file("ibus_test_engine.py"),
+                    testAppBrowser = testResourcesDir.file("test_app_browser"),
+                    testAppFileManager = testResourcesDir.file("test_app_file_manager"),
                     testResourcesDir = testResourcesDir,
                     testAppDataSourceCmd = testAppDataSourceCmd,
                     headless = headless,
@@ -1002,6 +1046,8 @@ val testWayland = tasks.register<Test>("testWayland") {
                     testResourcesDir = testResourcesDir,
                     runVirtualDevicesCmd = runVirtualDevicesCmd,
                     testAppDataSourceCmd = testAppDataSourceCmd,
+                    testAppBrowser = testResourcesDir.file("test_app_browser"),
+                    testAppFileManager = testResourcesDir.file("test_app_file_manager"),
                     headless = true,
                 )
                 println(newEnv)
@@ -1104,6 +1150,7 @@ abstract class WaylandTestEnv :
     private var logFiles = mutableListOf<Path>()
 
     private val homeTempDir by lazy { Files.createTempDirectory("test_home") }
+    private val xdgConfigHome by lazy { homeTempDir.resolve(".config").createDirectories() }
     private val xdgDataHome by lazy { homeTempDir.resolve(".local/share").createDirectories() }
 
     private val newEnv by lazy {
@@ -1123,6 +1170,7 @@ abstract class WaylandTestEnv :
 
     private fun newProcess(
         vararg args: String,
+        logStdOut: Boolean = false,
         getAdditionalEnvs: ((Map<String, String>) -> Map<String, String>)? = null,
         afterStart: ((Process) -> Unit)? = null,
     ) {
@@ -1146,7 +1194,12 @@ abstract class WaylandTestEnv :
                 println(it)
                 logFiles.add(it)
             }
-            pb.redirectError(ProcessBuilder.Redirect.to(logFileStderr.toFile()))
+            val logRedirect = ProcessBuilder.Redirect.to(logFileStderr.toFile())
+            if (logStdOut) {
+                pb.redirectOutput(logRedirect)
+            } else {
+                pb.redirectError(logRedirect)
+            }
         }.start().let {
             check(it.isAlive)
             afterStart?.invoke(it)
@@ -1161,21 +1214,55 @@ abstract class WaylandTestEnv :
         testResourcesDir: Directory,
         runVirtualDevicesCmd: String,
         testAppDataSourceCmd: String,
+        testAppBrowser: RegularFile,
+        testAppFileManager: RegularFile,
         headless: Boolean,
     ): Map<String, String> {
         println("WaylandTestEnv run")
         this.test = test
 
-        xdgDataHome
-            .resolve("dbus-1/services")
-            .createDirectories(PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")))
-            .resolve("org.freedesktop.Notifications.service")
-            .writeText(
-                """[D-BUS Service]
+        val dbusServicesDir = xdgDataHome.resolve(
+            "dbus-1/services",
+        ).createDirectories(PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")))
+        dbusServicesDir.resolve("org.freedesktop.Notifications.service").writeText(
+            """[D-BUS Service]
 Name=org.freedesktop.Notifications
 Exec=/bin/true
 """,
-            )
+        )
+        dbusServicesDir.resolve("org.gnome.Nautilus.service").writeText(
+            """[D-BUS Service]
+Name=org.gnome.Nautilus
+Exec=/bin/true
+""",
+        )
+
+        dbusServicesDir.resolve("org.freedesktop.FileManager1.service").writeText(
+            """[D-BUS Service]
+Name=org.freedesktop.FileManager1
+Exec=${testAppFileManager.asFile.absolutePath}
+""",
+        )
+
+        val userApplicationsDir = xdgDataHome.resolve("applications").createDirectory()
+
+        userApplicationsDir.resolve("test_app_browser.desktop").writeText(
+            """[Desktop Entry]
+Type=Application
+Exec=${testAppBrowser.asFile.absolutePath} %u
+Terminal=false
+Categories=GNOME;GTK;Network;WebBrowser;
+MimeType=x-scheme-handler/chrome;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/mailto
+StartupNotify=true
+Name=KDT Test Browser
+""",
+        )
+
+        xdgConfigHome.resolve("mimeapps.list").writeText(
+            """[Default Applications]
+x-scheme-handler/https=test_app_browser.desktop;
+""",
+        )
 
         val testSwayOut = Files.createTempDirectory("test_sway_out")
         val testSwayDisplayName = testSwayOut.resolve("display_name")
@@ -1232,6 +1319,8 @@ Exec=/bin/true
         ) {
             newEnv["DBUS_SESSION_BUS_ADDRESS"] = it.inputReader().readLine()
         }
+
+        newProcess("busctl", "--user", "monitor", logStdOut = true)
 
         newProcess(runVirtualDevicesCmd)
 

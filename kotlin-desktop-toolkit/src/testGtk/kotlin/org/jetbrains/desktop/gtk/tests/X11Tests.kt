@@ -13,6 +13,7 @@ import org.jetbrains.desktop.gtk.DragAndDropQueryResponse
 import org.jetbrains.desktop.gtk.DragIconParams
 import org.jetbrains.desktop.gtk.Event
 import org.jetbrains.desktop.gtk.EventHandlerResult
+import org.jetbrains.desktop.gtk.FileDialog
 import org.jetbrains.desktop.gtk.FontHintingValue
 import org.jetbrains.desktop.gtk.FontRgbaOrderValue
 import org.jetbrains.desktop.gtk.KeyCode
@@ -68,6 +69,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 import kotlin.io.path.absolutePathString
+import kotlin.io.path.createDirectories
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.exists
 import kotlin.io.path.fileSize
@@ -76,6 +78,7 @@ import kotlin.io.path.readBytes
 import kotlin.io.path.readLines
 import kotlin.io.path.readText
 import kotlin.io.path.writeBytes
+import kotlin.io.path.writeText
 import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.test.AfterTest
@@ -1223,6 +1226,51 @@ abstract class X11TestsBase {
     internal fun focusTestAppWindow(testAppData: TestAppData) {
         val operations = wm.getWindowByTitle(testAppData.windowTitle) { Pair(LogicalPixels.Zero, LogicalPixels.Zero) }
         operations.focus()
+    }
+
+    internal fun waitForWindowFocus(windowId: WindowId, msg: String) {
+        val checklist = Checklist(listOf("configure", "keyboardEnter"))
+        waitUntil(msg, getter = {
+            when (val event: Event? = eventQueue.poll()) {
+                is Event.WindowConfigure -> {
+                    assertEquals(windowId, event.windowId)
+                    if (event.active) {
+                        checklist.checkEntry("configure")
+                    }
+                }
+
+                is Event.WindowKeyboardEnter -> {
+                    assertEquals(windowId, event.windowId)
+                    checklist.checkEntry("keyboardEnter")
+                }
+
+                else -> {}
+            }
+            checklist.uncheckedEntries()
+        }) { it.isEmpty() }
+    }
+
+    internal fun waitForTestAppFocus(windowId: WindowId, msg: String? = null) {
+        val testAppFocusedChecklist = Checklist(listOf("configure", "keyboardLeave"))
+        waitUntil(msg ?: "Wait for test app focus", getter = {
+            when (val event: Event? = eventQueue.poll()) {
+                is Event.WindowConfigure -> {
+                    assertEquals(windowId, event.windowId)
+                    if (!event.active) {
+                        testAppFocusedChecklist.checkEntry("configure")
+                    }
+                }
+
+                is Event.WindowKeyboardLeave -> {
+                    assertEquals(windowId, event.windowId)
+                    testAppFocusedChecklist.checkEntry("keyboardLeave")
+                }
+
+                else -> {}
+            }
+            testAppFocusedChecklist.uncheckedEntries()
+        }) { it.isEmpty() }
+        ui {}
     }
 
     // Older GTK versions (e.g., 4.6.9) don't report `Event.WindowKeyboardLeave` on window close
@@ -4805,5 +4853,137 @@ text/plain;charset=utf-8
 
         val topLeftColor = pixmap.getColor(0, 0)
         assertEquals(rectColor, topLeftColor, "Expected ${rectColor.toHexString()}, got ${topLeftColor.toHexString()}")
+    }
+
+    @Test
+    fun testOpenUrl() {
+        run(defaultApplicationConfig())
+        val url = "https://localhost"
+        ui { app.openURL(url, null) }
+        val homeDir = assertNotNull(System.getenv("HOME"))
+        val logPath = Path.of(homeDir, "test_app_browser.log")
+        waitUntilTrue("Log created") { logPath.exists() }
+        waitUntil("Log startup_id", getter = { logPath.readText() }) {
+            it == "startup_id=DESKTOP_STARTUP_ID, url=$url\n"
+        }
+    }
+
+    @Test
+    fun testOpenFileManager() {
+        run(defaultApplicationConfig())
+        val homeDir = assertNotNull(System.getenv("HOME"))
+        val logPath = Path.of(homeDir, "test_app_file_manager.log")
+
+        val dir = Path.of(
+            homeDir,
+            "Some Path",
+            """~ ! @ # $ % ^ & * ( ) - _ = + [ { ] } \ | ; : ' " , < . > ?""",
+            "НЕШТО",
+            "何か",
+        ).createDirectories()
+        val path = dir.resolve("\uD83D\uDC69\uD83C\uDFFE\u200D\uD83E\uDD1D\u200D\uD83D\uDC68\uD83C\uDFFD")
+        path.writeText("")
+        val pathString = path.absolutePathString()
+        val expectedLogLine =
+            """has_startup_id=1, method_name=ShowItems, uris=file://$homeDir/Some%20Path/~%20!%20@%20%23%20$%20%25%20%5E%20&%20*%20(%20)%20-%20_%20=%20+%20%5B%20%7B%20%5D%20%7D%20%5C%20%7C%20%3B%20:%20'%20%22%20,%20%3C%20.%20%3E%20%3F/%D0%9D%D0%95%D0%A8%D0%A2%D0%9E/%E4%BD%95%E3%81%8B/%F0%9F%91%A9%F0%9F%8F%BE%E2%80%8D%F0%9F%A4%9D%E2%80%8D%F0%9F%91%A8%F0%9F%8F%BD, file_paths=$pathString"""
+
+        val windowParams = defaultWindowParams()
+        val windowOperations = createWindowAndWaitForFocus(windowParams).operations
+
+        ui { app.openFileManager(pathString, null) }
+        waitUntilTrue("Log created") { logPath.exists() }
+        waitUntil("Log line is $expectedLogLine", getter = { logPath.readText() }) {
+            it == expectedLogLine
+        }
+        waitForTestAppFocus(windowParams.windowId, msg = "First not active")
+        windowOperations.focus()
+        waitForWindowFocus(windowParams.windowId, msg = "First active")
+
+        logPath.deleteIfExists()
+
+        ui { app.openFileManager(pathString, null) }
+        waitUntilTrue("Log created") { logPath.exists() }
+        waitUntil("Log line is $expectedLogLine", getter = { logPath.readText() }) {
+            it == expectedLogLine
+        }
+
+        waitForTestAppFocus(windowParams.windowId, msg = "Second not active")
+        wm.closeActiveWindow()
+        waitForWindowFocus(windowParams.windowId, msg = "Second active")
+    }
+
+    @Test
+    fun testFileOpenDialog() {
+        run(defaultApplicationConfig())
+        val window = createWindowAndWaitForFocus(defaultWindowParams()).window
+        val requestId = ui {
+            window.showOpenFileDialog(
+                commonParams = FileDialog.CommonDialogParams(
+                    modal = true,
+                    title = "Open Files",
+                    acceptLabel = null,
+                    currentFolder = null,
+                ),
+                openParams = FileDialog.OpenDialogParams(
+                    allowsMultipleSelections = true,
+                    selectDirectories = false,
+                ),
+            )
+        }
+        assertNotNull(requestId, "requestId")
+        waitForTestAppFocus(window.windowId)
+
+        wm.withKeyPress(KeyCode.Escape) {}
+
+        checkNextEvents(
+            checks = mapOf(
+                "FileChooserResponse" to { event, _ ->
+                    event is Event.FileChooserResponse && requestId == event.requestId
+                },
+                "WindowKeyboardEnter" to { event, _ ->
+                    event is Event.WindowKeyboardEnter
+                },
+            ),
+        )
+
+        ui { window.close() }
+        awaitEventOfType<Event.WindowClosed> { true }
+    }
+
+    @Test
+    fun testFileSaveDialog() {
+        run(defaultApplicationConfig())
+        val window = createWindowAndWaitForFocus(defaultWindowParams()).window
+        val requestId = ui {
+            window.showSaveFileDialog(
+                FileDialog.CommonDialogParams(
+                    modal = true,
+                    title = null,
+                    acceptLabel = null,
+                    currentFolder = null,
+                ),
+                saveParams = FileDialog.SaveDialogParams(
+                    nameFieldStringValue = null,
+                ),
+            )
+        }
+        assertNotNull(requestId, "requestId")
+        waitForTestAppFocus(window.windowId)
+
+        wm.withKeyPress(KeyCode.Escape) {}
+
+        checkNextEvents(
+            checks = mapOf(
+                "FileChooserResponse" to { event, _ ->
+                    event is Event.FileChooserResponse && requestId == event.requestId
+                },
+                "WindowKeyboardEnter" to { event, _ ->
+                    event is Event.WindowKeyboardEnter
+                },
+            ),
+        )
+
+        ui { window.close() }
+        awaitEventOfType<Event.WindowClosed> { true }
     }
 }

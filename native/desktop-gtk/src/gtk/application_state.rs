@@ -23,8 +23,8 @@ use crate::gtk::window_api::WindowParams;
 use anyhow::{Context, bail};
 use gtk4::glib::translate::ToGlibPtr;
 use gtk4::prelude::{
-    ActionMapExtManual, ApplicationExt, ApplicationExtManual, CancellableExt, DeviceExt, DisplayExt, DragExt, FileExt, GtkApplicationExt,
-    GtkWindowExt, ObjectExt, ObjectType, SeatExt, WidgetExt, WidgetExtManual,
+    ActionMapExtManual, AppInfoExt, AppLaunchContextExt, ApplicationExt, ApplicationExtManual, CancellableExt, DeviceExt, DisplayExt,
+    DragExt, FileExt, GtkApplicationExt, GtkWindowExt, ObjectExt, ObjectType, SeatExt, WidgetExt, WidgetExtManual,
 };
 use gtk4::{gdk as gdk4, gio, glib};
 use log::{debug, warn};
@@ -475,16 +475,44 @@ impl ApplicationState {
         request_id
     }
 
-    fn open_file_manager_impl(path: &str, request_id: RequestId, cancellable: gio::Cancellable) {
-        let uri = gio::File::for_path(path).uri();
+    fn open_file_manager_impl(path: &str, activation_token: Option<&str>, request_id: RequestId, cancellable: gio::Cancellable) {
+        let file = gio::File::for_path(path);
+        let uri = file.uri();
+        let uris = vec![uri.as_str()];
+        let file_type = file.query_file_type(gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS, Some(&cancellable));
+
+        let app_launch_context = gdk4::DisplayManager::get()
+            .default_display()
+            .as_ref()
+            .map(DisplayExt::app_launch_context);
+        let app_info = gio::AppInfo::default_for_type("inode/directory", true);
+
+        let args = if let Some(activation_token) = activation_token {
+            glib::Variant::from((uris, activation_token))
+        } else if let Some(app_info) = &app_info
+            && let Some(app_launch_context) = &app_launch_context
+        {
+            let startup_id = app_launch_context
+                .startup_notify_id(Some(app_info), std::slice::from_ref(&file))
+                .unwrap_or_default();
+            debug!("Opening file manager using startup ID: {startup_id}");
+            glib::Variant::from((uris, startup_id.as_str()))
+        } else {
+            glib::Variant::from((uris, ""))
+        };
+        let command = if file_type == gio::FileType::Directory {
+            "ShowFolders"
+        } else {
+            "ShowItems"
+        };
         gio::bus_get(gio::BusType::Session, Some(&cancellable.clone()), move |result| match result {
             Ok(connection) => {
                 connection.call(
                     Some("org.freedesktop.FileManager1"),
                     "/org/freedesktop/FileManager1",
                     "org.freedesktop.FileManager1",
-                    "ShowItems",
-                    Some(&glib::Variant::from((vec![uri.as_str()], ""))),
+                    command,
+                    Some(&args),
                     None,
                     gio::DBusCallFlags::NONE,
                     -1,
@@ -492,12 +520,18 @@ impl ApplicationState {
                     move |result| {
                         if let Err(e) = result {
                             warn!("Error trying to open URL for {request_id:?}: {e}");
+                            if let Some(app_info) = app_info {
+                                _ = app_info.launch(&[file], app_launch_context.as_ref());
+                            }
                         }
                     },
                 );
             }
             Err(e) => {
                 warn!("Error establishing DBus session connection: {e}");
+                if let Some(app_info) = app_info {
+                    _ = app_info.launch(&[file], app_launch_context.as_ref());
+                }
             }
         });
     }
@@ -507,7 +541,7 @@ impl ApplicationState {
         let raw_request_id = self.async_request_counter.fetch_add(1, atomic::Ordering::Relaxed);
         let request_id = RequestId(raw_request_id);
 
-        Self::open_file_manager_impl(path, request_id, self.cancellable.clone());
+        Self::open_file_manager_impl(path, activation_token, request_id, self.cancellable.clone());
         request_id
     }
 

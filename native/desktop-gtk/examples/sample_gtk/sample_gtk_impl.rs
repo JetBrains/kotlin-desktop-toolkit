@@ -65,6 +65,14 @@ pub trait Drawable {
     fn draw(&mut self, physical_size: PhysicalSize, window_state: &WindowState);
 }
 
+struct ReceivedPath(String);
+
+impl Default for ReceivedPath {
+    fn default() -> Self {
+        Self("/bin/true".to_owned())
+    }
+}
+
 #[derive(Default)]
 pub struct WindowState {
     active: bool,
@@ -75,7 +83,7 @@ pub struct WindowState {
     drag_and_drop_target: bool,
     drag_and_drop_source: bool,
     drawable: Option<Box<dyn Drawable>>,
-    last_received_path: Option<String>,
+    last_received_path: ReceivedPath,
     fullscreen: bool,
     maximized: bool,
     pub scale: Scale,
@@ -305,9 +313,7 @@ fn on_keydown(event: &KeyDownEvent, state: &mut State, window_id: WindowId) -> O
             Some(Action::Dummy)
         }
         (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyU) => {
-            if let Some(path) = window_state.last_received_path.clone() {
-                application_open_file_manager(BorrowedUtf8::new(&path), BorrowedUtf8::null());
-            }
+            application_open_file_manager(BorrowedUtf8::new(&window_state.last_received_path.0), BorrowedUtf8::null());
             Some(Action::Dummy)
         }
         (_, _) => {
@@ -382,7 +388,7 @@ fn on_data_transfer_received(content: &DataTransferContent, window_state: &mut W
                 let path_bytes = path_buf.into_os_string().into_encoded_bytes();
                 String::from_utf8(path_bytes).unwrap()
             };
-            window_state.last_received_path = Some(first_path);
+            window_state.last_received_path = ReceivedPath(first_path);
             for e in list {
                 assert!(e.starts_with("file:///"), "\"{e}\" doesn't start with \"file:///\"");
                 assert_eq!(e, e.trim_ascii_end());
@@ -390,10 +396,8 @@ fn on_data_transfer_received(content: &DataTransferContent, window_state: &mut W
         } else if mime_type == TEXT_MIME_TYPE {
             let data_str = str::from_utf8(data).unwrap();
             window_state.text += data_str;
-            window_state.last_received_path = None;
         } else {
             warn!("Mime type {mime_type:?} is not supported");
-            window_state.last_received_path = None;
         }
     }
     window_state.drag_and_drop_target = false;
