@@ -1,10 +1,10 @@
 package org.jetbrains.desktop.macos.tests
 
 import org.jetbrains.desktop.macos.Sound
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
-import kotlin.test.assertTrue
 
 @EnabledOnOs(OS.MAC)
 internal class SoundTest : KDTApplicationTestBase() {

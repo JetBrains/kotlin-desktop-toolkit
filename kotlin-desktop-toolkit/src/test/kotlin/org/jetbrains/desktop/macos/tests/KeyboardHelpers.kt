@@ -5,6 +5,7 @@ import org.jetbrains.desktop.macos.KeyCode
 import org.jetbrains.desktop.macos.KeyModifiersSet
 import org.jetbrains.desktop.macos.tests.KDTApplicationTestBase.Companion.ui
 import org.jetbrains.desktop.macos.tests.KeyboardTest.Companion.robot
+import org.junit.jupiter.api.Assertions.assertTrue
 import kotlin.collections.forEach
 
 object KeyboardHelpers {
@@ -42,7 +43,7 @@ object KeyboardHelpers {
             event.key.text == key &&
             event.keyWithModifiers.text == keyWithModifiers &&
             event.modifiers == modifiers.toModifiersSet()
-        assert(isKeyDownExpected) {
+        assertTrue(isKeyDownExpected) {
             "Expected keyDown event with keyCode=$keyCode, typed=$characters, key=$key, keyWithModifiers=$keyWithModifiers, modifiers=$modifiers, but got $event"
         }
     }
@@ -52,7 +53,7 @@ object KeyboardHelpers {
             event.key.text == key &&
             event.keyWithModifiers.text == keyWithModifiers &&
             event.modifiers == modifiers.toModifiersSet()
-        assert(isKeyDownExpected) {
+        assertTrue(isKeyDownExpected) {
             "Expected keyUp event with keyCode=$keyCode, typed=$typed, key=$key, keyWithModifiers=$keyWithModifiers, modifiers=$modifiers, but got $event"
         }
     }

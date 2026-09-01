@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.win32.tests
 
+import org.assertj.core.api.Assertions.assertThat
 import org.jetbrains.desktop.win32.KotlinDesktopToolkit
 import org.jetbrains.desktop.win32.Screen
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -20,13 +21,10 @@ class ScreenTests {
         assertTrue(screens.isNotEmpty(), "Expected at least one screen")
 
         for (screen in screens) {
-            assertTrue(screen.size.width > 0f, "Screen width should be positive, got: ${screen.size.width}")
-            assertTrue(screen.size.height > 0f, "Screen height should be positive, got: ${screen.size.height}")
-            assertTrue(screen.scale > 0f, "Screen scale should be positive, got: ${screen.scale}")
-            assertTrue(
-                screen.maximumFramesPerSecond > 0,
-                "Screen maximumFramesPerSecond should be positive, got: ${screen.maximumFramesPerSecond}",
-            )
+            assertThat(screen.size.width).`as`("Screen width").isPositive()
+            assertThat(screen.size.height).`as`("Screen height").isPositive()
+            assertThat(screen.scale).`as`("Screen scale").isPositive()
+            assertThat(screen.maximumFramesPerSecond).`as`("Screen maximumFramesPerSecond").isPositive()
         }
 
         assertEquals(

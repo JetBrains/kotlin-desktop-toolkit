@@ -24,14 +24,14 @@ import org.jetbrains.desktop.win32.generated.NativeTextRange
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import org.jetbrains.desktop.win32.readBorrowedUtf8
 import org.jetbrains.desktop.win32.readSegments
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertSame
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertInstanceOf
 import java.lang.foreign.Arena
 import java.lang.foreign.ValueLayout
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertSame
-import kotlin.test.assertTrue
 
 class TextInputClientTests {
     private class RecordingClient : TextInputClient {
@@ -180,7 +180,7 @@ class TextInputClientTests {
         val native = NativeEvent.input_language_changed(eventStorage)
         NativeInputLanguageChangedEvent.hkl(native, 0x0411L)
         NativeInputLanguageChangedEvent.locale_name(native, arena.allocateFrom("ja-JP"))
-        val event = assertIs<Event.InputLanguageChanged>(Event.fromNative(eventStorage))
+        val event = assertInstanceOf<Event.InputLanguageChanged>(Event.fromNative(eventStorage))
         assertEquals(0x0411L, event.hkl)
         assertEquals("ja-JP", event.localeName)
     }

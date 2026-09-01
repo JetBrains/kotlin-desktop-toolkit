@@ -4,8 +4,12 @@ import org.jetbrains.annotations.TestOnly
 import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.EventHandlerResult
 import org.jetbrains.desktop.win32.KotlinDesktopToolkit
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import java.nio.file.Path
@@ -16,10 +20,6 @@ import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.concurrent.atomics.fetchAndDecrement
 import kotlin.concurrent.atomics.fetchAndIncrement
 import kotlin.concurrent.thread
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 import kotlin.use
 
 @EnabledOnOs(OS.WINDOWS)

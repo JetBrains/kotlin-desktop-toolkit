@@ -1,12 +1,12 @@
 package org.jetbrains.desktop.macos.tests
 
 import org.jetbrains.desktop.macos.GrandCentralDispatch
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.test.Test
-import kotlin.test.assertEquals
 
 @EnabledOnOs(OS.MAC)
 class GrandCentralDispatchCloseTest : KDTTestBase() {

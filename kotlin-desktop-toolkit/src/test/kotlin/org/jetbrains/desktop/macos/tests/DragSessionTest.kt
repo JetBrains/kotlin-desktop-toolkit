@@ -7,14 +7,14 @@ import org.jetbrains.desktop.macos.LogicalRect
 import org.jetbrains.desktop.macos.LogicalSize
 import org.jetbrains.desktop.macos.Pasteboard
 import org.jetbrains.desktop.macos.Window
+import org.junit.jupiter.api.Disabled
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
-import kotlin.test.Ignore
-import kotlin.test.Test
 
 @EnabledOnOs(OS.MAC)
 class DragSessionTest : KDTApplicationTestBase() {
-    @Ignore("Add an API to cancel session")
+    @Disabled("Add an API to cancel session")
     @Test
     fun startDragSessionSmokeTest() {
         val window = ui {

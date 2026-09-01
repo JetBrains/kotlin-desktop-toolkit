@@ -69,13 +69,10 @@ dependencies {
     // To be able to inspect gradle source code
     compileOnly(gradleApi())
 
-    // Use the Kotlin JUnit 5 integration.
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-
-    // Use the JUnit 5 integration.
-    testImplementation(libs.junit.jupiter.engine)
+    testImplementation(libs.junit.jupiter)
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation(libs.assertj.core)
     implementation(kotlin("stdlib"))
 }
 
@@ -945,8 +942,7 @@ val testGtkRuntimeOnly = configurations.getByName("testGtkRuntimeOnly")
 configurations["testGtkRuntimeOnly"].extendsFrom(configurations.runtimeOnly.get())
 
 dependencies {
-    testGtkImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    testGtkImplementation(libs.junit.jupiter.engine)
+    testGtkImplementation(libs.junit.jupiter)
     testGtkImplementation("org.jetbrains.skiko:skiko-awt-runtime-$skikoTargetOs-$skikoTargetArch:$skikoVersion")
     testGtkImplementation("com.github.moaxcp.x11:x11-client:0.22.0")
     testGtkImplementation("com.squareup.moshi:moshi-kotlin:1.15.2")
@@ -1012,8 +1008,7 @@ val testWaylandRuntimeOnly = configurations.getByName("testWaylandRuntimeOnly")
 configurations["testWaylandRuntimeOnly"].extendsFrom(configurations.runtimeOnly.get())
 
 dependencies {
-    testWaylandImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    testWaylandImplementation(libs.junit.jupiter.engine)
+    testWaylandImplementation(libs.junit.jupiter)
     testWaylandImplementation("org.jetbrains.skiko:skiko-awt-runtime-$skikoTargetOs-$skikoTargetArch:$skikoVersion")
     testWaylandImplementation("com.squareup.moshi:moshi-kotlin:1.15.2")
     testWaylandRuntimeOnly("org.junit.platform:junit-platform-launcher")

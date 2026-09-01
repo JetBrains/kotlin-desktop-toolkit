@@ -11,14 +11,14 @@ import org.jetbrains.desktop.macos.TextInputClient
 import org.jetbrains.desktop.macos.TextRange
 import org.jetbrains.desktop.macos.Window
 import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Disabled
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import java.util.concurrent.TimeUnit
-import kotlin.test.Ignore
-import kotlin.test.Test
-import kotlin.test.assertEquals
 
 @EnabledOnOs(OS.MAC)
 class KoreanImeTest : KDTApplicationTestBase() {
@@ -58,7 +58,7 @@ class KoreanImeTest : KDTApplicationTestBase() {
      *   S → ㄴ (nieun), U → ㅕ (yeo), D → ㅇ (ieung)
      *   ㄴ + ㅕ + ㅇ = 녕
      */
-    @Ignore("Fails on CI, disable before investigation")
+    @Disabled("Fails on CI, disable before investigation")
     @Test
     @Timeout(value = 30, unit = TimeUnit.SECONDS)
     fun `typing S U D with Korean 2-Set IME produces 녕`() {

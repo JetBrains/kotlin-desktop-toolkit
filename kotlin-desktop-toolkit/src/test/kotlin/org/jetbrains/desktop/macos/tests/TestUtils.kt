@@ -13,6 +13,8 @@ import org.jetbrains.desktop.macos.TextInputSource
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.tests.KeyboardTest.Companion.window
 import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Timeout
 import java.lang.Thread.sleep
@@ -20,7 +22,6 @@ import java.nio.file.Path
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
-import kotlin.test.assertEquals
 
 /**
  * We expect that every test class will be executed with a separate JVM instance, without parallel forks.
@@ -122,7 +123,7 @@ open class KDTApplicationTestBase : KDTTestBase() {
                     Application.init()
                     Application.runEventLoop { event ->
                         Logger.debug { "Event: $event" }
-                        assert(eventQueue.offer(event), { "Event queue overflow" })
+                        assertTrue(eventQueue.offer(event)) { "Event queue overflow" }
                         eventHandler?.invoke(event) ?: EventHandlerResult.Continue
                     }
                     GrandCentralDispatch.close()

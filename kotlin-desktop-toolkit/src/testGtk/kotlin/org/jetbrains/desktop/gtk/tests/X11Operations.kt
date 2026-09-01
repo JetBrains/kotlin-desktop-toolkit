@@ -30,14 +30,14 @@ import org.jetbrains.desktop.gtk.MouseButton
 import org.jetbrains.desktop.gtk.PhysicalPixels
 import org.jetbrains.desktop.gtk.PhysicalSize
 import org.jetbrains.desktop.gtk.Scale
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.fail
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.IntBuffer
 import kotlin.math.roundToInt
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
-import kotlin.test.fail
 
 internal data class GlobalPosition<T>(
     val x: T,
