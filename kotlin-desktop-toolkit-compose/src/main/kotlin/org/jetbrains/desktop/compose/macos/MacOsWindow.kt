@@ -44,9 +44,6 @@ import androidx.compose.ui.unit.height
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.takeOrElse
 import androidx.compose.ui.unit.width
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.desktop.compose.ClipboardItemsEntry
@@ -84,7 +81,6 @@ import org.jetbrains.desktop.macos.WindowId
 import org.jetbrains.skia.PictureRecorder
 import org.jetbrains.skia.Rect
 import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.ceil
 
 /**
@@ -134,19 +130,6 @@ internal class MacOsWindow(
 
     @Volatile
     private var isFrameRequested = false
-
-    /**
-     * AppKit's occlusion state, mirrored rather than read back through [Window.isVisible]: the frame
-     * request below can arrive on any thread, and that call is main-thread only.
-     */
-    @Volatile
-    private var isWindowVisible = false
-
-    private val windowlessFrameRequested = AtomicBoolean(false)
-
-    @Volatile
-    private var nextWindowlessFrameDeadlineNs = 0L
-    private val windowlessFrameScope = CoroutineScope(KdtDispatcher)
 
     private val viewContext = application.gpuContext.createMetalViewContext()
     private val pictureRecorder = PictureRecorder()
@@ -591,7 +574,6 @@ internal class MacOsWindow(
             }
 
             is Event.WindowChangedOcclusionState -> {
-                isWindowVisible = event.isVisible
                 if (event.isVisible) {
                     // AppKit's origin is only reliable while the window is on screen, so the last one
                     // reported before it was hidden may be stale.
@@ -602,9 +584,9 @@ internal class MacOsWindow(
                     event.isVisible && displayLink == null -> setUpDisplayLink()
                     else -> displayLink?.setRunning(event.isVisible)
                 }
-                // A window that just became visible has to repaint; one that just went invisible will
-                // get no more ticks, so a frame already asked for has to be produced without them.
-                if (event.isVisible || isFrameRequested) requestFrame()
+                // A window that just came back has to repaint; one that went away gets no ticks until
+                // it returns, and the frame it was waiting for is still requested when it does.
+                if (event.isVisible) requestFrame()
                 EventHandlerResult.Stop
             }
 
@@ -730,8 +712,7 @@ internal class MacOsWindow(
     private fun setUpDisplayLink() {
         displayLink?.close()
         displayLink = null
-        isWindowVisible = nativeWindow.isVisible
-        if (isWindowVisible) {
+        if (nativeWindow.isVisible) {
             val link = DisplayLink.create(nativeWindow.screenId()) { framePump.onDisplayLinkTick() }
             if (link == null) {
                 // `create` returns null when there is no active display — the machine is asleep, or every
@@ -745,61 +726,16 @@ internal class MacOsWindow(
                 link.setRunning(true)
             }
         }
-        // Whatever the reason there is no link, a frame the scene is still waiting for has to arrive.
-        if (isFrameRequested) requestFrame()
     }
 
-    /** True while the display link is in a position to hand a tick to [framePump]. */
-    private fun canDeliverFrames(): Boolean = displayLink != null && isWindowVisible
-
     /**
-     * Records that Compose wants a new frame, and makes sure something will produce it.
+     * Records that Compose wants a new frame; the display link produces it on its next tick.
      *
-     * Normally that is the display link, on its next tick. A window that is not visible has no running
-     * link, and nothing else drives the scene: its frame clock only ticks inside [ComposeScene.render],
-     * so `withFrameNanos` awaiters, animations and state written from outside the composition would all
-     * stall — the window would stop recomposing, not merely stop repainting, until it came back.
-     *
-     * In that state the frame is produced here instead, at most [WINDOWLESS_MIN_FRAME_INTERVAL_NANOS] apart,
-     * and thrown away rather than presented: rendering is what ticks the clock, presenting is the part
-     * that needs a visible window.
+     * A window that is not visible has no running link and so gets no frames, which stalls its frame
+     * clock — measured, and deliberate. See the plan's note on `macos.md` finding 2.
      */
     private fun requestFrame() {
         isFrameRequested = true
-        if (isDisposed || canDeliverFrames() || !windowlessFrameRequested.compareAndSet(false, true)) {
-            return
-        }
-        val delayMs = ((nextWindowlessFrameDeadlineNs - System.nanoTime()).coerceAtLeast(0L) + 999_999L) / 1_000_000L
-        windowlessFrameScope.launch {
-            delay(delayMs)
-            windowlessFrameRequested.set(false)
-            nextWindowlessFrameDeadlineNs = System.nanoTime() + WINDOWLESS_MIN_FRAME_INTERVAL_NANOS
-            // The window may have become visible while the delay ran; then the link is the better pump
-            // and the request it is holding stands.
-            if (isDisposed || canDeliverFrames() || !isFrameRequested) {
-                return@launch
-            }
-            isFrameRequested = false
-            try {
-                renderWindowlessFrame()
-            } catch (throwable: Throwable) {
-                Logger.error(throwable) { "Could not render a frame without a display link" }
-                requestFrame()
-            }
-        }
-    }
-
-    /**
-     * Renders into a picture that is discarded immediately. The recording rect is 1x1 because nothing
-     * reads the result; only the side effects of [ComposeScene.render] are wanted.
-     */
-    private fun renderWindowlessFrame() {
-        val canvas = pictureRecorder.beginRecording(Rect.makeWH(1f, 1f))
-        try {
-            scene.render(canvas.asComposeCanvas(), System.nanoTime())
-        } finally {
-            pictureRecorder.finishRecordingAsPicture().close()
-        }
     }
 
     private fun recordFrame(): PresentablePicture? {
@@ -857,7 +793,6 @@ internal class MacOsWindow(
         displayLink?.setRunning(false)
         displayLink?.close()
         displayLink = null
-        windowlessFrameScope.cancel()
         application.detachWindow(this)
         scene.close()
         pictureRecorder.close()
@@ -873,9 +808,6 @@ private fun Window.currentPlacement(): WindowPlacement = when {
 }
 
 private fun Window.isMaximizedButNotFullScreen(): Boolean = !isFullScreen && isMaximized
-
-/** The fastest a window with no display link is allowed to render, mirroring a 60 Hz link. */
-private const val WINDOWLESS_MIN_FRAME_INTERVAL_NANOS = 1_000_000_000L / 60
 
 /** Rounds a size in pixels up so that both dimensions are even integers. */
 private fun Size.roundUpToEvenPixels(): Size {

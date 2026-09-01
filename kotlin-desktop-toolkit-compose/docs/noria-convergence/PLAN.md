@@ -424,6 +424,28 @@ Picked up after the ten workstreams; the report's P2/P3 backlog is otherwise unt
   `LocalDensity provides density` from the window itself and never blanket-re-provides an
   application-level context over it.
 
+- **`macos.md` 2 — reverted after measuring it.** The windowless frame fallback (`bce6609b`) is out;
+  the finding is a Noria problem that Compose does not have.
+
+  Measured on macOS by removing the fallback and instrumenting an occluded window. While hidden:
+  `framesLastSecond=0` and `withFrameNanos` ticks drop from ~180/s to **0**, resuming the instant the
+  window returns — so the *mechanism* the finding describes is real. But a `delay`-driven coroutine in
+  the content kept reporting at 1/s throughout: **the dispatcher never stalls, only the frame clock
+  does.**
+
+  That is the whole difference. In Noria the scene's `reconcile` drives its data flow, so no reconcile
+  means non-visual work genuinely stops — which is what AIR-6275 was about. In Compose, non-visual work
+  rides coroutines on the dispatcher, and state written while hidden is held by the snapshot system and
+  applied when frames resume. What actually stalls is animation on a window nobody can see, which is
+  reasonable behaviour rather than a defect.
+
+  The fallback's cost was not reasonable: rendering the scene at up to 60 Hz into a discarded picture
+  for as long as a window stays hidden, burning CPU for output nobody receives.
+
+  **Still worth checking, and not covered by this experiment:** a window occluded *from creation* never
+  gets a display link, so it may never produce a first frame and its content's `LaunchedEffect`s may
+  never start. If real, the fix is one guaranteed frame, not a 60 Hz loop.
+
 - **`macos.md` 5 — stale window position after hiding.** AppKit's origin is only reliable while the
   window is on screen; re-read on the visible transition, as Noria does. Noria refreshes only
   `position`, so neither does this.
