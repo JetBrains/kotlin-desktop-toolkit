@@ -1561,7 +1561,7 @@ abstract class WaylandTestsBase {
         val otherEvents: List<Event>,
     )
 
-    internal fun createWindowAndWaitForFocus(windowParams: WindowParams, onScale: ((Scale) -> Unit)? = null): InitialWindowData {
+    internal fun createWindowAndWaitForFocus(windowParams: WindowParams): InitialWindowData {
         val window = ui { app.createWindow(windowParams) }
         lateinit var scale: Event.WindowScaleChanged
         lateinit var configure: Event.WindowConfigure
@@ -1620,7 +1620,6 @@ abstract class WaylandTestsBase {
                     if (windowParams.windowId == event.windowId) {
                         scale = event
                         checklist.checkEntry("scale")
-                        onScale?.invoke(scale.newScale)
                         checklist.uncheckEntry("draw")
                     }
                 }
@@ -5034,19 +5033,26 @@ text/plain;charset=utf-8
 
         eventHandler = { event ->
             assertTrue(app.isEventLoopThread())
-            if (event is Event.WindowDraw) {
-                draw(event)
-                EventHandlerResult.Stop
-            } else {
-                EventHandlerResult.Continue
+            when (event) {
+                is Event.WindowScaleChanged -> {
+                    scale = event.newScale
+                    EventHandlerResult.Stop
+                }
+
+                is Event.WindowDraw -> {
+                    draw(event)
+                    EventHandlerResult.Stop
+                }
+
+                else -> {
+                    EventHandlerResult.Continue
+                }
             }
         }
         run(defaultApplicationConfig())
 
         val windowParams = defaultWindowParams()
-        val window = createWindowAndWaitForFocus(windowParams, onScale = { drawScale ->
-            scale = drawScale
-        }).window
+        val window = createWindowAndWaitForFocus(windowParams).window
 
         assertNotNull(scale)
         val lastScreenSize = checkNotNull(lastScreenSize)
