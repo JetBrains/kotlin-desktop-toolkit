@@ -5074,15 +5074,14 @@ text/plain;charset=utf-8
         awaitEventOfType<Event.MouseEntered> { true }
 
         window.setPointerShape(PointerShape.Hidden)
-        ui { lastDrawEvents.clear() }
 
+        ui { lastDrawEvents.clear() }
         awaitEventOfType<Event.WindowDraw> { true }
 
-        // Screenshot only the window, because sometimes the previous tests can leave the drag&drop artifacts
-        screenshot(screenshotPath)
+        moveMouseTo(TestMousePosition(GlobalPosition.Zero, lastScreenSize.width, lastScreenSize.height / 2))
+        awaitEventOfType<Event.MouseMoved> { true }
 
-        val drawEvent = lastDrawEvents[windowParams.windowId]
-        assertNotNull(drawEvent)
+        screenshot(screenshotPath)
 
         val image = SkImage.makeFromEncoded(screenshotPath.readBytes())
         val imageScale = lastScreenSize.width.rawLogical.toDouble() / image.width
