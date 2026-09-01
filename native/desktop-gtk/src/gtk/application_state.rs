@@ -83,8 +83,8 @@ pub struct ApplicationState {
     clipboard: KdtClipboard,
     primary_clipboard: KdtClipboard,
     current_drag: glib::WeakRef<gdk4::Drag>,
-    drag_icon: Rc<RefCell<Option<GlWidget>>>,
-    drag_content_provider: Rc<RefCell<Option<ClipboardContentProvider>>>,
+    drag_icon: RefCell<Option<GlWidget>>,
+    drag_content_provider: RefCell<Option<ClipboardContentProvider>>,
     desktop_settings: DesktopSettings,
     notifications: Notifications,
     disconnect_modifier_state_notify_handler: Option<Box<dyn FnOnce()>>,
@@ -256,8 +256,8 @@ impl ApplicationState {
             clipboard,
             primary_clipboard,
             current_drag: glib::WeakRef::default(),
-            drag_icon: Rc::default(),
-            drag_content_provider: Rc::default(),
+            drag_icon: RefCell::default(),
+            drag_content_provider: RefCell::default(),
             desktop_settings,
             notifications,
             disconnect_modifier_state_notify_handler: None,
@@ -453,7 +453,7 @@ impl ApplicationState {
     }
 
     pub fn request_redraw_drag_icon(&self) {
-        (*self.drag_icon.borrow()).as_ref().map(GlWidget::queue_draw);
+        self.drag_icon.borrow().as_ref().map(GlWidget::queue_draw);
     }
 
     pub fn open_url(&self, url_string: &str, activation_token: Option<&str>) -> RequestId {
