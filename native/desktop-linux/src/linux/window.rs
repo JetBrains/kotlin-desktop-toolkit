@@ -1,7 +1,10 @@
 use crate::linux::{
     application_api::RenderingMode,
     application_state::{ApplicationState, EGLData},
-    events::{EventSerial, SoftwareDrawData, WindowConfigureEvent, WindowDrawEvent, WindowFrame, WindowId},
+    events::{
+        EventSerial, SoftwareDrawData, WindowCapabilities, WindowConfigureEvent, WindowDecorationMode, WindowDrawEvent, WindowFrame,
+        WindowId,
+    },
     geometry::{LogicalPixelsInt, LogicalPoint, LogicalRect, LogicalSize, PhysicalSize, Scale},
     pointer_shapes_api::PointerShape,
     rendering_egl::EglRendering,
@@ -17,6 +20,7 @@ use smithay_client_toolkit::{
             Connection, Proxy as _, QueueHandle,
             protocol::{wl_seat::WlSeat, wl_surface::WlSurface},
         },
+        csd_frame::WindowManagerCapabilities,
         protocols::wp::viewporter::client::wp_viewport::WpViewport,
     },
     seat::pointer::{CursorIcon, ThemedPointer},
@@ -52,8 +56,8 @@ pub struct SimpleWindow {
     pub window_id: WindowId,
     pub app_id: String,
     pub close: bool,
-    pub content_size: Option<LogicalSize>,
-    pub surface_size: Option<LogicalSize>,
+    content_size: Option<LogicalSize>,
+    surface_size: Option<LogicalSize>,
     last_geometry: Option<LogicalRect>,
     viewport: Option<WpViewport>,
     pub window: Window,
@@ -64,8 +68,8 @@ pub struct SimpleWindow {
     rendering_data: Option<RenderingData>,
     pub rendering_mode: RenderingMode,
     pub num_pointer_buttons_down: u32,
-    pub default_client_side_decoration_frame: WindowFrame,
-    pub last_configure_event: Option<WindowConfigureEvent>,
+    default_client_side_decoration_frame: WindowFrame,
+    last_configure_event: Option<WindowConfigureEvent>,
 }
 
 impl SimpleWindow {
@@ -155,8 +159,7 @@ impl SimpleWindow {
         window: &Window,
         configure: &WindowConfigure,
         egl: Option<Rc<EGLData>>,
-        frame: &WindowFrame,
-    ) -> bool {
+    ) -> (bool, Option<WindowConfigureEvent>) {
         const DEFAULT_WIDTH: LogicalPixelsInt = LogicalPixelsInt::new(640);
         const DEFAULT_HEIGHT: LogicalPixelsInt = LogicalPixelsInt::new(480);
         debug!("{:?}: configure start: {configure:?}", self.window_id);
@@ -185,7 +188,17 @@ impl SimpleWindow {
         };
         self.content_size = Some(content_size);
 
-        let surface_size = self.update_window_geometry(content_size, frame, compositor_state, shm);
+        let mut frame = if configure.decoration_mode == DecorationMode::Server || configure.is_maximized() || configure.is_fullscreen() {
+            WindowFrame::default()
+        } else {
+            self.default_client_side_decoration_frame.clone()
+        };
+        frame.left.tiled = configure.is_tiled_left();
+        frame.right.tiled = configure.is_tiled_right();
+        frame.top.tiled = configure.is_tiled_top();
+        frame.bottom.tiled = configure.is_tiled_bottom();
+
+        let surface_size = self.update_window_geometry(content_size, &frame, compositor_state, shm);
 
         // TODO: wl_surface::set_opaque_region?
 
@@ -223,7 +236,34 @@ impl SimpleWindow {
                 }
             };
         }
-        is_first_configure
+
+        let decoration_mode = match configure.decoration_mode {
+            DecorationMode::Client => WindowDecorationMode::Client(frame),
+            DecorationMode::Server => WindowDecorationMode::Server,
+        };
+
+        let event = WindowConfigureEvent {
+            window_id: self.window_id,
+            size: self.surface_size.unwrap(),
+            active: configure.is_activated(),
+            maximized: configure.is_maximized(),
+            fullscreen: configure.is_fullscreen(),
+            decoration_mode,
+            capabilities: WindowCapabilities {
+                window_menu: configure.capabilities.contains(WindowManagerCapabilities::WINDOW_MENU),
+                maximize: configure.capabilities.contains(WindowManagerCapabilities::MAXIMIZE),
+                fullscreen: configure.capabilities.contains(WindowManagerCapabilities::FULLSCREEN),
+                minimize: configure.capabilities.contains(WindowManagerCapabilities::MINIMIZE),
+            },
+        };
+
+        let event = if self.last_configure_event.replace(event.clone()).is_none_or(|e| e != event) {
+            Some(event)
+        } else {
+            None
+        };
+
+        (is_first_configure, event)
     }
 
     fn update_window_geometry(
@@ -415,12 +455,41 @@ impl SimpleWindow {
         self.window.commit();
     }
 
-    pub fn set_client_side_decoration_frame(&mut self, frame: &WindowFrame, compositor_state: &CompositorState, shm: &Shm) {
+    #[must_use]
+    pub fn set_client_side_decoration_frame(
+        &mut self,
+        mut frame: WindowFrame,
+        compositor_state: &CompositorState,
+        shm: &Shm,
+    ) -> Option<WindowConfigureEvent> {
         debug!("{:?}: set_client_side_decoration_frame: {frame:?}", self.window_id);
-        if self.decoration_mode == DecorationMode::Client
-            && let Some(content_size) = self.content_size
+
+        if self.default_client_side_decoration_frame == frame {
+            return None;
+        }
+
+        self.default_client_side_decoration_frame = frame.clone();
+
+        if let Some(mut event) = self.last_configure_event.clone()
+            && let WindowDecorationMode::Client(last_frame) = event.decoration_mode
+            && !event.maximized
+            && !event.fullscreen
         {
-            self.update_window_geometry(content_size, frame, compositor_state, shm);
+            if let Some(content_size) = self.content_size {
+                self.update_window_geometry(content_size, &frame, compositor_state, shm);
+            }
+
+            frame.left.tiled = last_frame.left.tiled;
+            frame.top.tiled = last_frame.top.tiled;
+            frame.right.tiled = last_frame.right.tiled;
+            frame.bottom.tiled = last_frame.bottom.tiled;
+            event.decoration_mode = WindowDecorationMode::Client(frame);
+            event.size = self.surface_size.unwrap();
+
+            self.last_configure_event = Some(event.clone());
+            Some(event)
+        } else {
+            None
         }
     }
 
