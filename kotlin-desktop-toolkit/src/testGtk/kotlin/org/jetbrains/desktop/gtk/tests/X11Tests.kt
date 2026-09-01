@@ -97,7 +97,6 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 import kotlin.time.measureTime
 import org.jetbrains.skia.BackendRenderTarget as SkBackendRenderTarget
-import org.jetbrains.skia.Bitmap as SkBitmap
 import org.jetbrains.skia.Color as SkColor
 import org.jetbrains.skia.ColorSpace as SkColorSpace
 import org.jetbrains.skia.DirectContext as SkDirectContext
@@ -155,29 +154,33 @@ internal fun runCommand(command: List<String>, timeout: Duration = 5.seconds) {
     runCommandImpl(command, timeout).getOrThrow().deleteIfExists()
 }
 
-private fun <T> waitUntilEqCheck(
-    expectedValue: T,
-    timeout: Duration = 5.seconds,
-    msg: String? = null,
-    actualValueGetter: () -> T,
-): Result<Unit> {
+private fun <T> waitUntilCheck(msg: (T) -> String, timeout: Duration = 5.seconds, getter: () -> T, predicate: (T) -> Boolean): Result<T> {
     val startTime = TimeSource.Monotonic.markNow()
     val waitStepMs = 10L
-    var actualValue = actualValueGetter()
+    var actualValue = getter()
     while (startTime.elapsedNow() < timeout) {
-        if (actualValue == expectedValue) {
-            return Result.success(Unit)
+        if (predicate(actualValue)) {
+            return Result.success(actualValue)
         }
         Thread.sleep(waitStepMs)
-        actualValue = actualValueGetter()
+        actualValue = getter()
     }
-    val msg = msg?.let { ", message: $it" } ?: ""
-    return Result.failure(Error(withTimestamp("waitUntilEq timed out: Expected: $expectedValue, actual: ${actualValue}$msg")))
+    return Result.failure(Error(withTimestamp("${msg(actualValue)} timed out: last received: $actualValue")))
 }
 
-internal fun <T> waitUntilEq(expectedValue: T, timeout: Duration = 5.seconds, msg: String? = null, actualValueGetter: () -> T) {
-    val res = waitUntilEqCheck(expectedValue, timeout, msg, actualValueGetter)
-    res.getOrThrow()
+internal fun <T> waitUntil(msg: (T) -> String, timeout: Duration = 5.seconds, getter: () -> T, predicate: (T) -> Boolean): T {
+    val res = waitUntilCheck(msg = msg, timeout = timeout, getter = getter, predicate = predicate)
+    return res.getOrThrow()
+}
+
+internal fun <T> waitUntil(msg: String, timeout: Duration = 5.seconds, getter: () -> T, predicate: (T) -> Boolean): T {
+    return waitUntil(msg = { msg }, timeout = timeout, getter = getter, predicate = predicate)
+}
+
+internal fun waitUntilTrue(msg: String, timeout: Duration = 5.seconds, getter: () -> Boolean) {
+    waitUntil(msg = msg, timeout = timeout, getter = getter) { v ->
+        v
+    }
 }
 
 internal data class TestAppData(
@@ -220,7 +223,7 @@ private class TestApp(private val cmd: List<String>) {
             outputFile.deleteIfExists()
             log("Test app closed")
         }.use {
-            waitUntilEq(true) { !process.isAlive || outputFile.fileSize() > 0 }
+            waitUntilTrue("Test app started") { !process.isAlive || outputFile.fileSize() > 0 }
             assertTrue(process.isAlive)
 
             val lines = outputFile.readLines()
@@ -369,9 +372,9 @@ private class XSettingsD {
             // https://codeberg.org/derat/xsettingsd/src/commit/351c70795f99f59064ca4b24da96b7b02a0db099/settings_manager.cc#L157-L159
             val oldLogFileSize = logFile.fileSize()
             assertEquals(0, reloadSettingsOnce())
-            if (waitUntilEqCheck(true) { logFile.fileSize() != oldLogFileSize }.isFailure) {
+            if (waitUntilCheck(msg = { "xsettingsd has new output" }, getter = { logFile.fileSize() }) { it != oldLogFileSize }.isFailure) {
                 assertEquals(0, reloadSettingsOnce())
-                waitUntilEq(true) { logFile.fileSize() != oldLogFileSize }
+                waitUntilTrue("xsettingsd has new output") { logFile.fileSize() != oldLogFileSize }
             }
         }
 
@@ -539,7 +542,7 @@ private fun withDunst(block: () -> Unit): List<String> {
         process.destroy()
     }.use {
         assertTrue(process.isAlive)
-        waitUntilEq(true) { isNotificationServiceRunning() }
+        waitUntilTrue("dunst running") { isNotificationServiceRunning() }
         block()
     }
     return output
@@ -571,27 +574,20 @@ private fun getPrimarySelectionContent(format: String): ByteArray? {
 }
 
 internal data class TestMousePosition(
-    val base: GlobalPosition,
-    val offsetX: LogicalPixelsInt = LogicalPixelsInt.Zero,
-    val offsetY: LogicalPixelsInt = LogicalPixelsInt.Zero,
+    val base: GlobalPosition<LogicalPixels>,
+    val offsetX: LogicalPixels = LogicalPixels.Zero,
+    val offsetY: LogicalPixels = LogicalPixels.Zero,
 ) {
-    fun assertEquals(actual: LogicalPoint) {
-        val expected = Pair(offsetX.toLogicalPixels(), offsetY.toLogicalPixels())
+    fun assertEquals(actual: LogicalPoint, msg: String) {
+        val expected = Pair(offsetX, offsetY)
         val actualPair = Pair(actual.x, actual.y)
-        assertEquals(expected, actualPair)
+        assertEquals(expected, actualPair, msg)
     }
 
-    fun shifted(x: LogicalPixelsInt = LogicalPixelsInt.Zero, y: LogicalPixelsInt = LogicalPixelsInt.Zero): TestMousePosition {
+    fun shifted(x: LogicalPixels = LogicalPixels.Zero, y: LogicalPixels = LogicalPixels.Zero): TestMousePosition {
         return TestMousePosition(this.base, this.offsetX + x, this.offsetY + y)
     }
 }
-
-internal data class PhysicalRect(
-    val x: PhysicalPixels,
-    val y: PhysicalPixels,
-    val width: PhysicalPixels,
-    val height: PhysicalPixels,
-)
 
 private fun <T : Any> LinkedBlockingQueue<T>.drainAll(): List<T> {
     val ret = mutableListOf<T>()
@@ -612,7 +608,7 @@ private class IBusTestEngineOutput(envVarName: String) {
         while (retryTimes > 0) {
             try {
                 val text = file.readLines()
-                if (expectedLineCount == -1 || expectedLineCount == text.size) {
+                if ((expectedLineCount == -1 && text.isNotEmpty()) || expectedLineCount == text.size) {
                     file.deleteIfExists()
                     return text.last()
                 }
@@ -808,7 +804,7 @@ abstract class X11TestsBase {
     val app by lazy { Application(APP_ID) }
     private var appExecutingResult: Future<Error?>? = null
     val eventQueue = LinkedBlockingQueue<Event>()
-    internal lateinit var screenBottomRight: GlobalPosition
+    internal lateinit var screenBottomRight: GlobalPosition<LogicalPixels>
 
     internal fun defaultApplicationConfig(
         queryDragAndDropTarget: (DragAndDropQueryData) -> DragAndDropQueryResponse = { _ -> DragAndDropQueryResponse(emptyList()) },
@@ -819,6 +815,8 @@ abstract class X11TestsBase {
     ): ApplicationConfig {
         return ApplicationConfig(
             eventHandler = { event ->
+                assertTrue(app.isEventLoopThread())
+
                 if (event !is Event.WindowFrameTick && event !is Event.DragIconFrameTick) {
                     log("Event: $event")
                     assert(eventQueue.offer(event)) { "Event queue overflow" }
@@ -883,6 +881,7 @@ abstract class X11TestsBase {
         wm.resetMousePosition()
 
         assertTrue(eventQueue.isEmpty(), "Event queue empty, but contained ${eventQueue.firstOrNull()}")
+
         return initialSettings
     }
 
@@ -978,7 +977,7 @@ abstract class X11TestsBase {
         val startTime = TimeSource.Monotonic.markNow()
         var moveToRight = false
         while (startTime.elapsedNow() < timeout) {
-            val offset = if (moveToRight) LogicalPixelsInt(5) else LogicalPixelsInt(0)
+            val offset = if (moveToRight) LogicalPixels(5.0) else LogicalPixels.Zero
             wm.moveMouseTo(TestMousePosition(pos.base, pos.offsetX + offset, pos.offsetY + offset))
             if (predicate()) {
                 return true
@@ -998,23 +997,14 @@ abstract class X11TestsBase {
         }
         AutoCloseable {
             ui { app.clipboardPut(emptyList()) }
-            ui {}
-            awaitEventOfType<Event.DataTransferAvailable>(msg = "withSetClipboardContent close wait 1") {
-                it.dataSource ==
-                    DataSource.Clipboard &&
-                    it.mimeTypes.isEmpty()
-            }
-            ui {}
-            awaitEventOfType<Event.DataTransferAvailable>(msg = "withSetClipboardContent close wait 2") {
-                it.dataSource ==
-                    DataSource.Clipboard &&
-                    it.mimeTypes.isEmpty()
-            }
-            ui {}
-            awaitEventOfType<Event.DataTransferAvailable>(msg = "withSetClipboardContent close wait 3") {
-                it.dataSource ==
-                    DataSource.Clipboard &&
-                    it.mimeTypes.isEmpty()
+
+            for (i in 1..3) {
+                ui {}
+                awaitEventOfType<Event.DataTransferAvailable>(msg = "withSetClipboardContent close wait $i") {
+                    it.dataSource ==
+                        DataSource.Clipboard &&
+                        it.mimeTypes.isEmpty()
+                }
             }
         }.use {
             block()
@@ -1092,14 +1082,17 @@ abstract class X11TestsBase {
             },
         )
 
-        waitUntilEq(emptySet()) {
+        waitUntil("createWindowAndWaitForFocus checklist empty", getter = {
             when (val event: Event? = eventQueue.poll()) {
                 null -> {}
 
                 is Event.WindowConfigure -> {
                     if (windowParams.windowId == event.windowId) {
                         if (operations == null) {
-                            operations = wm.getWindowByTitle(windowParams.title)!!
+                            operations = wm.getWindowByTitle(windowParams.title) {
+                                val transform = ui { window.getTransform() }
+                                Pair(transform.x, transform.y)
+                            }
                         }
 
                         if (event.active) {
@@ -1154,7 +1147,8 @@ abstract class X11TestsBase {
                 }
             }
             checklist.uncheckedEntries()
-        }
+        }) { it.isEmpty() }
+
         return InitialWindowData(
             window = window,
             scale = assertNotNull(scale),
@@ -1167,28 +1161,31 @@ abstract class X11TestsBase {
         )
     }
 
-    internal fun moveMouseInsideWindow(operations: X11WindowOperations) {
+    internal fun moveMouseInsideWindow(initialWindowData: InitialWindowData): TestMousePosition {
+        val clientAreaPosition = initialWindowData.operations.clientAreaPosition()
+        val windowSize = initialWindowData.configure.size
+        val offsetX = windowSize.width / 2
+        val offsetY = windowSize.height / 2
         val pos = TestMousePosition(
-            operations.position()!!,
-            LogicalPixelsInt(1),
-            LogicalPixelsInt(1),
+            clientAreaPosition,
+            offsetX = offsetX.toLogicalPixels(),
+            offsetY = offsetY.toLogicalPixels(),
         )
         wm.moveMouseTo(pos)
         awaitEventOfType<Event.MouseEntered> { event ->
-            assertEquals(1.0, event.locationInWindow.x.rawLogical)
-            assertEquals(1.0, event.locationInWindow.y.rawLogical)
+            pos.assertEquals(event.locationInWindow, "Mouse entered")
             true
         }
         awaitEventOfType<Event.MouseMoved> { event ->
-            assertEquals(1.0, event.locationInWindow.x.rawLogical)
-            assertEquals(1.0, event.locationInWindow.y.rawLogical)
+            pos.assertEquals(event.locationInWindow, "Mouse moved")
             true
         }
+        return pos
     }
 
     internal fun waitForWindowFocusAfterMouseDown(windowId: WindowId) {
         val checklist = Checklist(listOf("configure", "keyboardEnter", "mouseDown"))
-        waitUntilEq(emptySet()) {
+        waitUntil("waitForWindowFocusAfterMouseDown checklist empty", getter = {
             when (val event: Event? = eventQueue.poll()) {
                 is Event.WindowConfigure -> {
                     assertEquals(windowId, event.windowId)
@@ -1210,36 +1207,46 @@ abstract class X11TestsBase {
                 else -> {}
             }
             checklist.uncheckedEntries()
-        }
+        }) { it.isEmpty() }
     }
 
     internal fun moveTestAppWindowTo(
         testAppData: TestAppData,
         x: LogicalPixelsInt,
         y: LogicalPixelsInt = LogicalPixelsInt.Zero,
-    ): GlobalPosition? {
-        val operations = assertNotNull(wm.getWindowByTitle(testAppData.windowTitle))
+    ): GlobalPosition<LogicalPixels> {
+        val operations = wm.getWindowByTitle(testAppData.windowTitle) { Pair(LogicalPixels.Zero, LogicalPixels.Zero) }
         operations.moveTo(GlobalPosition(x.toLogicalPixels(), y.toLogicalPixels()))
-        return operations.position()
+        return operations.clientAreaPosition()
     }
 
     internal fun focusTestAppWindow(testAppData: TestAppData) {
-        val operations = assertNotNull(wm.getWindowByTitle(testAppData.windowTitle))
+        val operations = wm.getWindowByTitle(testAppData.windowTitle) { Pair(LogicalPixels.Zero, LogicalPixels.Zero) }
         operations.focus()
     }
 
     // Older GTK versions (e.g., 4.6.9) don't report `Event.WindowKeyboardLeave` on window close
     fun waitForWindowClosed(windowId: WindowId) {
         withNextEvent { event ->
-            if (event is Event.WindowKeyboardLeave) {
-                assertEquals(windowId, event.windowId)
-                withNextEvent { event ->
+            when (event) {
+                is Event.WindowDraw -> {
+                    waitForWindowClosed(windowId)
+                }
+
+                is Event.MouseExited -> {
+                    assertEquals(windowId, event.windowId)
+                    waitForWindowClosed(windowId)
+                }
+
+                is Event.WindowKeyboardLeave -> {
+                    assertEquals(windowId, event.windowId)
+                    waitForWindowClosed(windowId)
+                }
+
+                else -> {
                     assertInstanceOf<Event.WindowClosed>(event)
                     assertEquals(windowId, event.windowId)
                 }
-            } else {
-                assertInstanceOf<Event.WindowClosed>(event)
-                assertEquals(windowId, event.windowId)
             }
         }
     }
@@ -1248,7 +1255,7 @@ abstract class X11TestsBase {
         val remainingChecks = checks.toMutableMap()
         log("checkNextEvents: ${remainingChecks.keys}")
         val otherEvents = mutableListOf<Event>()
-        waitUntilEq(emptySet()) {
+        waitUntil("checkNextEvents", getter = {
             val event =
                 assertNotNull(
                     eventQueue.poll(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS),
@@ -1263,7 +1270,7 @@ abstract class X11TestsBase {
                 remainingChecks.remove(matchedName)
             }
             remainingChecks.keys
-        }
+        }) { it.isEmpty() }
         return otherEvents
     }
 
@@ -1531,8 +1538,7 @@ class X11Tests : X11TestsBase() {
             true
         }
 
-        // TODO
-        // assertFalse(initialIsComposited.value)
+        assertEquals(wm.isComposerActive(), initialIsComposited.value)
 
         val initialScale = initialWindowData.scale.newScale
         assertEquals(2.0, initialScale.rawValue)
@@ -1558,22 +1564,38 @@ class X11Tests : X11TestsBase() {
             assertEquals(windowParams.windowId, event.windowId)
             assertEquals(1.0, event.newScale.rawValue)
 
+            if (wm.isMutter()) {
+                withNextEvent { event ->
+                    assertIs<Event.WindowConfigure>(event)
+                    assertEquals(windowParams.windowId, event.windowId)
+                }
+            }
+
             ui { initialWindowData.window.requestRedraw() }
 
             withNextEvent { event ->
                 assertIs<Event.WindowDraw>(event)
                 assertEquals(windowParams.windowId, event.windowId)
                 assertEquals(initialWindowData.configure.size.width.toRawPhysical(Scale.NO_SCALE), event.size.width.rawPhysical.toDouble())
-                assertEquals(
-                    initialWindowData.configure.size.height.toRawPhysical(Scale.NO_SCALE),
-                    event.size.height.rawPhysical.toDouble(),
-                )
+                if (!wm.isMutter()) {
+                    assertEquals(
+                        initialWindowData.configure.size.height.toRawPhysical(Scale.NO_SCALE),
+                        event.size.height.rawPhysical.toDouble(),
+                    )
+                }
             }
         }
         awaitEventOfType<Event.WindowScaleChanged> { event ->
             assertEquals(windowParams.windowId, event.windowId)
             assertEquals(initialScale, event.newScale)
             true
+        }
+
+        if (wm.isMutter()) {
+            withNextEvent { event ->
+                assertIs<Event.WindowConfigure>(event)
+                assertEquals(windowParams.windowId, event.windowId)
+            }
         }
     }
 
@@ -1614,7 +1636,7 @@ class X11Tests : X11TestsBase() {
             assertEquals(windowParams.windowId, event.windowId)
         }
 
-        wm.moveMouseTo(TestMousePosition(windowOperations.position()!!))
+        wm.moveMouseTo(TestMousePosition(windowOperations.clientAreaPosition()))
         withNextEvent { event ->
             assertInstanceOf<Event.MouseEntered>(event)
         }
@@ -1685,7 +1707,7 @@ class X11Tests : X11TestsBase() {
         assertEquals(screen.screenId, initialWindowData.screen.newScreenId)
         assertTrue(initialWindowData.otherEvents.isEmpty(), "Unexpected initial events: ${initialWindowData.otherEvents}")
 
-        val mousePos = TestMousePosition(initialWindowData.operations.position()!!, LogicalPixelsInt(10), LogicalPixelsInt(10))
+        val mousePos = TestMousePosition(initialWindowData.operations.clientAreaPosition(), LogicalPixels(10.0), LogicalPixels(10.0))
         wm.moveMouseTo(mousePos)
 
         withNextEvent { event ->
@@ -1702,13 +1724,13 @@ class X11Tests : X11TestsBase() {
             }
             assertInstanceOf<Event.MouseMoved>(mouseMovedEvent)
             assertEquals(windowParams.windowId, mouseMovedEvent.windowId)
-            mousePos.assertEquals(mouseMovedEvent.locationInWindow)
+            mousePos.assertEquals(mouseMovedEvent.locationInWindow, "Mouse moved")
             assertNotEquals(Duration.ZERO, mouseMovedEvent.timestamp.toDuration())
             true
         }
 
         wm.withMouseButtonDown(MouseButton.LEFT) {
-            withNextEvent { event ->
+            withNextEvent(timeout = 1.seconds) { event ->
                 assertInstanceOf<Event.MouseDown>(event)
                 assertEquals(windowParams.windowId, event.windowId)
                 assertEquals(MouseButton.LEFT, event.button)
@@ -1720,7 +1742,7 @@ class X11Tests : X11TestsBase() {
             assertEquals(MouseButton.LEFT, event.button)
         }
 
-        wm.moveMouseTo(TestMousePosition(screenBottomRight, LogicalPixelsInt(-50), LogicalPixelsInt(-50)))
+        wm.moveMouseTo(TestMousePosition(screenBottomRight, LogicalPixels(-50.0), LogicalPixels(-50.0)))
         withNextEvent { event ->
             assertInstanceOf<Event.MouseExited>(event)
             assertEquals(windowParams.windowId, event.windowId)
@@ -1729,9 +1751,9 @@ class X11Tests : X11TestsBase() {
         assertEquals(minSize, initialWindowData.operations.getMinimalSizeHint())
 
         assertEquals(windowParams.title, initialWindowData.operations.readTitle())
-        "New title 🙂".also {
-            ui { window.setTitle(it) }
-            waitUntilEq(it) { initialWindowData.operations.readTitle() }
+        "New title 🙂".also { titleToSet ->
+            ui { window.setTitle(titleToSet) }
+            waitUntil<String?>("Window title changed", getter = { initialWindowData.operations.readTitle() }) { it == titleToSet }
         }
 
         for (useWm in listOf(true, false)) {
@@ -1769,8 +1791,8 @@ class X11Tests : X11TestsBase() {
                             wm.moveMouseTo(
                                 TestMousePosition(
                                     screenBottomRight,
-                                    LogicalPixelsInt(-51),
-                                    LogicalPixelsInt(-51),
+                                    LogicalPixels(-51.0),
+                                    LogicalPixels(-51.0),
                                 ),
                             )
                         } else {
@@ -1865,8 +1887,8 @@ class X11Tests : X11TestsBase() {
                         wm.moveMouseTo(
                             TestMousePosition(
                                 screenBottomRight,
-                                LogicalPixelsInt(-52),
-                                LogicalPixelsInt(-52),
+                                LogicalPixels(-52.0),
+                                LogicalPixels(-52.0),
                             ),
                         )
                     }
@@ -1923,18 +1945,18 @@ class X11Tests : X11TestsBase() {
         }
     }
 
-    @Test
-    fun testWindowMinSizeWithInitialMinSizeNewSizeSmaller() {
+    fun testWindowMinSizeWithInitialMinSizeNewSizeSmallerImpl(windowParams: WindowParams) {
         run(defaultApplicationConfig())
 
-        val minSize = LogicalSize.makeWH(width = 200, height = 150)
-        val windowParams = defaultWindowParams().copy(
+        val minSize = LogicalSize.makeWH(width = 100, height = 70)
+        val windowParams = windowParams.copy(
             size = LogicalSize.makeWH(width = 50, height = 50),
             minSize = minSize,
         )
 
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
         val window = initialWindowData.window
+        assertEquals(windowParams.minSize, initialWindowData.operations.getMinimalSizeHint())
 
         val newMinSize = LogicalSize(minSize.width - LogicalPixelsInt(10), minSize.height - LogicalPixelsInt(10))
         ui { window.setMinSize(newMinSize) }
@@ -1944,12 +1966,21 @@ class X11Tests : X11TestsBase() {
     }
 
     @Test
-    fun testWindowMinSizeWithoutInitialMinSize() {
-        run(defaultApplicationConfig())
+    fun testWindowMinSizeWithInitialMinSizeNewSizeSmaller() {
+        testWindowMinSizeWithInitialMinSizeNewSizeSmallerImpl(defaultWindowParams())
+    }
 
-        val windowParams = defaultWindowParams().copy(
-            size = LogicalSize.makeWH(width = 150, height = 150),
+    @Test
+    fun testWindowMinSizeWithInitialMinSizeNewSizeSmallerCSD() {
+        testWindowMinSizeWithInitialMinSizeNewSizeSmallerImpl(
+            defaultWindowParams().copy(
+                decorationMode = WindowDecorationMode.CustomTitlebar(height = LogicalPixelsInt(35)),
+            ),
         )
+    }
+
+    fun testWindowMinSizeWithoutInitialMinSizeImpl(windowParams: WindowParams) {
+        run(defaultApplicationConfig())
 
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
         val window = initialWindowData.window
@@ -1964,6 +1995,25 @@ class X11Tests : X11TestsBase() {
     }
 
     @Test
+    fun testWindowMinSizeWithoutInitialMinSize() {
+        testWindowMinSizeWithoutInitialMinSizeImpl(
+            defaultWindowParams().copy(
+                size = LogicalSize.makeWH(width = 150, height = 150),
+            ),
+        )
+    }
+
+    @Test
+    fun testWindowMinSizeWithoutInitialMinSizeCSD() {
+        testWindowMinSizeWithoutInitialMinSizeImpl(
+            defaultWindowParams().copy(
+                size = LogicalSize.makeWH(width = 150, height = 150),
+                decorationMode = WindowDecorationMode.CustomTitlebar(height = LogicalPixelsInt(35)),
+            ),
+        )
+    }
+
+    @Test
     fun testWindowSetPointerShape() {
         run(defaultApplicationConfig())
 
@@ -1971,25 +2021,17 @@ class X11Tests : X11TestsBase() {
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
         val window = initialWindowData.window
 
-        val clientAreaPos = assertNotNull(initialWindowData.operations.position())
+        val clientAreaPos = assertNotNull(initialWindowData.operations.clientAreaPosition())
 
         val screenshotRect = LogicalRect.makeWH(150, 150)
 
-        val screenshots = mutableListOf<Path>()
-        val tempDir = Files.createTempDirectory("test_linux_screenshots")
+        val screenshots = mutableMapOf<String, SkImage>()
         ui {}
 
-        wm.moveMouseTo(TestMousePosition(screenBottomRight, LogicalPixelsInt(-1), LogicalPixelsInt(-1)))
-        val blank = tempDir.resolve("_blank.png").also {
-            initialWindowData.operations.screenshot(
-                it,
-                screenshotRect,
-                hideCursor = false,
-            )
-            screenshots.add(it)
-        }
+        wm.moveMouseTo(TestMousePosition(screenBottomRight, LogicalPixels(-1.0), LogicalPixels(-1.0)))
+        screenshots["_blank"] = initialWindowData.operations.screenshot(screenshotRect)
 
-        val mouseLoc = TestMousePosition(clientAreaPos, LogicalPixelsInt(100), LogicalPixelsInt(100))
+        val mouseLoc = TestMousePosition(clientAreaPos, LogicalPixels(100.0), LogicalPixels(100.0))
         wm.moveMouseTo(mouseLoc)
         awaitEventOfType<Event.MouseMoved> { event ->
             assertEquals(windowParams.windowId, event.windowId)
@@ -2000,86 +2042,103 @@ class X11Tests : X11TestsBase() {
         for (shape in PointerShape.entries) {
             ui { window.setPointerShape(shape) }
 
-            tempDir.resolve("$shape.png").also { shapeScreenshotPath ->
-                var retryCount = 20
-                while (retryCount > 0) {
-                    initialWindowData.operations.screenshot(
-                        shapeScreenshotPath,
-                        screenshotRect,
-                        hideCursor = false,
-                    )
-                    val same = screenshots.find {
-                        val isIdentical = Files.mismatch(shapeScreenshotPath, it) == -1L
-                        if (shape == PointerShape.Hidden && it == blank) {
-                            !isIdentical
-                        } else {
-                            isIdentical
-                        }
+            var retryCount = 20
+            while (retryCount > 0) {
+                val screenshot = initialWindowData.operations.screenshot(screenshotRect)
+                val same = screenshots.firstNotNullOfOrNull { (name, data) ->
+                    if (screenshot == data && !(shape == PointerShape.Hidden && name == "_blank")) {
+                        name
+                    } else {
+                        null
                     }
-                    if (same == null) {
-                        break
-                    }
-                    retryCount -= 1
-                    if (retryCount == 0) {
-                        errors.add("$shapeScreenshotPath and $same are identical")
-                        break
-                    }
-                    log("Retrying $shape (same as $same)")
-                    // For animated cursors, such as Progress and Wait, for some reason we need to wait a bit before they can be screenshotted
-                    Thread.sleep(100)
                 }
-                screenshots.add(shapeScreenshotPath)
+                if (same == null) {
+                    screenshots[shape.toString()] = screenshot
+                    break
+                }
+                retryCount -= 1
+                if (retryCount == 0) {
+                    errors.add("$shape and $same are identical")
+                    screenshots[shape.toString()] = screenshot
+                    break
+                }
+                log("Retrying $shape (same as $same)")
+                // For animated cursors, such as Progress and Wait, for some reason we need to wait a bit before they can be screenshotted
+                Thread.sleep(100)
             }
         }
 
         assertTrue(errors.isEmpty(), errors.joinToString("\n"))
-        screenshots.forEach { it.deleteIfExists() }
-        tempDir.deleteIfExists()
     }
 
-    @Test
-    fun testMultipleMouseButtonsAtOnce() {
+    fun testMultipleMouseButtonsAtOnceImpl(windowParams: WindowParams) {
         run(defaultApplicationConfig())
-        val windowParams = defaultWindowParams()
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
-        moveMouseInsideWindow(initialWindowData.operations)
+        val mousePos = moveMouseInsideWindow(initialWindowData)
 
         wm.withMouseButtonDown(MouseButton.LEFT) {
             withNextEvent { event ->
                 assertInstanceOf<Event.MouseDown>(event)
                 assertEquals(windowParams.windowId, event.windowId)
                 assertEquals(MouseButton.LEFT, event.button)
+                mousePos.assertEquals(event.locationInWindow, "Left mouse down")
             }
             wm.withMouseButtonDown(MouseButton.RIGHT) {
                 withNextEvent { event ->
                     assertInstanceOf<Event.MouseDown>(event)
                     assertEquals(windowParams.windowId, event.windowId)
                     assertEquals(MouseButton.RIGHT, event.button)
+                    mousePos.assertEquals(event.locationInWindow, "Right mouse down")
                 }
                 wm.withMouseButtonDown(MouseButton.MIDDLE) {
                     withNextEvent { event ->
                         assertInstanceOf<Event.MouseDown>(event)
                         assertEquals(windowParams.windowId, event.windowId)
                         assertEquals(MouseButton.MIDDLE, event.button)
+                        mousePos.assertEquals(event.locationInWindow, "Middle mouse down")
                     }
                 }
                 withNextEvent { event ->
                     assertInstanceOf<Event.MouseUp>(event)
                     assertEquals(windowParams.windowId, event.windowId)
                     assertEquals(MouseButton.MIDDLE, event.button)
+                    mousePos.assertEquals(event.locationInWindow, "Middle mouse up")
                 }
             }
             withNextEvent { event ->
                 assertInstanceOf<Event.MouseUp>(event)
                 assertEquals(windowParams.windowId, event.windowId)
                 assertEquals(MouseButton.RIGHT, event.button)
+                mousePos.assertEquals(event.locationInWindow, "Right mouse up")
             }
         }
         withNextEvent { event ->
             assertInstanceOf<Event.MouseUp>(event)
             assertEquals(windowParams.windowId, event.windowId)
             assertEquals(MouseButton.LEFT, event.button)
+            mousePos.assertEquals(event.locationInWindow, "Left mouse up")
         }
+
+        ui { initialWindowData.window.close() }
+
+        awaitEventOfType<Event.WindowClosed> { event ->
+            assertEquals(windowParams.windowId, event.windowId)
+            true
+        }
+    }
+
+    @Test
+    fun testMultipleMouseButtonsAtOnce() {
+        testMultipleMouseButtonsAtOnceImpl(defaultWindowParams())
+    }
+
+    @Test
+    fun testMultipleMouseButtonsAtOnceCSD() {
+        testMultipleMouseButtonsAtOnceImpl(
+            defaultWindowParams().copy(
+                decorationMode = WindowDecorationMode.CustomTitlebar(height = LogicalPixelsInt(35)),
+            ),
+        )
     }
 
     @Test
@@ -2184,8 +2243,9 @@ class X11Tests : X11TestsBase() {
 
         wm.withKeyPress(KeyCode.Tab) {
             awaitEventOfType<Event.KeyDown> { true }
-            ui { window1.activate(null) }
         }
+        awaitEventOfType<Event.KeyUp> { true }
+        ui { window1.activate(null) }
 
         checkNextEvents(
             checks = mapOf(
@@ -2206,8 +2266,9 @@ class X11Tests : X11TestsBase() {
 
         wm.withKeyPress(KeyCode.Tab) {
             awaitEventOfType<Event.KeyDown> { true }
-            ui { window2.activate("something") } // i3 does not have focus stealing protection, so any token is valid
         }
+        awaitEventOfType<Event.KeyUp> { true }
+        ui { window2.activate("something") } // i3 does not have focus stealing protection, so any token is valid
 
         checkNextEvents(
             checks = mapOf(
@@ -2402,17 +2463,26 @@ text/plain;charset=utf-8
                 }
             }
 
-            ui {}
-            awaitEventOfType<Event.DataTransferAvailable>(msg = "testSetClipboardContentThenOtherApplicationSetsClipboard close wait 1") {
-                it.dataSource ==
-                    DataSource.Clipboard &&
-                    it.mimeTypes.isEmpty()
+            for (i in 1..2) {
+                ui {}
+                awaitEventOfType<Event.DataTransferAvailable>(
+                    msg = "testSetClipboardContentThenOtherApplicationSetsClipboard close wait $i",
+                ) {
+                    it.dataSource ==
+                        DataSource.Clipboard &&
+                        it.mimeTypes.isEmpty()
+                }
             }
-            ui {}
-            awaitEventOfType<Event.DataTransferAvailable>(msg = "testSetClipboardContentThenOtherApplicationSetsClipboard close wait 2") {
-                it.dataSource ==
-                    DataSource.Clipboard &&
-                    it.mimeTypes.isEmpty()
+        }
+
+        if (wm.isMutter()) {
+            for (i in 3..4) {
+                ui {}
+                awaitEventOfType<Event.DataTransferAvailable>(
+                    msg = "testSetClipboardContentThenOtherApplicationSetsClipboard close wait $i",
+                ) {
+                    it.dataSource == DataSource.Clipboard
+                }
             }
         }
     }
@@ -2655,8 +2725,14 @@ text/plain;charset=utf-8
 
         val transferSerialLast = 777
         ui { app.clipboardPaste(transferSerialLast, listOf(mimeTypes.first())) }
-        withNextEvent { event ->
-            assertInstanceOf<Event.DataTransfer>(event)
+        withNextEvent {
+            val event = if (it is Event.DataTransferAvailable) {
+                assertTrue(wm.isMutter())
+                getNextEvent()
+            } else {
+                it
+            }
+            assertInstanceOf<Event.DataTransfer>(event, "$event")
             assertEquals(transferSerialLast, event.serial)
             assertNull(event.content)
         }
@@ -2773,7 +2849,7 @@ text/plain;charset=utf-8
             var uiCallbackCount = 0
             var eventOrNull: Event? = null
             val timeTaken = measureTime {
-                waitUntilEq(true) {
+                waitUntilTrue("Event received") {
                     eventOrNull = eventQueue.poll(10, TimeUnit.MILLISECONDS)
                     ui { uiCallbackCount += 1 }
                     eventOrNull != null
@@ -3063,7 +3139,7 @@ text/plain;charset=utf-8
         }
     }
 
-    private fun getExpectedImePopupPositionLogLine(windowPosition: GlobalPosition, pos: LogicalRect, scale: Scale): String {
+    private fun getExpectedImePopupPositionLogLine(windowPosition: GlobalPosition<LogicalPixels>, pos: LogicalRect, scale: Scale): String {
         log("windowPosition=$windowPosition")
         log("pos=$pos")
         log("scale=$scale")
@@ -3098,7 +3174,7 @@ text/plain;charset=utf-8
     private fun assertImePopupPosition(
         actualLine: String?,
         pos: LogicalRect,
-        windowPosition: GlobalPosition,
+        windowPosition: GlobalPosition<LogicalPixels>,
         windowSize: LogicalSize,
         scale: Scale,
     ) {
@@ -3139,7 +3215,7 @@ text/plain;charset=utf-8
             val window = initialWindowData.window
             val windowSize = initialWindowData.configure.size
             val scale = initialWindowData.scale.newScale
-            val windowPosition = assertNotNull(initialWindowData.operations.position())
+            val windowPosition = assertNotNull(initialWindowData.operations.clientAreaPosition())
             val maxValue = floor(Application.MAX_PIXEL_VALUE.toDouble() / 2 / scale.rawValue).roundToInt()
             ui { window.textInputEnable(textInputContext) }
 
@@ -3985,11 +4061,11 @@ text/plain;charset=utf-8
             val testAppClientArea = moveTestAppWindowTo(
                 testAppData,
                 initialWindowData.configure.size.width + LogicalPixelsInt(100),
-            )!!
+            )
 
-            moveMouseInsideWindow(initialWindowData.operations)
+            moveMouseInsideWindow(initialWindowData)
             wm.withMouseButtonDown(MouseButton.LEFT) {
-                waitForWindowFocusAfterMouseDown(windowParams.windowId)
+                awaitEventOfType<Event.MouseDown> { true }
                 ui {
                     window.startDragAndDrop(
                         StartDragAndDropParams(
@@ -4001,7 +4077,7 @@ text/plain;charset=utf-8
                 }
                 awaitEventOfType<Event.MouseExited> { true }
 
-                val testAppLocation = TestMousePosition(testAppClientArea, LogicalPixelsInt(50), LogicalPixelsInt(50))
+                val testAppLocation = TestMousePosition(testAppClientArea, LogicalPixels(50.0), LogicalPixels(50.0))
                 assertTrue(
                     wiggleMouseUntil(testAppLocation) {
                         testAppData.readLastLine(10.milliseconds) == "Received DRAG_MOTION event"
@@ -4064,7 +4140,7 @@ text/plain;charset=utf-8
         initialWindowData.operations.moveTo(WINDOW_POS_TOP_LEFT)
 
         val mouseLocationForOurWindow =
-            TestMousePosition(initialWindowData.operations.position()!!, LogicalPixelsInt(50), LogicalPixelsInt(50))
+            TestMousePosition(initialWindowData.operations.clientAreaPosition(), LogicalPixels(50.0), LogicalPixels(50.0))
 
         val textData = "Text from TestAppDragSource".encodeToByteArray()
         val expectedSourceMimeTypes = listOf("text/plain;charset=utf-8", "text/plain")
@@ -4074,14 +4150,14 @@ text/plain;charset=utf-8
             val testAppClientArea = moveTestAppWindowTo(
                 testAppData,
                 x = initialWindowData.configure.size.width + LogicalPixelsInt(100),
-            )!!
+            )
             focusTestAppWindow(testAppData)
-            val testAppLocation = TestMousePosition(testAppClientArea, LogicalPixelsInt(50), LogicalPixelsInt(50))
+            val testAppLocation = TestMousePosition(testAppClientArea, LogicalPixels(50.0), LogicalPixels(50.0))
             wm.moveMouseTo(testAppLocation)
             wm.withMouseButtonDown(MouseButton.LEFT) {
                 assertEquals("TestAppDragSource drag begin", testAppData.readLastLine(5.seconds))
-                wm.moveMouseTo(testAppLocation.shifted(x = LogicalPixelsInt(2)))
-                wm.moveMouseTo(testAppLocation.shifted(x = LogicalPixelsInt(5)))
+                wm.moveMouseTo(testAppLocation.shifted(x = LogicalPixels(2.0)))
+                wm.moveMouseTo(testAppLocation.shifted(x = LogicalPixels(5.0)))
 
                 initialWindowData.operations.focus()
                 assertTrue(
@@ -4144,7 +4220,10 @@ text/plain;charset=utf-8
                 true
             }
 
-            waitUntilEq("dnd-finished") { testAppData.readLastLine(10.milliseconds) }
+            waitUntil<String?>("Test app reported dnd-finished", getter = { testAppData.readLastLine(10.milliseconds) }) {
+                it ==
+                    "dnd-finished"
+            }
         }
     }
 
@@ -4177,12 +4256,12 @@ text/plain;charset=utf-8
             val testAppClientArea = moveTestAppWindowTo(
                 testAppData,
                 initialWindowData.configure.size.width + LogicalPixelsInt(100),
-            )!!
+            )
 
-            moveMouseInsideWindow(initialWindowData.operations)
+            moveMouseInsideWindow(initialWindowData)
             initialWindowData.operations.focus()
             wm.withMouseButtonDown(MouseButton.LEFT) {
-                waitForWindowFocusAfterMouseDown(windowParams.windowId)
+                awaitEventOfType<Event.MouseDown> { true }
                 ui {
                     window.startDragAndDrop(
                         StartDragAndDropParams(
@@ -4195,7 +4274,7 @@ text/plain;charset=utf-8
                 awaitEventOfType<Event.MouseExited> { true }
 
                 focusTestAppWindow(testAppData)
-                val testAppLocation = TestMousePosition(testAppClientArea, LogicalPixelsInt(50), LogicalPixelsInt(50))
+                val testAppLocation = TestMousePosition(testAppClientArea, LogicalPixels(50.0), LogicalPixels(50.0))
                 assertTrue(
                     wiggleMouseUntil(testAppLocation) {
                         testAppData.readLastLine(10.milliseconds) == "Received DRAG_MOTION event"
@@ -4308,9 +4387,8 @@ text/plain;charset=utf-8
         val windowParams = defaultWindowParams()
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
         val window = initialWindowData.window
-        val clientAreaTopLeftGlobalPosition = initialWindowData.operations.position()!!
-        var mousePos = TestMousePosition(clientAreaTopLeftGlobalPosition, LogicalPixelsInt(5), LogicalPixelsInt(5))
-        wm.moveMouseTo(mousePos)
+        var mousePos = moveMouseInsideWindow(initialWindowData)
+        initialWindowData.operations.focus()
 
         wm.withMouseButtonDown(MouseButton.LEFT) {
             awaitEventOfType<Event.MouseDown> { true }
@@ -4327,16 +4405,16 @@ text/plain;charset=utf-8
                     ),
                 )
             }
-            mousePos = mousePos.shifted(LogicalPixelsInt(10))
+            mousePos = mousePos.shifted(LogicalPixels(10.0))
             wm.moveMouseTo(mousePos)
             awaitEventOfType<Event.MouseExited> { true }
-            waitUntilEq(true) { dragIconDrawTriggered.isNotEmpty() }
+            waitUntilTrue("Received Event.DragIconDraw") { dragIconDrawTriggered.isNotEmpty() }
 
-            mousePos = mousePos.shifted(LogicalPixelsInt(10))
+            mousePos = mousePos.shifted(LogicalPixels(10.0))
             wm.moveMouseTo(mousePos)
-            mousePos = mousePos.shifted(LogicalPixelsInt(10))
+            mousePos = mousePos.shifted(LogicalPixels(10.0))
             wm.moveMouseTo(mousePos)
-            waitUntilEq(true) { queryDragAndDropTargetTriggered.isNotEmpty() }
+            waitUntilTrue("queryDragAndDropTarget called") { queryDragAndDropTargetTriggered.isNotEmpty() }
         }
 
         awaitEventOfType<Event.DropPerformed> { event ->
@@ -4346,7 +4424,7 @@ text/plain;charset=utf-8
             assertNotNull(content)
             assertEquals(TEXT_UTF8_MIME_TYPE, content.mimeType)
             assertContentEquals(textContent, content.data)
-            mousePos.assertEquals(event.locationInWindow)
+            mousePos.assertEquals(event.locationInWindow, "Drop performed")
             true
         }
         awaitEventOfType<Event.DragAndDropFinished> { event ->
@@ -4367,7 +4445,7 @@ text/plain;charset=utf-8
         run(defaultApplicationConfig())
         val windowParams = defaultWindowParams()
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
-        moveMouseInsideWindow(initialWindowData.operations)
+        moveMouseInsideWindow(initialWindowData)
 
         wm.scrollMouseDown()
         withNextEvent { event ->
@@ -4693,43 +4771,39 @@ text/plain;charset=utf-8
 
         assertNotNull(scale)
 
-        val tempDir = Files.createTempDirectory("test_linux_rendering")
-        val screenshotPath = tempDir.resolve("1.png")
-
         ui {}
         // Screenshot only the window, because sometimes the previous tests can leave the drag&drop artifacts
-        initialWindowData.operations.screenshot(screenshotPath)
+        val image = initialWindowData.operations.screenshot(
+            LogicalRect(
+                x = LogicalPixelsInt.Zero,
+                y = LogicalPixelsInt.Zero,
+                width = windowParams.size.width,
+                height = windowParams.size.height,
+            ),
+        )
 
-        val image = SkImage.makeFromEncoded(screenshotPath.readBytes())
         assertEquals(initialWindowData.draw.size.width.rawPhysical, image.width)
         assertEquals(initialWindowData.draw.size.height.rawPhysical, image.height)
-        val bitmap = SkBitmap.makeFromImage(image, directContext)
-        assertEquals(initialWindowData.draw.size.width.rawPhysical, bitmap.width)
-        assertEquals(initialWindowData.draw.size.height.rawPhysical, bitmap.height)
+        val pixmap = assertNotNull(image.peekPixels())
 
-        val path = screenshotPath.absolutePathString()
-
-        val bottomRightRectColor = bitmap.getColor(
+        val bottomRightRectColor = pixmap.getColor(
             (rectSize.width - LogicalPixelsInt(1)).toRawPhysical(scale).roundToInt(),
             (rectSize.height - LogicalPixelsInt(1)).toRawPhysical(scale).roundToInt(),
         )
         assertEquals(
             rectColor,
             bottomRightRectColor,
-            "Expected ${rectColor.toHexString()}, got ${bottomRightRectColor.toHexString()} for $path",
+            "Expected ${rectColor.toHexString()}, got ${bottomRightRectColor.toHexString()}",
         )
 
-        val bottomRightColor = bitmap.getColor(image.width - 1, image.height - 1)
+        val bottomRightColor = pixmap.getColor(image.width - 1, image.height - 1)
         assertEquals(
             backgroundColor,
             bottomRightColor,
-            "Expected ${backgroundColor.toHexString()}, got ${bottomRightColor.toHexString()} for $path",
+            "Expected ${backgroundColor.toHexString()}, got ${bottomRightColor.toHexString()}",
         )
 
-        val topLeftColor = bitmap.getColor(0, 0)
-        assertEquals(rectColor, topLeftColor, "Expected ${rectColor.toHexString()}, got ${topLeftColor.toHexString()} for $path")
-
-        screenshotPath.deleteIfExists()
-        tempDir.deleteIfExists()
+        val topLeftColor = pixmap.getColor(0, 0)
+        assertEquals(rectColor, topLeftColor, "Expected ${rectColor.toHexString()}, got ${topLeftColor.toHexString()}")
     }
 }

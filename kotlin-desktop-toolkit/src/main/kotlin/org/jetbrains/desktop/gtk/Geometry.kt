@@ -12,6 +12,8 @@ public value class PhysicalPixels(public val rawPhysical: Int) {
         public val Zero: PhysicalPixels = PhysicalPixels(0)
     }
 
+    public constructor(rawPhysical: Short) : this(rawPhysical.toInt())
+
     public operator fun plus(other: PhysicalPixels): PhysicalPixels = PhysicalPixels(rawPhysical + other.rawPhysical)
     public operator fun minus(other: PhysicalPixels): PhysicalPixels = PhysicalPixels(rawPhysical - other.rawPhysical)
     public operator fun div(other: Int): PhysicalPixels = PhysicalPixels(rawPhysical / other)

@@ -1,36 +1,47 @@
-@file:Suppress("SameParameterValue")
-
 package org.jetbrains.desktop.gtk.tests
 
+import com.github.moaxcp.x11.protocol.Utilities
+import com.github.moaxcp.x11.protocol.X11BigEndianOutputStream
+import com.github.moaxcp.x11.protocol.X11LittleEndianOutputStream
+import com.github.moaxcp.x11.protocol.xproto.Atom
+import com.github.moaxcp.x11.protocol.xproto.ClientMessageData32
+import com.github.moaxcp.x11.protocol.xproto.ClientMessageEvent
+import com.github.moaxcp.x11.protocol.xproto.ConfigureWindow
+import com.github.moaxcp.x11.protocol.xproto.EventMask
+import com.github.moaxcp.x11.protocol.xproto.GetGeometry
+import com.github.moaxcp.x11.protocol.xproto.GetImage
+import com.github.moaxcp.x11.protocol.xproto.GetProperty
+import com.github.moaxcp.x11.protocol.xproto.GetSelectionOwner
+import com.github.moaxcp.x11.protocol.xproto.ImageOrder
+import com.github.moaxcp.x11.protocol.xproto.MotionNotifyEvent
+import com.github.moaxcp.x11.protocol.xproto.QueryPointer
+import com.github.moaxcp.x11.protocol.xproto.SendEvent
+import com.github.moaxcp.x11.protocol.xproto.TranslateCoordinates
+import com.github.moaxcp.x11.protocol.xtest.FakeInput
+import com.github.moaxcp.x11.x11client.X11Client
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
-import com.sun.jna.NativeLong
-import com.sun.jna.Pointer
-import com.sun.jna.platform.unix.X11
-import com.sun.jna.ptr.IntByReference
-import com.sun.jna.ptr.NativeLongByReference
-import com.sun.jna.ptr.PointerByReference
 import org.jetbrains.desktop.gtk.LogicalPixels
 import org.jetbrains.desktop.gtk.LogicalPixelsInt
 import org.jetbrains.desktop.gtk.LogicalRect
 import org.jetbrains.desktop.gtk.LogicalSize
 import org.jetbrains.desktop.gtk.MouseButton
 import org.jetbrains.desktop.gtk.PhysicalPixels
+import org.jetbrains.desktop.gtk.PhysicalSize
 import org.jetbrains.desktop.gtk.Scale
-import java.nio.file.Path
-import kotlin.io.path.absolutePathString
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.IntBuffer
 import kotlin.math.roundToInt
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+import kotlin.test.fail
 
-internal data class GlobalPosition(
-    val x: LogicalPixels,
-    val y: LogicalPixels,
-)
-
-internal data class GlobalRect(
-    val position: GlobalPosition,
-    val width: LogicalPixels,
-    val height: LogicalPixels,
+internal data class GlobalPosition<T>(
+    val x: T,
+    val y: T,
 )
 
 internal data class WmVersion(
@@ -40,247 +51,556 @@ internal data class WmVersion(
     val patch: Int,
 )
 
-internal class X11PropertyReader(
-    private val x11: X11,
-    private val display: X11.Display,
+internal data class TransformData(
+    val x: PhysicalPixels,
+    val y: PhysicalPixels,
+)
+
+internal data class PhysicalExtents(
+    val top: PhysicalPixels,
+    val left: PhysicalPixels,
+    val right: PhysicalPixels,
+    val bottom: PhysicalPixels,
+)
+
+private data class X11PropertyData(
+    private val format: Byte,
+    private val byteBuffer: ByteBuffer,
 ) {
-    data class X11PropertyData(
-        val pointer: Pointer,
-        val format: Int,
-        val itemCount: Int,
-    )
-
-    private val atomsCache = HashMap<String, X11.Atom>()
-
-    private fun atom(name: String): X11.Atom {
-        var atom = atomsCache[name]
-        if (atom == null) {
-            atom = x11.XInternAtom(display, name, false)
-            atomsCache[name] = atom
-        }
-        return atom
+    fun asIntBuffer(): IntBuffer {
+        assertEquals(32, format)
+        return byteBuffer.asIntBuffer()
     }
+}
 
-    fun <T> withProperty(w: X11.Window, atom: X11.Atom, regType: X11.Atom, block: (X11PropertyData) -> T): T? {
-        val xaRetTypeRef = X11.AtomByReference()
-        val retFormatRef = IntByReference()
-        val retNItemsRef = NativeLongByReference()
-        val retBytesAfterRef = NativeLongByReference()
-        val retPropRef = PointerByReference()
-
-        val longOffset = NativeLong(0)
-        val longLength = NativeLong((4096 / 4).toLong())
-
-        val status = x11.XGetWindowProperty(
-            display, w, atom, longOffset, longLength, false,
-            regType, xaRetTypeRef, retFormatRef,
-            retNItemsRef, retBytesAfterRef, retPropRef,
+private object X11Helper {
+    fun getProperty(x11: X11Client, window: Int, property: Int, type: Atom): X11PropertyData? {
+        val reply = x11.send(
+            GetProperty
+                .builder()
+                .window(window)
+                .property(property)
+                .type(type.value)
+                .longOffset(0)
+                .longLength(1024)
+                .delete(false)
+                .build(),
         )
 
-        if (status != X11.Success) {
-            log("XGetWindowProperty status: $status")
+        if (reply.type == 0) {
             return null
         }
 
-        val xaRetType = xaRetTypeRef.getValue()
-        val retProp = retPropRef.value
+        assertEquals(type.value, reply.type)
+//        log("len = ${reply.valueLen}")
+        return X11PropertyData(
+            reply.format,
+            ByteBuffer
+                .wrap(reply.value.toArray())
+                .asReadOnlyBuffer()
+                .order(if (x11.bigEndian) ByteOrder.BIG_ENDIAN else ByteOrder.LITTLE_ENDIAN),
+        )
+    }
 
-        if (xaRetType == null) {
-            x11.XFree(retProp)
-            return null
-        }
+    fun getRootWindowProperty(x11: X11Client, propertyName: String, type: Atom): X11PropertyData? {
+        return getProperty(x11, x11.defaultRoot, x11.getAtom(propertyName).id, type)
+    }
 
-        val itemCount = retNItemsRef.value.toInt()
-        val propertyData = X11PropertyData(pointer = retPropRef.value, format = retFormatRef.value, itemCount = itemCount)
-        return try {
-            block(propertyData)
-        } finally {
-            x11.XFree(propertyData.pointer)
+    fun readNetWmName(x11: X11Client, window: Int): String? {
+        // https://specifications.freedesktop.org/wm/1.5/ar01s05.html#id-1.6.2
+        val reply = x11.send(
+            GetProperty
+                .builder()
+                .window(window)
+                .property(x11.getAtom("_NET_WM_NAME").id)
+                .type(x11.getAtom("UTF8_STRING").id)
+                .longOffset(0)
+                .longLength(1024)
+                .delete(false)
+                .build(),
+        )
+        return when (reply.format) {
+            8.toByte() -> Utilities.toString(reply.value)
+            else -> null
         }
     }
 
-    fun <T> withProperty(w: X11.Window, name: String, regType: X11.Atom, block: (X11PropertyData) -> T): T? {
-        return withProperty(w, atom(name), regType, block)
+    fun getMousePosition(x11: X11Client): Pair<Short, Short> {
+        val reply = x11.send(QueryPointer.builder().window(x11.defaultRoot).build())
+        return Pair(reply.rootX, reply.rootY)
     }
 
-    fun <T> withProperty(w: X11.Window, name: String, regTypeName: String, block: (X11PropertyData) -> T): T? {
-        return withProperty(w, atom(name), atom(regTypeName), block)
+    fun moveMouseTo(x11: X11Client, x: Short, y: Short) {
+        log("wm.moveMouseTo $x, $y start")
+        x11.send(
+            FakeInput
+                .builder()
+                .root(x11.defaultRoot)
+                .type(MotionNotifyEvent.NUMBER)
+                .rootX(x)
+                .rootY(y)
+                .time(0)
+                .build(),
+        )
+        x11.sync()
+    }
+
+    fun getGtkFrameExtents(x11: X11Client, window: Int): PhysicalExtents? {
+        // https://github.com/GNOME/gtk/blob/4.22.4/gdk/x11/gdksurface-x11.c#L240-L246
+        val intBuffer = getProperty(
+            x11,
+            window = window,
+            property = x11.getAtom("_GTK_FRAME_EXTENTS").id,
+            type = Atom.CARDINAL,
+        )?.asIntBuffer() ?: return null
+        assertTrue(isComposerActive(x11, screen = 0)) // sanity check
+        val left = intBuffer.get()
+        val right = intBuffer.get()
+        val top = intBuffer.get()
+        val bottom = intBuffer.get()
+        return PhysicalExtents(
+            top = PhysicalPixels(top),
+            left = PhysicalPixels(left),
+            right = PhysicalPixels(right),
+            bottom = PhysicalPixels(bottom),
+        ).also {
+            log("_GTK_FRAME_EXTENTS=$it")
+        }
+    }
+
+    fun getNetWmExtents(x11: X11Client, window: Int): PhysicalExtents? {
+        // https://specifications.freedesktop.org/wm/1.5/ar01s05.html#id-1.6.18
+        val intBuffer = getProperty(
+            x11,
+            window = window,
+            property = x11.getAtom("_NET_FRAME_EXTENTS").id,
+            type = Atom.CARDINAL,
+        )?.asIntBuffer() ?: return null
+        val left = intBuffer.get()
+        val right = intBuffer.get()
+        val top = intBuffer.get()
+        val bottom = intBuffer.get()
+        return PhysicalExtents(
+            top = PhysicalPixels(top),
+            left = PhysicalPixels(left),
+            right = PhysicalPixels(right),
+            bottom = PhysicalPixels(bottom),
+        ).also {
+            log("_NET_FRAME_EXTENTS=$it")
+        }
+    }
+
+    private fun getExtents(x11: X11Client, window: Int): PhysicalExtents {
+        var left = PhysicalPixels.Zero
+        var top = PhysicalPixels.Zero
+        var right = PhysicalPixels.Zero
+        var bottom = PhysicalPixels.Zero
+
+        val gtkFrameExtents = getGtkFrameExtents(x11, window)
+
+        if (gtkFrameExtents != null) {
+            left += gtkFrameExtents.left
+            top += gtkFrameExtents.top
+            right += gtkFrameExtents.right
+            bottom += gtkFrameExtents.bottom
+        }
+
+        val netWmExtents = getNetWmExtents(x11, window)
+        log("netWmExtents=$netWmExtents")
+        if (netWmExtents != null) {
+            left -= netWmExtents.left
+            top -= netWmExtents.top
+            right += netWmExtents.right
+            bottom += netWmExtents.bottom
+        }
+
+        return PhysicalExtents(
+            top = top,
+            left = left,
+            right = right,
+            bottom = bottom,
+        )
+    }
+
+    fun windowSize(x11: X11Client, window: Int): PhysicalSize {
+        val geometry = x11.send(GetGeometry.builder().drawable(window).build())
+        val geometryWidth = geometry.width
+        val geometryHeight = geometry.height
+        log("XGetGeometry get size for $window: width=$geometryWidth, height=$geometryHeight")
+        return PhysicalSize(
+            width = PhysicalPixels(geometryWidth),
+            height = PhysicalPixels(geometryHeight),
+        )
+    }
+
+    fun clientAreaPosition(x11: X11Client, window: Int, transform: TransformData): GlobalPosition<PhysicalPixels> {
+        val translated = x11.send(
+            TranslateCoordinates
+                .builder()
+                .srcWindow(window)
+                .dstWindow(x11.defaultRoot)
+                .srcX(0)
+                .srcY(0)
+                .build(),
+        )
+
+        val geometryX = translated.dstX
+        val geometryY = translated.dstY
+        log("XTranslateCoordinates for $window: x=$geometryX, y=$geometryY")
+
+        ProcessBuilder("xwininfo", "-id", window.toString()).start().inputReader().readLines().let {
+            log(it.joinToString("\n"))
+        }
+
+        ProcessBuilder("xprop", "-id", window.toString()).start().inputReader().readLines().let {
+            log(it.joinToString("\n"))
+        }
+        return GlobalPosition(
+            x = PhysicalPixels(geometryX) + transform.x,
+            y = PhysicalPixels(geometryY) + transform.y,
+        )
+    }
+
+    fun screenshot(x11: X11Client, window: Int, x: Short, y: Short, width: Short, height: Short): org.jetbrains.skia.Image {
+        val reply = x11.send(
+            GetImage
+                .builder()
+                .drawable(window)
+                .x(x)
+                .y(y)
+                .width(width)
+                .height(height)
+                .planeMask(0.inv())
+                .format(2) // ZPixmap
+                .build(),
+        )
+
+        val data = reply.data
+        val rgbaBytes = when (reply.depth.toInt()) {
+            32 -> {
+                val rgbaBytes = ByteArray(data.size())
+
+                if (x11.setup.imageByteOrder.toInt() == ImageOrder.M_S_B_FIRST.value) {
+                    // Interpreting as ARGB
+                    for (i in 0..<data.size() step 4) {
+                        val a = data[i]
+                        val r = data[i + 1]
+                        val g = data[i + 2]
+                        val b = data[i + 3]
+
+                        rgbaBytes[i] = r
+                        rgbaBytes[i + 1] = g
+                        rgbaBytes[i + 2] = b
+                        rgbaBytes[i + 3] = a
+                    }
+                } else {
+                    // Interpreting as BGRA
+                    for (i in 0..<data.size() step 4) {
+                        val b = data[i]
+                        val g = data[i + 1]
+                        val r = data[i + 2]
+                        val a = data[i + 3]
+
+                        rgbaBytes[i] = r
+                        rgbaBytes[i + 1] = g
+                        rgbaBytes[i + 2] = b
+                        rgbaBytes[i + 3] = a
+                    }
+                }
+                rgbaBytes
+            }
+            24 -> {
+                val rgbaBytes = ByteArray(data.size())
+
+                if (x11.setup.imageByteOrder.toInt() == ImageOrder.M_S_B_FIRST.value) {
+                    // Interpreting as ARGB
+                    for (i in 0..<data.size() step 4) {
+                        val r = data[i]
+                        val g = data[i + 1]
+                        val b = data[i + 2]
+
+                        rgbaBytes[i] = r
+                        rgbaBytes[i + 1] = g
+                        rgbaBytes[i + 2] = b
+                        rgbaBytes[i + 3] = Byte.MAX_VALUE
+                    }
+                } else {
+                    // Interpreting as BGRA
+                    for (i in 0..<data.size() step 4) {
+                        val b = data[i]
+                        val g = data[i + 1]
+                        val r = data[i + 2]
+
+                        rgbaBytes[i] = r
+                        rgbaBytes[i + 1] = g
+                        rgbaBytes[i + 2] = b
+                        rgbaBytes[i + 3] = Byte.MAX_VALUE
+                    }
+                }
+                rgbaBytes
+            }
+            else -> {
+                fail("X11 GetImage: unexpected depth=${reply.depth}, visual=${reply.visual}, data size=${reply.data.size()}")
+            }
+        }
+
+        return org.jetbrains.skia.Image.makeRaster(
+            imageInfo = org.jetbrains.skia.ImageInfo(
+                colorInfo = org.jetbrains.skia.ColorInfo(
+                    colorType = org.jetbrains.skia.ColorType.RGBA_8888,
+                    alphaType = org.jetbrains.skia.ColorAlphaType.OPAQUE,
+                    colorSpace = null,
+                ),
+                width = width.toInt(),
+                height = height.toInt(),
+            ),
+            rgbaBytes,
+            rowBytes = width * 4,
+        )
+    }
+
+    fun rootSize(x11: X11Client): Pair<Short, Short> {
+        val root = x11.defaultRoot
+        val geometry = x11.send(GetGeometry.builder().drawable(root).build())
+        return Pair(geometry.width, geometry.height)
+    }
+
+    fun netClientList(x11: X11Client): List<Int>? {
+        // https://specifications.freedesktop.org/wm/1.5/ar01s03.html#id-1.4.4
+        val intBuffer = getRootWindowProperty(
+            x11,
+            propertyName = "_NET_CLIENT_LIST",
+            type = Atom.WINDOW,
+        )?.asIntBuffer() ?: return null
+        val res = IntArray(intBuffer.remaining())
+        intBuffer.get(res)
+        log("netClientList: value=${res.contentToString()}")
+        return res.asList()
+    }
+
+    fun isComposerActive(x11: X11Client, screen: Int): Boolean {
+        // https://specifications.freedesktop.org/wm/1.5/ar01s08.html
+        val atomName = "_NET_WM_CM_S$screen"
+        val reply = x11.send(GetSelectionOwner.builder().selection(x11.getAtom(atomName).id).build())
+        val owner = reply.owner
+        return owner != 0
     }
 }
 
 internal class X11WindowOperations(
-    private val x11: X11,
-    private val display: X11.Display,
+    private val x11: X11Client,
+    private val window: Int,
     private val scale: Scale,
-    private val window: X11.Window,
-    private val x11PropReader: X11PropertyReader,
+    private val getTransform: () -> Pair<LogicalPixels, LogicalPixels>,
 ) {
+    private companion object {
+        // https://github.com/tcltk/tk/blob/d2311aed9c6a4952a78e049cb7fe2fa414b9b705/unix/tkUnixWm.c#L5059-L5060
+        const val NET_WM_STATE_REMOVE = 0
+        const val NET_WM_STATE_ADD = 1
+
+        private fun sendClientMessageToRootWindow(x11: X11Client, window: Int, type: String, vararg data32: Int) {
+            val event = ClientMessageEvent
+                .builder()
+                .sentEvent(true)
+                .window(window)
+                .format(32)
+                .type(x11.getAtom(type).id)
+                .data(ClientMessageData32(*data32))
+                .build()
+
+            val saved = ByteArrayOutputStream()
+            val out = if (x11.bigEndian) X11BigEndianOutputStream(saved) else X11LittleEndianOutputStream(saved)
+            event.write(out)
+
+            x11.send(
+                SendEvent
+                    .builder()
+                    .destination(x11.defaultRoot)
+                    .propagate(false)
+                    .eventMaskEnable(EventMask.SUBSTRUCTURE_REDIRECT, EventMask.SUBSTRUCTURE_NOTIFY)
+                    .event(Utilities.toList(saved.toByteArray()))
+                    .build(),
+            )
+            x11.sync()
+        }
+    }
+
+    private fun setFullScreen(action: Int) {
+        // https://specifications.freedesktop.org/wm/1.5/ar01s05.html#id-1.6.8
+        sendClientMessageToRootWindow(x11, window, "_NET_WM_STATE", action, x11.getAtom("_NET_WM_STATE_FULLSCREEN").id)
+    }
+
     fun fullScreen() {
-        runCommand(listOf("wmctrl", "-i", "-r", window.toString(), "-b", "add,fullscreen"))
+        setFullScreen(NET_WM_STATE_ADD)
     }
 
     fun unsetFullScreen() {
-        runCommand(listOf("wmctrl", "-i", "-r", window.toString(), "-b", "remove,fullscreen"))
+        setFullScreen(NET_WM_STATE_REMOVE)
     }
 
     fun close() {
-        runCommand(listOf("wmctrl", "-i", "-c", window.toString()))
+        // https://specifications.freedesktop.org/wm/1.5/ar01s04.html#id-1.5.2
+        sendClientMessageToRootWindow(x11, window, "_NET_CLOSE_WINDOW")
     }
 
-    fun moveTo(pos: GlobalPosition) {
-        val x: Int = pos.x.toRawPhysical(scale).roundToInt()
-        val y: Int = pos.y.toRawPhysical(scale).roundToInt()
-        val posBefore = position()
-        x11.XMoveWindow(display, window, x, y)
-        x11.XFlush(display)
-        waitUntilEq(true) {
-            posBefore != position()
+    fun moveTo(pos: GlobalPosition<LogicalPixels>) {
+        val x = logicalToPhysical(pos.x)
+        val y = logicalToPhysical(pos.y)
+        x11.send(ConfigureWindow.builder().window(window).x(x.rawPhysical).y(y.rawPhysical).build())
+        x11.sync()
+        waitUntilTrue("Window $window moved to $pos") {
+            val actualPosition = framePosition()
+            (actualPosition == pos).also {
+                if (!it) {
+                    log("moveTo: actualPosition ($actualPosition) != $pos")
+                }
+            }
         }
         log("Moved window $window to $x,$y")
     }
 
-    private fun getActiveWindow(): X11.Window? {
-        val root = x11.XDefaultRootWindow(display)!!
-        return x11PropReader.withProperty(root, "_NET_ACTIVE_WINDOW", X11.XA_WINDOW) {
-            X11.Window(it.pointer.getInt(0).toLong())
-        }
+    private fun getActiveWindow(): Int? {
+        // https://specifications.freedesktop.org/wm/1.5/ar01s03.html#id-1.4.10
+        val intBuffer = X11Helper.getRootWindowProperty(
+            x11,
+            propertyName = "_NET_ACTIVE_WINDOW",
+            type = Atom.WINDOW,
+        )?.asIntBuffer() ?: return null
+        val res = intBuffer.get()
+        log("getActiveWindow: value=$res")
+        return res
     }
 
     fun focus() {
-        runCommand(listOf("wmctrl", "-F", "-i", "-a", window.toString()))
-        waitUntilEq(window) { getActiveWindow() }
+        // https://specifications.freedesktop.org/wm/1.5/ar01s03.html#id-1.4.10
+        sendClientMessageToRootWindow(x11, window, "_NET_ACTIVE_WINDOW")
+        waitUntil("Window $window active", getter = { getActiveWindow() }) { it == window }
     }
 
-    private fun rawPhysicalToLogical(rawPhysical: Long): LogicalPixels {
+    private fun rawPhysicalToLogical(rawPhysical: Int): LogicalPixels {
         return scale.rawPhysicalToLogical(rawPhysical.toDouble())
     }
 
-    fun clientArea(): GlobalRect? {
-        val rootRet = X11.WindowByReference()
-        val xRelRet = IntByReference()
-        val yRelRet = IntByReference()
-        val widthRet = IntByReference()
-        val heightRet = IntByReference()
-        val borderWidthRet = IntByReference()
-        val depthRet = IntByReference()
+    private fun rawPhysicalToLogicalInt(rawPhysical: Int): LogicalPixelsInt {
+        return LogicalPixelsInt(scale.rawPhysicalToLogical(rawPhysical.toDouble()).rawLogical.roundToInt())
+    }
 
-        if (x11.XGetGeometry(
-                display,
-                window,
-                rootRet,
-                xRelRet,
-                yRelRet,
-                widthRet,
-                heightRet,
-                borderWidthRet,
-                depthRet,
-            ) == 0
-        ) {
-            log("XGetGeometry failed for $window")
-            return null
+    private fun physicalToLogicalInt(physical: PhysicalPixels): LogicalPixelsInt {
+        return LogicalPixelsInt(scale.rawPhysicalToLogical(physical.rawPhysical.toDouble()).rawLogical.roundToInt())
+    }
+
+    private fun logicalToPhysical(logical: LogicalPixels): PhysicalPixels {
+        return PhysicalPixels(logical.toRawPhysical(scale).roundToInt())
+    }
+
+    private fun logicalToPhysical(logical: LogicalPixelsInt): PhysicalPixels {
+        return PhysicalPixels(logical.toRawPhysical(scale).roundToInt())
+    }
+
+    private fun getPhysicalTransform(): TransformData {
+        val gtkFrameExtents = X11Helper.getGtkFrameExtents(x11, window)
+        if (gtkFrameExtents != null) {
+            return TransformData(x = gtkFrameExtents.left, y = gtkFrameExtents.top)
         }
-        val geometryWidth = widthRet.value
-        val geometryHeight = heightRet.value
-        val borderWidth = borderWidthRet.value
-        val frameLeft = xRelRet.value
-        val frameTop = yRelRet.value
-        log(
-            "XGetGeometry for $window: relative x=$frameLeft, relative y=$frameTop, width=$geometryWidth, height=$geometryHeight, borderWidth=$borderWidth",
-        )
+        val (transformX, transformY) = getTransform()
+        log("Window $window transform: x=$transformX, y=$transformY")
 
-        val x = IntByReference()
-        val y = IntByReference()
-        if (!x11.XTranslateCoordinates(
-                display,
-                window,
-                rootRet.getValue(),
-                -borderWidth,
-                -borderWidth,
-                x,
-                y,
-                rootRet,
-            )
-        ) {
-            log("XTranslateCoordinates failed for $window")
-            return null
+        ProcessBuilder("xwininfo", "-id", window.toString()).start().inputReader().readLines().let {
+            log(it.joinToString("\n"))
         }
 
-        val geometryX = x.value
-        val geometryY = y.value
-        log("XTranslateCoordinates for $window: x=$geometryX, y=$geometryY")
+        ProcessBuilder("xprop", "-id", window.toString()).start().inputReader().readLines().let {
+            log(it.joinToString("\n"))
+        }
+        return TransformData(x = logicalToPhysical(transformX), y = logicalToPhysical(transformY))
+    }
 
-//        val xwininfoLines = ProcessBuilder("xwininfo", "-id", window.toString()).start().inputReader().readLines()
-//        log(xwininfoLines.joinToString("\n"))
-        return GlobalRect(
-            GlobalPosition(
-                x = rawPhysicalToLogical(geometryX.toLong()),
-                y = rawPhysicalToLogical(geometryY.toLong()),
-            ),
-            width = rawPhysicalToLogical(geometryWidth.toLong()),
-            height = rawPhysicalToLogical(geometryHeight.toLong()),
+    fun clientAreaPosition(): GlobalPosition<LogicalPixels> {
+        val pos = X11Helper.clientAreaPosition(x11, window, getPhysicalTransform())
+        return GlobalPosition(
+            x = rawPhysicalToLogical(pos.x.rawPhysical),
+            y = rawPhysicalToLogical(pos.y.rawPhysical),
         )
     }
 
-    fun position(): GlobalPosition? {
-        return clientArea()?.position
+    fun framePosition(): GlobalPosition<LogicalPixels> {
+        val netWmExtents = X11Helper.getNetWmExtents(x11, window)
+        val transform = if (netWmExtents == null) {
+            TransformData(PhysicalPixels.Zero, PhysicalPixels.Zero)
+        } else {
+            TransformData(
+                x = PhysicalPixels.Zero - netWmExtents.left,
+                y = PhysicalPixels.Zero - netWmExtents.top,
+            )
+        }
+        val pos = X11Helper.clientAreaPosition(x11, window, transform)
+        return GlobalPosition(
+            x = rawPhysicalToLogical(pos.x.rawPhysical),
+            y = rawPhysicalToLogical(pos.y.rawPhysical),
+        )
     }
 
     fun getMinimalSizeHint(): LogicalSize? {
-//        val xpropLines = ProcessBuilder("xprop", "-id", window.toString()).start().inputReader().readLines()
-//        log(xpropLines.joinToString("\n"))
-        return x11PropReader.withProperty(window, X11.XA_WM_NORMAL_HINTS, X11.XA_WM_SIZE_HINTS) {
-            val rawPhysicalMinWidth = it.pointer.getLong(Long.SIZE_BYTES * 5L)
-            val rawPhysicalMinHeight = it.pointer.getLong(Long.SIZE_BYTES * 6L)
-            val minWidth = rawPhysicalToLogical(rawPhysicalMinWidth)
-            val minHeight = rawPhysicalToLogical(rawPhysicalMinHeight)
-            if (minWidth.rawLogical <= 1 && minHeight.rawLogical <= 1) {
-                null
-            } else {
-                log("minWidth=$minWidth, minHeight=$minHeight")
-                LogicalSize(
-                    width = LogicalPixelsInt(minWidth.rawLogical.roundToInt()),
-                    height = LogicalPixelsInt(minHeight.rawLogical.roundToInt()),
-                )
-            }
-        }
-    }
+        val intBuffer = X11Helper.getProperty(x11, window, Atom.WM_NORMAL_HINTS.value, Atom.WM_SIZE_HINTS)?.asIntBuffer() ?: return null
+        val res = IntArray(intBuffer.remaining())
+        intBuffer.get(res)
+        log("WM_NORMAL_HINTS: ${res.contentToString()}")
 
-    private fun readUtf8Property(window: X11.Window, propertyName: String): String? {
-        return x11PropReader.withProperty(window, propertyName, "UTF8_STRING") {
-            when (it.format) {
-                8 -> it.pointer.getByteArray(0, it.itemCount).toString(Charsets.UTF_8).trim().takeIf(String::isNotEmpty)
-                else -> null
-            }
+        val minWidthProperty = PhysicalPixels(res[5])
+        val minHeightProperty = PhysicalPixels(res[6])
+        val frameExtents = X11Helper.getGtkFrameExtents(x11, window) ?: run {
+            val (transformX, transformY) = getPhysicalTransform()
+            PhysicalExtents(
+                top = transformY,
+                left = transformX,
+                right = transformX,
+                bottom = transformY,
+            )
+        }
+        val minWidth = minWidthProperty - frameExtents.left - frameExtents.right
+        val minHeight = minHeightProperty - frameExtents.top - frameExtents.bottom
+        log("minWidth=$minWidth, minHeight=$minHeight")
+        return if (minWidth.rawPhysical <= scale.rawValue && minHeight.rawPhysical <= scale.rawValue) {
+            null
+        } else {
+            LogicalSize(
+                width = physicalToLogicalInt(minWidth),
+                height = physicalToLogicalInt(minHeight),
+            )
         }
     }
 
     fun readTitle(): String? {
-        return readUtf8Property(window, "_NET_WM_NAME")
+        return X11Helper.readNetWmName(x11, window)
     }
 
-    fun screenshot(outPath: Path, rect: LogicalRect? = null, hideCursor: Boolean = true) {
-        val cmd = buildList {
-            add("maim")
-            if (rect != null) {
-                val x: Int = rect.x.toRawPhysical(scale).roundToInt()
-                val y: Int = rect.y.toRawPhysical(scale).roundToInt()
-                val width: Int = rect.width.toRawPhysical(scale).roundToInt()
-                val height: Int = rect.height.toRawPhysical(scale).roundToInt()
-                add("-g")
-                add("${width}x$height+$x+$y")
-            }
-            if (hideCursor) {
-                add("--hidecursor")
-            }
-            add("--window=${window.toLong()}")
-            add(outPath.absolutePathString())
-        }
-        runCommand(cmd)
+    fun screenshot(rect: LogicalRect): org.jetbrains.skia.Image {
+        val x: Int = logicalToPhysical(rect.x).rawPhysical
+        val y: Int = logicalToPhysical(rect.y).rawPhysical
+        val width: Int = logicalToPhysical(rect.width).rawPhysical
+        val height: Int = logicalToPhysical(rect.height).rawPhysical
+        return X11Helper.screenshot(
+            x11,
+            window = window,
+            x = x.toShort(),
+            y = y.toShort(),
+            width = width.toShort(),
+            height = height.toShort(),
+        )
     }
 }
 
 internal class X11Wm(private val scale: Scale) {
     companion object {
+        // Used in "type" field in XEvent structures.
+        // https://github.com/tcltk/tk/blob/d2311aed9c6a4952a78e049cb7fe2fa414b9b705/xlib/X11/X.h#L186-L193
+        enum class EventType(val value: Byte) {
+            KeyPress(2.toByte()),
+            KeyRelease(3.toByte()),
+            ButtonPress(4.toByte()),
+            ButtonRelease(5.toByte()),
+        }
+
         @Suppress("PropertyName")
         @JsonClass(generateAdapter = true)
         private data class I3VersionModel(
@@ -301,10 +621,24 @@ internal class X11Wm(private val scale: Scale) {
         }
     }
 
-    private val x11 = X11.INSTANCE
-    private val display: X11.Display = X11.INSTANCE.XOpenDisplay(null)!!
+    private val x11 = X11Client.connect()
 
-    private val x11PropReader = X11PropertyReader(x11, display)
+    fun isMutter(): Boolean {
+        return getWmName() == "Mutter"
+    }
+
+    fun getWmName(): String? {
+        // https://specifications.freedesktop.org/wm/1.5/ar01s03.html#id-1.4.12
+        val intBuffer = X11Helper.getRootWindowProperty(
+            x11,
+            propertyName = "_NET_SUPPORTING_WM_CHECK",
+            type = Atom.WINDOW,
+        )?.asIntBuffer() ?: return null
+        val res = intBuffer.get()
+        return X11Helper.readNetWmName(x11, res).also {
+            log("wmName=$it")
+        }
+    }
 
     fun getVersion(): WmVersion {
         return getI3Version()?.let {
@@ -315,160 +649,115 @@ internal class X11Wm(private val scale: Scale) {
                 patch = it.patch,
             )
         } ?: WmVersion(
-            name = "",
+            name = getWmName().orEmpty(),
             major = 0,
             minor = 0,
             patch = 0,
         )
     }
 
-    fun getWindowByTitle(title: String): X11WindowOperations? {
-        val children = mutableListOf<X11.Window>()
-        fillChildren(x11.XDefaultRootWindow(display), children)
-        return children.firstNotNullOfOrNull {
-            val operations = X11WindowOperations(x11, display, scale, it, x11PropReader)
-            val actualTitle = operations.readTitle()
-            if (actualTitle == title) {
-                log("Found window with title $title: $it")
-                waitUntilEq(true) {
-                    val clientArea = operations.clientArea()
-                    clientArea != null && clientArea.height.rawLogical > 1.0 && clientArea.width.rawLogical > 1.0
+    private fun getWindowByTitleImpl(title: String, getTransform: () -> Pair<LogicalPixels, LogicalPixels>): X11WindowOperations? {
+        val allWindows = X11Helper.netClientList(x11) ?: return null
+
+        val windows = allWindows.filter { window ->
+            val actualTitle = X11Helper.readNetWmName(x11, window)
+            log("window $window title = \"$actualTitle\"")
+            actualTitle == title
+        }
+
+        if (windows.isEmpty()) {
+            return null
+        }
+
+        val window = windows.single()
+
+        waitUntilTrue("Window $window has proper size") {
+            val size = X11Helper.windowSize(x11, window)
+            size.width.rawPhysical > scale.rawValue && size.height.rawPhysical > scale.rawValue
+        }
+
+        return X11WindowOperations(x11, window, scale, getTransform)
+    }
+
+    fun getWindowByTitle(title: String, getTransform: () -> Pair<LogicalPixels, LogicalPixels>): X11WindowOperations {
+        return waitUntil(
+            msg = {
+                ProcessBuilder("xwininfo", "-root", "-tree").start().inputReader().readLines().let {
+                    "getWindowByTitle($title) failed: ${it.joinToString("\n")}"
                 }
-                operations
-            } else {
-                null
-            }
-        } ?: run {
-            val lines = ProcessBuilder("xwininfo", "-root", "-tree").start().inputReader().readLines()
-            log("getWindowByTitle failed: ${lines.joinToString("\n")}")
-            null
-        }
+            },
+            getter = { getWindowByTitleImpl(title, getTransform) },
+        ) { it != null }!!
     }
 
-    private fun fillChildren(window: X11.Window, out: MutableList<X11.Window>) {
-        val rootReturn = X11.WindowByReference()
-        val parentReturn = X11.WindowByReference()
-        val childrenReturn = PointerByReference()
-        val childCountReturn = IntByReference()
-        if (x11.XQueryTree(display, window, rootReturn, parentReturn, childrenReturn, childCountReturn) == 0) {
-            log("XQueryTree failed")
-            return
-        }
-        val childCount = childCountReturn.value
-
-        if (childCount > 0) {
-            val arr = childrenReturn.value.getLongArray(0, childCount)
-            for (childId in arr) {
-                val child = X11.Window(childId)
-                out.add(child)
-                fillChildren(child, out)
-            }
-        }
+    private fun sendFakeInput(detail: Byte, eventType: EventType) {
+        x11.send(
+            FakeInput
+                .builder()
+                .detail(detail)
+                .type(eventType.value)
+                .time(0)
+                .build(),
+        )
+        x11.sync()
     }
 
-    fun <T> withXtest(doXtest: (X11.XTest, X11.Display) -> Unit, undoXtest: (X11.XTest, X11.Display) -> Unit, block: () -> T): T {
-        doXtest(X11.XTest.INSTANCE, display)
-        x11.XSync(display, false)
+    fun <T> withKeyPress(key: UInt, block: () -> T): T {
+        log("Key down: $key")
+        sendFakeInput(key.toByte(), EventType.KeyPress)
         AutoCloseable {
-            undoXtest(X11.XTest.INSTANCE, display)
-            x11.XSync(display, false)
+            log("Key up: $key")
+            sendFakeInput(key.toByte(), EventType.KeyRelease)
         }.use {
             return block()
         }
     }
 
-    fun <T> withKeyPress(key: UInt, block: () -> T): T {
-        return withXtest(
-            { xtest, display ->
-                log("Key down: $key")
-                xtest.XTestFakeKeyEvent(display, key.toInt(), true, NativeLong(0))
-            },
-            { xtest, display ->
-                log("Key up: $key")
-                xtest.XTestFakeKeyEvent(display, key.toInt(), false, NativeLong(0))
-            },
-            block,
-        )
-    }
-
     fun <T> withMouseButtonDown(button: MouseButton, block: () -> T): T {
-        return withXtest(
-            { xtest, display ->
-                log("Mouse button down: $button")
-                xtest.XTestFakeButtonEvent(display, button.value, true, NativeLong(0))
-            },
-            { xtest, display ->
-                log("Mouse button up: $button")
-                xtest.XTestFakeButtonEvent(display, button.value, false, NativeLong(0))
-            },
-            block,
-        )
-    }
-
-    private fun getMousePosition(): Pair<PhysicalPixels, PhysicalPixels>? {
-        val rootWindow = x11.XDefaultRootWindow(display)
-        val rootReturn = X11.WindowByReference()
-        val childReturn = X11.WindowByReference()
-        val rootXReturn = IntByReference()
-        val rootYReturn = IntByReference()
-        val winXReturn = IntByReference()
-        val winYReturn = IntByReference()
-        val maskReturn = IntByReference()
-        val ret = x11.XQueryPointer(
-            display, rootWindow, rootReturn, childReturn, rootXReturn, rootYReturn, winXReturn, winYReturn, maskReturn,
-        )
-        return if (ret) {
-            Pair(PhysicalPixels(rootXReturn.value), PhysicalPixels(rootYReturn.value))
-        } else {
-            null
+        log("Mouse button down: $button")
+        sendFakeInput(button.value.toByte(), EventType.ButtonPress)
+        AutoCloseable {
+            log("Mouse button up: $button")
+            sendFakeInput(button.value.toByte(), EventType.ButtonRelease)
+        }.use {
+            return block()
         }
     }
 
-    private fun moveMouseToImpl(pos: Pair<PhysicalPixels, PhysicalPixels>) {
-        withXtest(
-            { xtest, display ->
-                val x = pos.first.rawPhysical
-                val y = pos.second.rawPhysical
-                xtest.XTestFakeMotionEvent(display, 0, x, y, NativeLong(0))
-                waitUntilEq(pos) { getMousePosition() }
-                log("wm.moveMouseTo $x, $y done")
-            },
-            { _, _ -> },
-            {},
-        )
+    private fun moveMouseToImpl(x: Short, y: Short) {
+        X11Helper.moveMouseTo(x11, x = x, y = y)
+
+        waitUntil("Mouse moved to $x, $y", getter = { X11Helper.getMousePosition(x11) }) { it.first == x && it.second == y }
+        log("wm.moveMouseTo $x, $y done")
+
+        if (isMutter()) {
+            Thread.sleep(100)
+        }
     }
 
     fun moveMouseTo(pos: TestMousePosition) {
-        val x = PhysicalPixels((pos.base.x + pos.offsetX.toLogicalPixels()).toRawPhysical(scale).roundToInt())
-        val y = PhysicalPixels((pos.base.y + pos.offsetY.toLogicalPixels()).toRawPhysical(scale).roundToInt())
-        moveMouseToImpl(Pair(x, y))
+        val x = (pos.base.x + pos.offsetX).toRawPhysical(scale).roundToInt().toShort()
+        val y = (pos.base.y + pos.offsetY).toRawPhysical(scale).roundToInt().toShort()
+        moveMouseToImpl(x = x, y = y)
     }
 
     fun resetMousePosition() {
-        moveMouseToImpl(Pair(PhysicalPixels.Zero, PhysicalPixels.Zero))
+        moveMouseToImpl(x = 1, y = 1)
     }
 
     fun scrollMouseUp() {
         // https://askubuntu.com/a/1162351
-        withXtest(
-            { xtest, display ->
-                xtest.XTestFakeButtonEvent(display, 4, true, NativeLong(0))
-                xtest.XTestFakeButtonEvent(display, 4, false, NativeLong(0))
-            },
-            { _, _ -> },
-            {},
-        )
+        sendFakeInput(4, EventType.ButtonPress)
+        sendFakeInput(4, EventType.ButtonRelease)
     }
 
     fun scrollMouseDown() {
         // https://askubuntu.com/a/1162351
-        withXtest(
-            { xtest, display ->
-                xtest.XTestFakeButtonEvent(display, 5, true, NativeLong(0))
-                xtest.XTestFakeButtonEvent(display, 5, false, NativeLong(0))
-            },
-            { _, _ -> },
-            {},
-        )
+        sendFakeInput(5, EventType.ButtonPress)
+        sendFakeInput(5, EventType.ButtonRelease)
+    }
+
+    fun isComposerActive(): Boolean {
+        return X11Helper.isComposerActive(x11, screen = 0)
     }
 }
