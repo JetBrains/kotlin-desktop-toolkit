@@ -7,7 +7,7 @@ use crate::gtk::events::{
     WindowKeyboardEnterEvent, WindowKeyboardLeaveEvent, WindowScaleChangedEvent, WindowScreenChangeEvent,
 };
 use crate::gtk::ffi_return_conversions::{QueryDragAndDropTarget, RetrieveSurroundingText};
-use crate::gtk::geometry::{LogicalPixelsInt, LogicalRect, LogicalSize, PhysicalSize, Scale};
+use crate::gtk::geometry::{LogicalPixelsInt, LogicalPoint, LogicalRect, LogicalSize, PhysicalSize, Scale};
 use crate::gtk::gl_widget::GlWidget;
 use crate::gtk::keyboard::set_keyboard_event_handlers;
 use crate::gtk::layout_manager_wrapper::LayoutManagerWrapper;
@@ -15,7 +15,7 @@ use crate::gtk::mouse::set_mouse_event_handlers;
 use crate::gtk::pointer_shapes_api::PointerShape;
 use crate::gtk::text_input::create_im_context;
 use crate::gtk::text_input_api::TextInputContext;
-use anyhow::Context;
+use anyhow::{Context, bail};
 use gtk4::gdk as gdk4;
 use gtk4::gio;
 use gtk4::glib;
@@ -548,5 +548,14 @@ impl SimpleWindow {
     pub fn text_input_reset(&self) {
         debug!("{:?}: text_input_reset", self.window_id);
         self.im_context.reset();
+    }
+
+    pub fn get_transform(&self) -> anyhow::Result<LogicalPoint> {
+        if let Some(window) = self.window.upgrade() {
+            let (x, y) = window.surface_transform();
+            Ok(LogicalPoint::new(x, y))
+        } else {
+            bail!("{:?} no longer alive", self.window_id)
+        }
     }
 }

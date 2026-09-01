@@ -1,3 +1,5 @@
+use desktop_common::logger::PanicDefault;
+
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
 pub struct PhysicalPixels(i32);
@@ -107,6 +109,12 @@ impl Scale {
         #[allow(clippy::cast_possible_truncation)]
         let rounded = v.round() as i32;
         PhysicalPixels(rounded)
+    }
+}
+
+impl PanicDefault for LogicalPoint {
+    fn default() -> Self {
+        <Self as Default>::default()
     }
 }
 

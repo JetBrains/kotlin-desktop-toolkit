@@ -4,7 +4,7 @@ use crate::gtk::application_api::RenderingMode;
 use crate::gtk::data_transfer_api::DragAndDropActions;
 use crate::gtk::events::{RequestId, WindowDecorationMode, WindowId};
 use crate::gtk::file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams};
-use crate::gtk::geometry::LogicalSize;
+use crate::gtk::geometry::{LogicalPoint, LogicalSize};
 use crate::gtk::mime_types::MimeTypes;
 use crate::gtk::pointer_shapes_api::PointerShape;
 use crate::gtk::text_input_api::TextInputContext;
@@ -15,8 +15,8 @@ use desktop_common::{
 };
 use log::debug;
 
-fn with_window(window_id: WindowId, name: &str, f: impl FnOnce(&SimpleWindow) -> anyhow::Result<()>) {
-    ffi_boundary(name, || with_app_state(|app| app.with_window(window_id, f)));
+fn with_window<T: PanicDefault>(window_id: WindowId, name: &str, f: impl FnOnce(&SimpleWindow) -> anyhow::Result<T>) -> T {
+    ffi_boundary(name, || with_app_state(|app| app.with_window(window_id, f)))
 }
 
 #[repr(C)]
@@ -218,4 +218,9 @@ pub extern "C" fn window_text_input_reset(window_id: WindowId) {
         w.text_input_reset();
         Ok(())
     });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_get_transform(window_id: WindowId) -> LogicalPoint {
+    with_window(window_id, "window_get_transform", SimpleWindow::get_transform)
 }

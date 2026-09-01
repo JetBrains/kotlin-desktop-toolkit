@@ -187,6 +187,14 @@ public class Window internal constructor(params: WindowParams) : AutoCloseable {
         }
     }
 
+    public fun getTransform(): LogicalPoint {
+        return Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                LogicalPoint.fromNative(desktop_gtk_h.window_get_transform(arena, windowId))
+            }
+        }
+    }
+
     override fun close() {
         Logger.trace { "Window: closing window with id $windowId" }
         ffiDownCall {
