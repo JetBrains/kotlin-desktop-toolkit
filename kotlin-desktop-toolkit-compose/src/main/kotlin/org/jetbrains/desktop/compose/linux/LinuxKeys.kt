@@ -94,14 +94,14 @@ internal fun KeySym.toComposeKey(): Key = when (value) {
     KeySym.minus, KeySym.underscore -> Key.Minus
     KeySym.equal -> Key.Equals
     KeySym.plus -> Key.Plus
-    KeySym.asterisk -> Key.Multiply
     KeySym.at -> Key.At
-    KeySym.numbersign -> Key.Pound
     KeySym.exclam -> Key.One
+    KeySym.numbersign -> Key.Three
     KeySym.dollar -> Key.Four
     KeySym.percent -> Key.Five
     KeySym.asciicircum -> Key.Six
     KeySym.ampersand -> Key.Seven
+    KeySym.asterisk -> Key.Eight
     KeySym.parenleft -> Key.Nine
     KeySym.parenright -> Key.Zero
     // asciitilde is Shift+grave on a US layout, and has no constant in KeySym's companion.
