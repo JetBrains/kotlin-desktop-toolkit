@@ -34,6 +34,8 @@ import kotlin.io.path.readLines
 import kotlin.io.path.readText
 import kotlin.io.path.writeLines
 import kotlin.io.path.writeText
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 import java.time.Duration as JavaDuration
@@ -597,12 +599,34 @@ abstract class X11TestEnv :
 """
     }
 
+    private fun waitUntil(msg: String, sleepInterval: Duration = 10.milliseconds, predicate: () -> Boolean) {
+        val startTime = TimeSource.Monotonic.markNow()
+        while (!predicate()) {
+            if (startTime.elapsedNow() > 10.seconds) {
+                throw Error("Timed out waiting for $msg")
+            }
+            Thread.sleep(sleepInterval.inWholeMilliseconds)
+        }
+    }
+
+    private fun runCommand(vararg args: String): Pair<Int, List<String>> {
+        println("Running: ${args.joinToString(" ") { "\"$it\"" }}")
+        val p = ProcessBuilder(*args).also { pb ->
+            val env = pb.environment()
+            env.clear()
+            env.putAll(newEnv)
+        }.start()
+        val stdOut = p.inputReader().readLines()
+        return Pair(p.waitFor(), stdOut)
+    }
+
     private fun newProcess(
         vararg args: String,
+        logStdOut: Boolean = false,
         getAdditionalEnvs: ((Map<String, String>) -> Map<String, String>)? = null,
         afterStart: (Process, Path) -> Boolean = { _, _ -> true },
     ): Boolean {
-        println("Running: ${args.joinToString(" ") { "\"$it\"" }}")
+        println("New process: ${args.joinToString(" ") { "\"$it\"" }}")
         val exeName = args.first().let {
             val p = Path.of(it)
             if (p.isAbsolute) {
@@ -611,20 +635,25 @@ abstract class X11TestEnv :
                 it
             }
         }
-        val logFileStderr = Path.of(newEnv["HOME"]!!).resolve("$exeName-stderr.log")
+        val logFile = Path.of(newEnv["HOME"]!!).resolve("$exeName-output.log")
         return ProcessBuilder(*args).also { pb ->
             val env = pb.environment()
             val additionalEnvs = getAdditionalEnvs?.invoke(env)
             env.clear()
             env.putAll(newEnv)
             additionalEnvs?.let { env.putAll(it) }
-            println(logFileStderr)
-            pb.redirectError(ProcessBuilder.Redirect.to(logFileStderr.toFile()))
+            println(logFile)
+            val logRedirect = ProcessBuilder.Redirect.to(logFile.toFile())
+            if (logStdOut) {
+                pb.redirectOutput(logRedirect)
+            } else {
+                pb.redirectError(logRedirect)
+            }
         }.start().let {
             check(it.isAlive)
-            val ret = afterStart(it, logFileStderr)
+            val ret = afterStart(it, logFile)
             if (ret) {
-                logFiles.add(logFileStderr)
+                logFiles.add(logFile)
                 startedProcesses.add(Pair(it, args.first()))
             }
             ret
@@ -633,6 +662,7 @@ abstract class X11TestEnv :
 
     fun run(
         test: Test,
+        wm: String,
         i3config: RegularFile,
         dbusConfigFile: RegularFile,
         dunstConfigFile: RegularFile,
@@ -680,28 +710,10 @@ Exec=/bin/true
             "--nosyslog",
             "--print-address",
         ) { p, _ ->
-            newEnv["DBUS_SESSION_BUS_ADDRESS"] = p.inputReader().readLine()
+            val dbusSessionBusAddress = p.inputReader().readLine()
+            println("dbusSessionBusAddress=$dbusSessionBusAddress")
+            newEnv["DBUS_SESSION_BUS_ADDRESS"] = dbusSessionBusAddress
             true
-        }
-
-        ProcessBuilder(
-            "xdotool",
-            "getmouselocation",
-        ).also { pb ->
-            val env = pb.environment()
-            env.clear()
-            env.putAll(newEnv)
-            val startTime = TimeSource.Monotonic.markNow()
-            while (true) {
-                val p = pb.start()
-                if (p.waitFor() == 0) {
-                    break
-                }
-                if (startTime.elapsedNow() > 3.seconds) {
-                    throw Error("Could not run xdotool: ${p.errorReader().readText()}")
-                }
-                Thread.sleep(10)
-            }
         }
 
         ProcessBuilder(
@@ -714,16 +726,8 @@ Exec=/bin/true
             val env = pb.environment()
             env.clear()
             env.putAll(newEnv)
-            val startTime = TimeSource.Monotonic.markNow()
-            while (true) {
-                val p = pb.start()
-                if (p.waitFor() == 0) {
-                    break
-                }
-                if (startTime.elapsedNow() > 3.seconds) {
-                    throw Error("Could not run setxkbmap: ${p.errorReader().readText()}")
-                }
-                Thread.sleep(10)
+            waitUntil("Run setxkbmap", sleepInterval = 100.milliseconds) {
+                pb.start().waitFor() == 0
             }
         }
 
@@ -732,27 +736,16 @@ Exec=/bin/true
         // We're using `xsettingsd` as a desktop-agnostic xsettings daemon.
         // E.g., Gnome used `gsd-xsettings` (gnome-settings-daemon) for this.
         var xSettingsDPid: String? = null
-        val startTime = TimeSource.Monotonic.markNow()
-        while (startTime.elapsedNow() < 10.seconds &&
-            !newProcess("xsettingsd", "--config=$xSettingsDConfigFilePathString") { p, log ->
+
+        waitUntil("Run xsettingsd", sleepInterval = 100.milliseconds) {
+            newProcess("xsettingsd", "--config=$xSettingsDConfigFilePathString") { p, log ->
                 xSettingsDPid = p.pid().toString()
-                var ret = false
-                while (p.isAlive) {
-                    val lines = log.readLines()
-                    if (lines.any { it.contains("Took ownership of selection") }) {
-                        ret = true
-                        newEnv["TEST_XSETTINGSD_LOG_FILE"] = log.absolutePathString()
-                        break
-                    }
-                    if (startTime.elapsedNow() > 10.seconds) {
-                        throw Error("Could not run xsettingsd:\n${lines.joinToString("\n")}")
-                    }
-                    Thread.sleep(10)
+                waitUntil("xsettingsd propertly started") {
+                    p.isAlive && log.readLines().any { it.contains("Took ownership of selection") }
                 }
-                ret
+                newEnv["TEST_XSETTINGSD_LOG_FILE"] = log.absolutePathString()
+                true
             }
-        ) {
-            continue
         }
 
         ibusComponentFile.writeText(generateIBusXmlFileContent(ibusTestEngineFile.asFile))
@@ -768,19 +761,41 @@ Exec=/bin/true
             "--xim",
             "--cache=none",
         ) { _, _ ->
-            val aliveCheckIntervalMs = 10L
-            var aliveCheckTimeoutMs = 1000L
-            while (!ibusSocketFile.exists() && aliveCheckTimeoutMs > 0) {
-                Thread.sleep(aliveCheckIntervalMs)
-                aliveCheckTimeoutMs -= aliveCheckIntervalMs
-            }
-            check(ibusSocketFile.exists()) { "${ibusSocketFile.absolutePathString()} does not exist" }
+            waitUntil("IBus socket file exists") { ibusSocketFile.exists() }
             true
         }
 
         newProcess(ibusTestEngineFile.asFile.absolutePath)
 
-        newProcess("i3", "--shmlog-size=26214400", "-c", i3config.asFile.absolutePath)
+        when (wm) {
+            "i3" -> {
+                newProcess("i3", "--shmlog-size=26214400", "-c", i3config.asFile.absolutePath)
+            }
+
+            "picom" -> {
+                newProcess("i3", "--shmlog-size=26214400", "-c", i3config.asFile.absolutePath)
+
+                newProcess("picom", "--backend", "xrender", "--log-level", "DEBUG") { p, errorLog ->
+                    waitUntil("Run picom") {
+                        p.isAlive && errorLog.readLines().any { it.contains("Screen redirected.") }
+                    }
+                    true
+                }
+            }
+
+            else -> newProcess(*wm.split(' ').toTypedArray())
+        }
+
+        waitUntil("Get _NET_SUPPORTED", sleepInterval = 100.milliseconds) {
+            val (exitCode, stdOut) = runCommand("xprop", "-root", "_NET_SUPPORTED")
+            (exitCode == 0 && !stdOut.any { it.contains("no such atom on any window.") || it.contains("not found.") }).also {
+                if (it) {
+                    println("_NET_SUPPORTED: $stdOut")
+                }
+            }
+        }
+//        val p = ProcessBuilder("ps", "ux").start()
+//        println("ps ux -> ${p.inputReader().readLines().joinToString("\n")}")
 
         newEnv["GSK_RENDERER"] = "vulkan"
         newEnv["TEST_DUNST_CONFIG_FILE"] = dunstConfigFile.asFile.absolutePath
@@ -889,6 +904,7 @@ dependencies {
     testGtkImplementation(libs.junit.jupiter.engine)
     testGtkImplementation("org.jetbrains.skiko:skiko-awt-runtime-$skikoTargetOs-$skikoTargetArch:$skikoVersion")
     testGtkImplementation("net.java.dev.jna:jna-platform:5.18.1")
+    testGtkImplementation("com.squareup.moshi:moshi-kotlin:1.15.2")
     testGtkRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -907,11 +923,14 @@ val testGtk = tasks.register<Test>("testGtk") {
         usesService(x11TestEnvProvider)
         val testResourcesDir = layout.projectDirectory.dir("src/test/resources/linux")
         val testAppDataSourceCmd = buildTestAppDataSource.map { it.outputs.files.first() }.get().absolutePath
+        val headless = (project.property("tests.x11.headless") as String).toBooleanStrict()
+        val wm = project.property("tests.x11.wm") as String
         doFirst {
             val x11TestEnv = x11TestEnvProvider.get()
             try {
                 val newEnv = x11TestEnv.run(
                     this@register,
+                    wm,
                     i3config = testResourcesDir.file("i3_test_config"),
                     dbusConfigFile = testResourcesDir.file("dbus-session-conf.xml"),
                     dunstConfigFile = testResourcesDir.file("dunstrc.conf"),
@@ -919,7 +938,7 @@ val testGtk = tasks.register<Test>("testGtk") {
                     ibusTestEngineFile = testResourcesDir.file("ibus_test_engine.py"),
                     testResourcesDir = testResourcesDir,
                     testAppDataSourceCmd = testAppDataSourceCmd,
-                    headless = true,
+                    headless = headless,
                 )
                 println(newEnv)
                 setEnvironment(newEnv)

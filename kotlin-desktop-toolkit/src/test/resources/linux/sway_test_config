@@ -16,9 +16,7 @@ input type:keyboard {
 
 focus_follows_mouse no
 focus_on_window_activation focus
-default_border none
-for_window [app_id="^org.jetbrains.desktop.linux.tests$"] floating enable, move position 0 0
-for_window [app_id="^org.jetbrains.desktop.linux.tests.TestApp.*"] floating enable, move position 300 0
+for_window [title=".*"] floating enable, move position 10 10
 swaybg_command -
 swaynag_command -
 
