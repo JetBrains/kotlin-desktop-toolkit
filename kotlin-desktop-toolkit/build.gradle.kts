@@ -1054,6 +1054,7 @@ val testWayland = tasks.register<Test>("testWayland") {
                     dbusConfigFile = testResourcesDir.file("dbus-session-conf.xml"),
                     testResourcesDir = testResourcesDir,
                     runVirtualDevicesCmd = runVirtualDevicesCmd,
+                    ibusTestEngineFile = testResourcesDir.file("ibus_test_engine.py"),
                     testAppDataSourceCmd = testAppDataSourceCmd,
                     testAppBrowser = testResourcesDir.file("test_app_browser"),
                     testAppFileManager = testResourcesDir.file("test_app_file_manager"),
@@ -1180,6 +1181,17 @@ abstract class WaylandTestEnv :
         )
     }
 
+    private val ibusTempDir by lazy { Files.createTempDirectory(xdgRuntimeDir, "test_ibus") }
+    private val ibusAddressFile by lazy {
+        ibusTempDir.resolve("ibus-addr").createFile() // suppress the IBus warning about the non-existing file
+    }
+    private val ibusSocketFile by lazy { ibusTempDir.resolve("ibus-socket") }
+    private val ibusComponentPath by lazy { ibusTempDir.resolve("component").createDirectory() }
+    private val ibusComponentFile by lazy { ibusComponentPath.resolve("ibus_test_engine.xml") }
+    private val ibusEngineTmpCapsOutputFile by lazy { ibusTempDir.resolve("test-engine-caps-out.txt") }
+    private val ibusEngineTmpContentTypeOutputFile by lazy { ibusTempDir.resolve("test-engine-content-type-out.txt") }
+    private val ibusEngineTmpCursorLocationOutputFile by lazy { ibusTempDir.resolve("test-engine-cursor-location-out.txt") }
+
     private val newEnv by lazy {
         mutableMapOf(
             "XDG_CURRENT_DESKTOP" to "GNOME",
@@ -1191,6 +1203,50 @@ abstract class WaylandTestEnv :
             "XDG_SESSION_TYPE" to "wayland",
 //            "WAYLAND_DEBUG" to "1",
         )
+    }
+
+    private fun generateIBusXmlFileContent(ibusTestEngineFile: File): String {
+        return """<?xml version="1.0" encoding="utf-8"?>
+<component>
+    <name>com.jetbrains.kdt.IBusTestEngine</name>
+    <description>An IBus engine for KDT testing</description>
+    <version>0.1.0</version>
+    <license>Proprietary</license>
+    <author>JetBrains</author>
+    <homepage>https://www.jetbrains.com/</homepage>
+    <exec>/usr/bin/python3 ${ibusTestEngineFile.absolutePath}</exec>
+    <textdomain>jb-kdt-ibus-test-engine</textdomain>
+    <engines>
+        <engine>
+            <name>jb_kdt_ibus_test_engine</name>
+            <longname>JetBrains KDT IBus test engine</longname>
+            <description>An IBus engine for KDT testing</description>
+            <language>en</language>
+            <license>Proprietary</license>
+            <author>JetBrains</author>
+            <layout>us</layout>
+            <layout_variant/>
+            <layout_option/>
+            <hotkeys/>
+            <symbol/>
+            <setup/>
+            <version/>
+            <textdomain/>
+            <rank>0</rank>
+        </engine>
+    </engines>
+</component>
+"""
+    }
+
+    private fun waitUntil(msg: String, sleepInterval: Duration = 10.milliseconds, predicate: () -> Boolean) {
+        val startTime = TimeSource.Monotonic.markNow()
+        while (!predicate()) {
+            if (startTime.elapsedNow() > 10.seconds) {
+                throw Error("Timed out waiting for $msg")
+            }
+            Thread.sleep(sleepInterval.inWholeMilliseconds)
+        }
     }
 
     private fun newProcess(
@@ -1238,6 +1294,7 @@ abstract class WaylandTestEnv :
         dbusConfigFile: RegularFile,
         testResourcesDir: Directory,
         runVirtualDevicesCmd: String,
+        ibusTestEngineFile: RegularFile,
         testAppDataSourceCmd: String,
         testAppBrowser: RegularFile,
         testAppFileManager: RegularFile,
@@ -1307,7 +1364,8 @@ x-scheme-handler/https=test_app_browser.desktop;
             getAdditionalEnvs = { env ->
                 buildMap {
                     if (headless) {
-                        put("WLR_BACKENDS", "headless")
+                        put("WLR_BACKENDS", "headless,libinput")
+                        put("LIBSEAT_BACKEND", "noop")
                     } else {
                         val orgXdgRuntimeDir = env["XDG_RUNTIME_DIR"]!!
                         val orgWaylandDisplay = env["WAYLAND_DISPLAY"]!!
@@ -1361,6 +1419,24 @@ x-scheme-handler/https=test_app_browser.desktop;
 
         newProcess(runVirtualDevicesCmd)
 
+        ibusComponentFile.writeText(generateIBusXmlFileContent(ibusTestEngineFile.asFile))
+        newProcess(
+            "ibus-daemon",
+            "-a",
+            "unix:path=${ibusSocketFile.absolutePathString()}",
+            "--verbose",
+            "--panel",
+            "disable",
+            "--emoji-extension",
+            "disable",
+            "--xim",
+            "--cache=none",
+        ) { _ ->
+            waitUntil("IBus socket file exists") { ibusSocketFile.exists() }
+        }
+
+        newProcess(ibusTestEngineFile.asFile.absolutePath)
+
 //        ProcessBuilder("foot").also { pb ->
 //            val env = pb.environment()
 //            env.clear()
@@ -1407,6 +1483,15 @@ x-scheme-handler/https=test_app_browser.desktop;
             p.waitFor()
         }
         startedProcesses.clear()
+
+        ibusAddressFile.deleteIfExists()
+        ibusSocketFile.deleteIfExists()
+        ibusEngineTmpCapsOutputFile.deleteIfExists()
+        ibusEngineTmpContentTypeOutputFile.deleteIfExists()
+        ibusEngineTmpCursorLocationOutputFile.deleteIfExists()
+        ibusComponentFile.deleteIfExists()
+        ibusComponentPath.deleteIfExists()
+        ibusTempDir.deleteIfExists()
 
         if (!testsFailed) {
             for (logFile in logFiles) {

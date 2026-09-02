@@ -35,9 +35,14 @@ version = "*"
 features = ["executor", "futures-io"]
 
 [target.'cfg(target_os="linux")'.dev-dependencies]
+ctrlc = "3.5.2"
 gles30 = { version = "0.5.2", features = ["struct_loader"] }
 keycode = "1.0.0"
 tempfile = "3.27.0"
 tiny_http = "0.12.0"
+uinput = "0.1.3"
 url = "2.5.8"
 xkbcommon = "0.9.0"
+
+[target.'cfg(target_os="linux")'.dev-dependencies.uinput-sys]
+version = "*"
