@@ -270,12 +270,27 @@ val collectNativeArtifactsTaskByTarget = compileNativeTaskByTarget.mapValues { (
     tasks.register<CollecNativeArtifactsTask>(
         "collectNativeArtifactsFor${target.backend.taskName()}-${target.platform.name()}-${target.profile}",
     ) {
-        dependsOn(buildNativeTask)
         downloadAngleTask?.let {
             dependsOn(downloadAngleTask)
             angleBinaries.setFrom(downloadAngleTask.map { it.binaries })
         }
-        nativeLibrary = buildNativeTask.flatMap { it.libraryFile }
+
+        val prebuiltNativeLibraryPath = (project.property("kdt.prebuiltNativeLibrariesPath") as String).trim().ifEmpty { null }?.let {
+            val expectedLibraryFileName = CompileRustTask.libraryFileName(
+                targetPlatform = target.platform,
+                rustProfile = target.profile,
+                crateName = target.backend.crateDirName(),
+            )
+            val expectedLibraryPath = Path.of(it).resolve(expectedLibraryFileName)
+            if (expectedLibraryPath.exists()) expectedLibraryPath else null
+        }
+
+        if (prebuiltNativeLibraryPath != null) {
+            nativeLibrary = project.objects.fileProperty().fileValue(prebuiltNativeLibraryPath.toFile())
+        } else {
+            dependsOn(buildNativeTask)
+            nativeLibrary = buildNativeTask.flatMap { it.libraryFile }
+        }
         targetDirectory = layout.buildDirectory.dir("native-${jarSuffixForPlatform(target.platform, target.backend)}-${target.profile}")
     }
 }

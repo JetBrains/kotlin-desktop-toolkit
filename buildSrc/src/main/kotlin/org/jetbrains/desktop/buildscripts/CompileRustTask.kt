@@ -25,6 +25,30 @@ abstract class CompileRustTask @Inject constructor(
     private val execOperations: ExecOperations,
     private val fileSystemOperations: FileSystemOperations,
 ) : DefaultTask() {
+    companion object {
+        fun libraryFileName(targetPlatform: Platform, rustProfile: String, crateName: String): String {
+            val targetSuffix = when (targetPlatform.arch) {
+                Arch.aarch64 -> "arm64"
+                Arch.x86_64 -> "x64"
+            }
+
+            val debugSuffix = if (rustProfile == "debug" || rustProfile == "dev") "+debug" else ""
+
+            val crateName = crateName.replace('-', '_')
+            val libName = "${crateName}_${targetSuffix}$debugSuffix"
+
+            /**
+             * See `KotlinDesktopToolkit.kt` if you would like to change this logic.
+             */
+            // todo macOS change libname with otool
+            return when (targetPlatform.os) {
+                Os.LINUX -> "lib$libName.so"
+                Os.MACOS -> "lib$libName.dylib"
+                Os.WINDOWS -> "$libName.dll"
+            }
+        }
+    }
+
     @get:Input
     val workspaceRoot = objectFactory.property<String>()
 
@@ -69,29 +93,14 @@ abstract class CompileRustTask @Inject constructor(
 
     @get:OutputFile
     val libraryFile = providerFactory.provider {
+        val libFileName = libraryFileName(
+            targetPlatform = targetPlatform.get(),
+            rustProfile = rustProfile.get(),
+            crateName = crateName.get(),
+        )
+
         val dir = outputDirectory.get().asFile
-        val targetPlatform = targetPlatform.get()
-        val rustProfile = rustProfile.get()
-
-        val targetSuffix = when (targetPlatform.arch) {
-            Arch.aarch64 -> "arm64"
-            Arch.x86_64 -> "x64"
-        }
-
-        val debugSuffix = if (rustProfile == "debug" || rustProfile == "dev") "+debug" else ""
-
-        val crateName = crateName.get().replace('-', '_')
-        val libName = "${crateName}_${targetSuffix}$debugSuffix"
-
-        /**
-         * See `KotlinDesktopToolkit.kt` if you would like to change this logic.
-         */
-        // todo macOS change libname with otool
-        when (targetPlatform.os) {
-            Os.LINUX -> dir.resolve("lib$libName.so")
-            Os.MACOS -> dir.resolve("lib$libName.dylib")
-            Os.WINDOWS -> dir.resolve("$libName.dll")
-        }
+        dir.resolve(libFileName)
     }
 
     @TaskAction
