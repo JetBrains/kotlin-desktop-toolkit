@@ -920,27 +920,27 @@ inode/directory=test_app_file_manager.desktop;
         }
     }
 }
-fun registerTaskForRustExample(name: String): TaskProvider<Exec> {
+
+fun registerTaskForRustBinary(name: String): TaskProvider<Exec> {
     return tasks.register<Exec>(
-        "buildRustExample-$name-${buildPlatformRustTarget(runTestsWithPlatform)}",
+        "buildRustBinary-$name-${buildPlatformRustTarget(runTestsWithPlatform)}",
     ) {
         val rustTarget = buildPlatformRustTarget(runTestsWithPlatform)
         dependsOn(installRustTaskByPlatform[runTestsWithPlatform]!!)
         inputs.files(nativeDir.rustWorkspaceFiles())
-        workingDir = nativeDir.asFile
+        workingDir = nativeDir.asFile.resolve(name)
         executable = providers.cargoCommand().get()
         args = listOf(
             "build",
-            "--example=$name",
             "--color=always",
             "--target=$rustTarget",
         )
-        outputs.file(nativeDir.file("target/$rustTarget/debug/examples/$name"))
+        outputs.file(nativeDir.file("target/$rustTarget/debug/$name"))
     }
 }
 
-val buildTestAppWaylandVirtualDevices = registerTaskForRustExample("wayland_virtual_devices")
-val buildTestAppDataSource = registerTaskForRustExample("test_app_data_source")
+val buildTestAppWaylandVirtualDevices = registerTaskForRustBinary("desktop-linux-test-app-wlr-virtual-input")
+val buildTestAppDataSource = registerTaskForRustBinary("desktop-linux-test-app-data-source")
 
 sourceSets {
     create("testGtk") {
