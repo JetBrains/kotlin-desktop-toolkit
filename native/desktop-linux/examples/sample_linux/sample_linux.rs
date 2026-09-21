@@ -538,7 +538,7 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
             }
             Event::DisplayConfigurationChange => {
                 let ffi_screens = screen_list(app_ptr);
-                let screen_infos = unsafe { std::slice::from_raw_parts_mut(ffi_screens.ptr.cast_mut(), ffi_screens.len) };
+                let screen_infos = ffi_screens.as_optional_slice();
                 debug!("DisplayConfigurationChange: {screen_infos:?}");
             }
             Event::DesktopSettingChange(data) => {

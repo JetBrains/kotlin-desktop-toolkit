@@ -249,10 +249,7 @@ impl<T> PanicDefault for Option<T> {
 
 impl<T> PanicDefault for AutoDropArray<T> {
     fn default() -> Self {
-        Self {
-            ptr: std::ptr::null_mut(),
-            len: 0,
-        }
+        Self::null()
     }
 }
 
