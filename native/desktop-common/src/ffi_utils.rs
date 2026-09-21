@@ -295,49 +295,48 @@ pub type ArraySize = usize;
 #[repr(C)]
 #[derive(Debug)]
 pub struct AutoDropArray<T> {
-    pub ptr: *const T,
-    pub len: ArraySize,
+    ptr: *mut T,
+    len: ArraySize,
+    cap: ArraySize,
 }
 
 impl<T> AutoDropArray<T> {
     #[must_use]
     pub fn new(array: Box<[T]>) -> Self {
-        let array = Box::leak(array);
-        Self {
-            ptr: array.as_ptr(),
-            len: array.len(),
-        }
+        let (ptr, len, cap) = array.into_vec().into_raw_parts();
+        Self { ptr, len, cap }
     }
 
     #[must_use]
     pub const fn null() -> Self {
         Self {
-            ptr: std::ptr::null(),
+            ptr: std::ptr::null_mut(),
             len: 0,
+            cap: 0,
         }
     }
-}
 
-impl AutoDropArray<AutoDropStrPtr> {
     #[must_use]
-    pub const fn read_at(&self, i: usize) -> BorrowedStrPtr<'_> {
-        assert!(i < self.len);
-        let p = self.ptr.wrapping_add(i).cast::<BorrowedStrPtr>();
-        unsafe { p.read() }
+    pub const fn as_optional_slice(&self) -> Option<&[T]> {
+        if self.ptr.is_null() {
+            None
+        } else {
+            let slice = unsafe { slice::from_raw_parts(self.ptr, self.len) };
+            Some(slice)
+        }
     }
 }
 
 impl std::fmt::Display for AutoDropArray<AutoDropStrPtr> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.ptr.is_null() {
-            write!(f, "AutoDropArray(null)")
-        } else {
+        if let Some(slice) = self.as_optional_slice() {
             f.write_str("AutoDropArray[")?;
-            for i in 0..self.len {
-                std::fmt::Debug::fmt(&self.read_at(i), f)?;
+            for e in slice {
+                std::fmt::Debug::fmt(e, f)?;
             }
-            f.write_char(']')?;
-            Ok(())
+            f.write_char(']')
+        } else {
+            write!(f, "AutoDropArray(null)")
         }
     }
 }
@@ -346,10 +345,7 @@ impl<T> Drop for AutoDropArray<T> {
     fn drop(&mut self) {
         trace!("Drop for AutoDropArray");
         if !self.ptr.is_null() {
-            let array = unsafe {
-                let s = slice::from_raw_parts_mut(self.ptr.cast_mut(), self.len);
-                Box::from_raw(s)
-            };
+            let array = unsafe { Vec::from_raw_parts(self.ptr, self.len, self.cap) };
             drop(array);
         }
     }
