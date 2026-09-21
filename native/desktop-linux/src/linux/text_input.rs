@@ -107,13 +107,13 @@ pub struct PendingTextInputEvent {
     pub delete_surrounding_text: Option<zwp_text_input_v3::Event>,
 }
 
-impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
+impl Dispatch<ZwpTextInputV3, ()> for ApplicationState {
     #[allow(clippy::too_many_lines)]
     fn event(
         this: &mut Self,
         text_input: &ZwpTextInputV3,
         event: <ZwpTextInputV3 as Proxy>::Event,
-        _: &i32,
+        (): &(),
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
