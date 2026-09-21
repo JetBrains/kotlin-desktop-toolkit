@@ -116,6 +116,9 @@ pub struct ApplicationState {
     pub query_drag_and_drop_target: QueryDragAndDropTarget,
     pub callbacks: ApplicationCallbacks,
 
+    // Has to be before `LoopHandle`, to prevent crash on drop in some cases (e.g. when `SeatState::get_keyboard_with_repeat` is not used).
+    egl: Option<anyhow::Result<Rc<EGLData>>>,
+
     registry_state: RegistryState,
     seat_state: SeatState,
     pub loop_handle: LoopHandle<'static, Self>,
@@ -143,7 +146,6 @@ pub struct ApplicationState {
     pub primary_selection_device: Option<PrimarySelectionDevice>,
     pub primary_selection_source: Option<PrimarySelectionSource>,
 
-    egl: Option<anyhow::Result<Rc<EGLData>>>,
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
     pub last_pointer_down_event_serial: Option<u32>,
