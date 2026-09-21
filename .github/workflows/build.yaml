@@ -20,6 +20,8 @@ jobs:
           { os: "macos-15-intel", rust_targets: "x86_64-apple-darwin", package_manager: "brew" }, # mac with intel cpu
           { os: "ubuntu-22.04", rust_targets: "x86_64-unknown-linux-gnu", package_manager: "apt" },
           { os: "ubuntu-22.04-arm", rust_targets: "aarch64-unknown-linux-gnu", package_manager: "apt" },
+          { os: "ubuntu-26.04", rust_targets: "x86_64-unknown-linux-gnu", package_manager: "apt" },
+          { os: "ubuntu-26.04-arm", rust_targets: "aarch64-unknown-linux-gnu", package_manager: "apt" },
           { os: "windows-2025", rust_targets: "x86_64-pc-windows-msvc", package_manager: "winget" },
           { os: "windows-11-arm", rust_targets: "aarch64-pc-windows-msvc", package_manager: "winget" },
         ]
@@ -32,7 +34,7 @@ jobs:
         if: "${{ matrix.targets.package_manager == 'apt' }}"
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends libwayland-dev libxkbcommon-dev libgtk-4-dev xvfb python3-gi xclip i3 dunst x11-xkb-utils x11-utils dbus-daemon ibus ibus-gtk4 phinger-cursor-theme adwaita-icon-theme-full xsettingsd picom sway grim wl-clipboard xdg-desktop-portal-gtk xdg-desktop-portal-gnome mako-notifier
+          sudo apt-get install --no-install-recommends libwayland-dev libxkbcommon-dev libgtk-4-dev xvfb python3-gi xclip i3 dunst x11-xkb-utils x11-utils dbus-daemon ibus ibus-gtk4 phinger-cursor-theme adwaita-icon-theme-full adwaita-icon-theme xsettingsd picom sway grim wl-clipboard xdg-desktop-portal-gtk xdg-desktop-portal-gnome mako-notifier
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -41,6 +43,7 @@ jobs:
           components: rustfmt, clippy
           rust-src-dir: "native"
           cache: true
+          cache-key: ${{ matrix.targets.os }}
 
       - name: Setup Java
         uses: actions/setup-java@v5

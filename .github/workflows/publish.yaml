@@ -51,6 +51,7 @@ jobs:
           components: rustfmt, clippy
           rust-src-dir: "native"
           cache: true
+          cache-key: ${{ matrix.targets.os }}
 
       - name: Setup Java
         uses: actions/setup-java@v5

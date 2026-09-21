@@ -3,6 +3,7 @@ package org.jetbrains.desktop.linux.tests
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.jetbrains.desktop.linux.Application
 import org.jetbrains.desktop.linux.ApplicationConfig
 import org.jetbrains.desktop.linux.Color
@@ -187,31 +188,25 @@ internal class SwayWm {
     fun getVersion(): WmVersion {
         val swayVersion = getSwayVersion()
 
-        val checkWindowCapabilities: (WindowCapabilities) -> Unit =
-            if (swayVersion.major > 1 || swayVersion.minor > 11 || (swayVersion.minor == 11 && swayVersion.patch > 0)) {
-                { capabilities ->
-                    assertFalse(capabilities.windowMenu)
-                    assertFalse(capabilities.maximize)
-                    assertTrue(capabilities.fullscreen)
-                    assertFalse(capabilities.minimize)
-                }
-            } else if (swayVersion.major == 1 && (swayVersion.minor == 10 || (swayVersion.minor == 11 && swayVersion.patch == 0))) {
+        val checkWindowCapabilities: (WindowCapabilities) -> Unit = { capabilities ->
+            if (capabilities.minimize) {
+                assertEquals(1, swayVersion.major)
+                assertThat(swayVersion.minor).isLessThanOrEqualTo(9)
+                assertTrue(capabilities.windowMenu)
+                assertTrue(capabilities.maximize)
+                assertTrue(capabilities.fullscreen)
+            } else if (capabilities.maximize) {
+                assertEquals(1, swayVersion.major)
                 // See https://github.com/swaywm/sway/commit/516a3de4ca6c2378b875f62ffa6008d1cfa0cba9
                 // and https://github.com/swaywm/sway/commit/c5456be7506adece2cdf922ed6d919db597944ab
-                { capabilities ->
-                    assertTrue(capabilities.windowMenu)
-                    assertTrue(capabilities.maximize)
-                    assertFalse(capabilities.fullscreen)
-                    assertFalse(capabilities.minimize)
-                }
+                assertThat(swayVersion.minor).isBetween(10, 11)
+                assertTrue(capabilities.windowMenu)
+                assertFalse(capabilities.fullscreen)
             } else {
-                { capabilities ->
-                    assertTrue(capabilities.windowMenu)
-                    assertTrue(capabilities.maximize)
-                    assertTrue(capabilities.fullscreen)
-                    assertTrue(capabilities.minimize)
-                }
+                assertFalse(capabilities.windowMenu)
+                assertTrue(capabilities.fullscreen)
             }
+        }
 
         // https://github.com/swaywm/sway/commit/9162b536f69cb69466fb4fcfa24d282fa54b122b
         val checkWindowScale: (WmOutputState, Scale) -> Unit = if (swayVersion.major > 1 || swayVersion.minor > 8) {
@@ -944,7 +939,12 @@ private data class MakoList(val data: List<List<Entry>>) {
 }
 
 private fun getMakoList(): MakoList? {
-    val json = runCommandWithOutput(listOf("makoctl", "list"))?.decodeToString() ?: return null
+    val json = runCommandWithOutput(
+        listOf(
+            "busctl", "-j", "--user", "call",
+            "org.freedesktop.Notifications", "/fr/emersion/Mako", "fr.emersion.Mako", "--", "ListNotifications",
+        ),
+    )?.decodeToString() ?: return null
     val moshi: Moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
     val jsonAdapter = moshi.adapter(MakoList::class.java)
     return jsonAdapter.fromJson(json)
@@ -2376,7 +2376,16 @@ class WaylandTests : WaylandTestsBase() {
 
             ui {
                 eventQueue.poll()?.let { event ->
-                    expectedConfigureEvent.assertEquals(event, "fullscreen configure, useWm=$useWm")
+                    val configureEvent = if (event is Event.WindowScreenChange) {
+                        assertEquals(windowParams.windowId, event.windowId)
+                        assertEquals(screen.screenId, event.newScreenId)
+                        eventQueue.poll()
+                    } else {
+                        event
+                    }
+                    if (configureEvent != null) {
+                        expectedConfigureEvent.assertEquals(configureEvent, "fullscreen configure, useWm=$useWm")
+                    }
                 }
             }
 
@@ -2456,6 +2465,10 @@ class WaylandTests : WaylandTestsBase() {
 
         val errors = mutableListOf<String>()
         for (shape in PointerShape.entries) {
+            // https://gitlab.gnome.org/GNOME/adwaita-icon-theme/-/merge_requests/84
+            if (shape == PointerShape.Move) {
+                continue
+            }
             ui { window.setPointerShape(shape) }
             lastDrawEvents.clear()
             awaitEventOfType<Event.WindowDraw> { true }
