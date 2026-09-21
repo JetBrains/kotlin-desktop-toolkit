@@ -3300,11 +3300,10 @@ text/plain;charset=utf-8
 
             val initialWindowData = createWindowAndWaitForFocus(defaultWindowParams())
 
-            initialWindowData.otherEvents.firstNotNullOfOrNull { it as? Event.DataTransferAvailable }
-                ?: awaitEventOfType<Event.DataTransferAvailable> { true }.let { event ->
-                    assertEquals(DataSource.Clipboard, event.dataSource)
-                    assertEquals(mimeTypes, event.mimeTypes)
-                }
+            val dataTransferAvailableEvent = initialWindowData.otherEvents.firstNotNullOfOrNull { it as? Event.DataTransferAvailable }
+                ?: awaitEventOfType<Event.DataTransferAvailable> { true }
+            assertEquals(DataSource.Clipboard, dataTransferAvailableEvent.dataSource)
+            assertEquals(mimeTypes, dataTransferAvailableEvent.mimeTypes)
 
             val availableMimeTypes = ui { app.clipboardGetAvailableMimeTypes() }
             assertEquals(mimeTypes, availableMimeTypes)
@@ -3482,11 +3481,10 @@ text/plain;charset=utf-8
 
             val initialWindowData = createWindowAndWaitForFocus(defaultWindowParams())
 
-            initialWindowData.otherEvents.firstNotNullOfOrNull { it as? Event.DataTransferAvailable }
-                ?: awaitEventOfType<Event.DataTransferAvailable> { true }.let { event ->
-                    assertEquals(DataSource.PrimarySelection, event.dataSource)
-                    assertEquals(listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE), event.mimeTypes)
-                }
+            val dataTransferAvailableEvent = initialWindowData.otherEvents.firstNotNullOfOrNull { it as? Event.DataTransferAvailable }
+                ?: awaitEventOfType<Event.DataTransferAvailable> { true }
+            assertEquals(DataSource.PrimarySelection, dataTransferAvailableEvent.dataSource)
+            assertEquals(listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE), dataTransferAvailableEvent.mimeTypes)
 
             val availableMimeTypes = ui { app.primarySelectionGetAvailableMimeTypes() }
             assertEquals(listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE), availableMimeTypes)
@@ -4340,7 +4338,7 @@ text/plain;charset=utf-8
             ui { window.startResize(mouseDown.serial, WindowResizeEdge.TopLeft) }
             awaitEventOfType<Event.MouseExited> { true }
             moveMouseTo(mousePos.shifted(moveX, moveY))
-            awaitEventOfType<Event.WindowConfigure> { event ->
+            awaitEventOfType<Event.WindowConfigure>(msg = "Wait for window size $expectedSize") { event ->
                 event.active && event.size == expectedSize
             }
         }
