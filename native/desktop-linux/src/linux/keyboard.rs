@@ -12,7 +12,7 @@ use smithay_client_toolkit::{
     seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers, RepeatInfo},
 };
 
-pub fn send_key_down_event(state: &ApplicationState, event: &KeyEvent, serial: EventSerial, is_repeat: bool) {
+pub fn send_key_down_event(state: &ApplicationState, event: &KeyEvent, serial: EventSerial) {
     let code = KeyCode(event.raw_code + 8);
     let key = event.keysym.raw();
     let characters = event.utf8.as_ref();
@@ -21,7 +21,6 @@ pub fn send_key_down_event(state: &ApplicationState, event: &KeyEvent, serial: E
         code,
         characters: BorrowedUtf8::optional(characters.filter(|&s| !s.is_empty())),
         key,
-        is_repeat,
     });
 }
 
@@ -63,11 +62,11 @@ impl KeyboardHandler for ApplicationState {
     fn press_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _keyboard: &WlKeyboard, serial: u32, event: KeyEvent) {
         self.cancel_key_repeat();
         self.last_keyboard_event_serial = Some(serial);
-        send_key_down_event(self, &event, EventSerial(serial), false);
+        send_key_down_event(self, &event, EventSerial(serial));
     }
 
     fn repeat_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _keyboard: &WlKeyboard, serial: u32, event: KeyEvent) {
-        send_key_down_event(self, &event, EventSerial(serial), true);
+        send_key_down_event(self, &event, EventSerial(serial));
     }
 
     fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlKeyboard, serial: u32, event: KeyEvent) {

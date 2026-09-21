@@ -383,7 +383,7 @@ impl SeatHandler for ApplicationState {
                                 state
                                     .loop_handle
                                     .insert_source(timer, move |_time, _metadata, state| {
-                                        send_key_down_event(state, &event, EventSerial(0), true);
+                                        send_key_down_event(state, &event, EventSerial(0));
                                         TimeoutAction::Drop
                                     })
                                     .unwrap(),
