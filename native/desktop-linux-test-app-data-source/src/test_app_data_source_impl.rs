@@ -1,4 +1,3 @@
-use desktop_gtk::gtk::data_transfer_api::DataSource;
 use gdk4::prelude::OutputStreamExtManual;
 use gtk4::prelude::{
     ApplicationExt, ApplicationExtManual, DisplayExt, DragExt, EventControllerExt, FileExt, GtkWindowExt, InputStreamExtManual, NativeExt,
@@ -18,6 +17,13 @@ fn log(msg: &str) {
     stdout.write_all(msg.as_bytes()).expect("eprint write_all msg");
     stdout.write_all(b"\n").expect("eprint write_all newline");
     stdout.flush().expect("eprint flush");
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DataSource {
+    Clipboard,
+    DragAndDrop,
+    PrimarySelection,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

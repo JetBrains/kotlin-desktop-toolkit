@@ -1,0 +1,19 @@
+[package]
+name = "desktop-linux-test-app-wlr-virtual-input"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+log4rs.workspace = true
+
+[target.'cfg(target_os="linux")'.dependencies]
+smithay-client-toolkit = "0.21.1"
+tempfile = "3.27.0"
+tiny_http = "0.12.0"
+url = "2.5.8"
+xkbcommon = "0.9.0"

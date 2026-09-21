@@ -482,13 +482,31 @@ dependencies = [
  "log4rs",
  "skia-safe",
  "smithay-client-toolkit",
- "tempfile",
- "tiny_http",
  "tokio",
  "url",
  "wayland-egl",
- "xkbcommon 0.9.0",
  "zbus",
+]
+
+[[package]]
+name = "desktop-linux-test-app-data-source"
+version = "0.1.0"
+dependencies = [
+ "gtk4",
+]
+
+[[package]]
+name = "desktop-linux-test-app-wlr-virtual-input"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "log",
+ "log4rs",
+ "smithay-client-toolkit",
+ "tempfile",
+ "tiny_http",
+ "url",
+ "xkbcommon 0.9.0",
 ]
 
 [[package]]
