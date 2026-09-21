@@ -958,6 +958,7 @@ configurations["testGtkRuntimeOnly"].extendsFrom(configurations.runtimeOnly.get(
 
 dependencies {
     testGtkImplementation(libs.junit.jupiter)
+    testGtkImplementation(libs.assertj.core)
     testGtkImplementation("org.jetbrains.skiko:skiko-awt-runtime-$skikoTargetOs-$skikoTargetArch:$skikoVersion")
     testGtkImplementation("com.github.moaxcp.x11:x11-client:0.22.0")
     testGtkImplementation("com.squareup.moshi:moshi-kotlin:1.15.2")
@@ -1024,6 +1025,7 @@ configurations["testWaylandRuntimeOnly"].extendsFrom(configurations.runtimeOnly.
 
 dependencies {
     testWaylandImplementation(libs.junit.jupiter)
+    testWaylandImplementation(libs.assertj.core)
     testWaylandImplementation("org.jetbrains.skiko:skiko-awt-runtime-$skikoTargetOs-$skikoTargetArch:$skikoVersion")
     testWaylandImplementation("com.squareup.moshi:moshi-kotlin:1.15.2")
     testWaylandRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -1309,6 +1311,7 @@ x-scheme-handler/https=test_app_browser.desktop;
                 buildMap {
                     if (headless) {
                         put("WLR_BACKENDS", "headless")
+                        put("WLR_RENDERER", "pixman")
                     } else {
                         val orgXdgRuntimeDir = env["XDG_RUNTIME_DIR"]!!
                         val orgWaylandDisplay = env["WAYLAND_DISPLAY"]!!

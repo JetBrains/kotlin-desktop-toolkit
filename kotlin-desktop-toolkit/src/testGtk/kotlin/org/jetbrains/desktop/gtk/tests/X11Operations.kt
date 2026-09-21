@@ -39,10 +39,17 @@ import java.nio.ByteOrder
 import java.nio.IntBuffer
 import kotlin.math.roundToInt
 
-internal data class GlobalPosition<T>(
-    val x: T,
-    val y: T,
+private data class GlobalPhysicalPosition(
+    val x: PhysicalPixels,
+    val y: PhysicalPixels,
 )
+
+internal data class GlobalLogicalPosition(
+    val x: LogicalPixels,
+    val y: LogicalPixels,
+) {
+    constructor(x: LogicalPixelsInt, y: LogicalPixelsInt) : this(x.toLogicalPixels(), y.toLogicalPixels())
+}
 
 internal data class WmVersion(
     val name: String,
@@ -233,7 +240,7 @@ private object X11Helper {
         )
     }
 
-    fun clientAreaPosition(x11: X11Client, window: Int, transform: TransformData): GlobalPosition<PhysicalPixels> {
+    fun clientAreaPosition(x11: X11Client, window: Int, transform: TransformData): GlobalPhysicalPosition {
         val translated = x11.send(
             TranslateCoordinates
                 .builder()
@@ -255,7 +262,7 @@ private object X11Helper {
         ProcessBuilder("xprop", "-id", window.toString()).start().inputReader().readLines().let {
             log(it.joinToString("\n"))
         }
-        return GlobalPosition(
+        return GlobalPhysicalPosition(
             x = PhysicalPixels(geometryX) + transform.x,
             y = PhysicalPixels(geometryY) + transform.y,
         )
@@ -455,16 +462,17 @@ internal class X11WindowOperations(
         sendClientMessageToRootWindow(x11, window, "_NET_CLOSE_WINDOW")
     }
 
-    fun moveTo(pos: GlobalPosition<LogicalPixels>) {
+    fun moveWindowTo(pos: GlobalLogicalPosition) {
         val x = logicalToPhysical(pos.x)
         val y = logicalToPhysical(pos.y)
         x11.send(ConfigureWindow.builder().window(window).x(x.rawPhysical).y(y.rawPhysical).build())
         x11.sync()
         waitUntilTrue("Window $window moved to $pos") {
-            val actualPosition = framePosition()
-            (actualPosition == pos).also {
+            val actualClientAreaPosition = clientAreaPosition()
+            val actualFramePosition = framePosition()
+            (actualClientAreaPosition == pos || actualFramePosition == pos).also {
                 if (!it) {
-                    log("moveTo: actualPosition ($actualPosition) != $pos")
+                    log("moveWindowTo: actual client area ($actualClientAreaPosition) and frame ($actualFramePosition) position != $pos")
                 }
             }
         }
@@ -515,15 +523,15 @@ internal class X11WindowOperations(
         return TransformData(x = logicalToPhysical(transformX), y = logicalToPhysical(transformY))
     }
 
-    fun clientAreaPosition(): GlobalPosition<LogicalPixels> {
+    fun clientAreaPosition(): GlobalLogicalPosition {
         val pos = X11Helper.clientAreaPosition(x11, window, getPhysicalTransform())
-        return GlobalPosition(
+        return GlobalLogicalPosition(
             x = rawPhysicalToLogical(pos.x.rawPhysical),
             y = rawPhysicalToLogical(pos.y.rawPhysical),
         )
     }
 
-    fun framePosition(): GlobalPosition<LogicalPixels> {
+    fun framePosition(): GlobalLogicalPosition {
         val netWmExtents = X11Helper.getNetWmExtents(x11, window)
         val transform = if (netWmExtents == null) {
             TransformData(PhysicalPixels.Zero, PhysicalPixels.Zero)
@@ -534,7 +542,7 @@ internal class X11WindowOperations(
             )
         }
         val pos = X11Helper.clientAreaPosition(x11, window, transform)
-        return GlobalPosition(
+        return GlobalLogicalPosition(
             x = rawPhysicalToLogical(pos.x.rawPhysical),
             y = rawPhysicalToLogical(pos.y.rawPhysical),
         )

@@ -587,7 +587,7 @@ private fun getPrimarySelectionContent(format: String): ByteArray? {
 }
 
 internal data class TestMousePosition(
-    val base: GlobalPosition<LogicalPixels>,
+    val base: GlobalLogicalPosition,
     val offsetX: LogicalPixels = LogicalPixels.Zero,
     val offsetY: LogicalPixels = LogicalPixels.Zero,
 ) {
@@ -788,7 +788,7 @@ abstract class X11TestsBase {
         internal const val HTML_TEXT_MIME_TYPE = "text/html"
         internal const val PNG_MIME_TYPE = "image/png"
 
-        internal val WINDOW_POS_TOP_LEFT = GlobalPosition(LogicalPixels(1.0), LogicalPixels(1.0))
+        internal val WINDOW_POS_TOP_LEFT = GlobalLogicalPosition(LogicalPixels(1.0), LogicalPixels(100.0))
 
         private val appExecutor = SingleThreadTaskQueue()
 
@@ -817,7 +817,7 @@ abstract class X11TestsBase {
     val app by lazy { Application(APP_ID) }
     private var appExecutingResult: Future<Error?>? = null
     val eventQueue = LinkedBlockingQueue<Event>()
-    internal lateinit var screenBottomRight: GlobalPosition<LogicalPixels>
+    internal lateinit var screenBottomRight: GlobalLogicalPosition
 
     internal fun defaultApplicationConfig(
         queryDragAndDropTarget: (DragAndDropQueryData) -> DragAndDropQueryResponse = { _ -> DragAndDropQueryResponse(emptyList()) },
@@ -888,7 +888,7 @@ abstract class X11TestsBase {
         }
 
         val screen = app.allScreens().screens.first()
-        screenBottomRight = GlobalPosition(screen.size.width.toLogicalPixels(), screen.size.height.toLogicalPixels())
+        screenBottomRight = GlobalLogicalPosition(screen.size.width, screen.size.height)
 
         wm = X11Wm(screen.scale)
         wm.resetMousePosition()
@@ -1229,10 +1229,10 @@ abstract class X11TestsBase {
     internal fun moveTestAppWindowTo(
         testAppData: TestAppData,
         x: LogicalPixelsInt,
-        y: LogicalPixelsInt = LogicalPixelsInt.Zero,
-    ): GlobalPosition<LogicalPixels> {
+        y: LogicalPixelsInt = LogicalPixelsInt(100),
+    ): GlobalLogicalPosition {
         val operations = wm.getWindowByTitle(testAppData.windowTitle) { Pair(LogicalPixels.Zero, LogicalPixels.Zero) }
-        operations.moveTo(GlobalPosition(x.toLogicalPixels(), y.toLogicalPixels()))
+        operations.moveWindowTo(GlobalLogicalPosition(x, y))
         return operations.clientAreaPosition()
     }
 
@@ -3204,7 +3204,7 @@ text/plain;charset=utf-8
         }
     }
 
-    private fun getExpectedImePopupPositionLogLine(windowPosition: GlobalPosition<LogicalPixels>, pos: LogicalRect, scale: Scale): String {
+    private fun getExpectedImePopupPositionLogLine(windowPosition: GlobalLogicalPosition, pos: LogicalRect, scale: Scale): String {
         log("windowPosition=$windowPosition")
         log("pos=$pos")
         log("scale=$scale")
@@ -3239,7 +3239,7 @@ text/plain;charset=utf-8
     private fun assertImePopupPosition(
         actualLine: String?,
         pos: LogicalRect,
-        windowPosition: GlobalPosition<LogicalPixels>,
+        windowPosition: GlobalLogicalPosition,
         windowSize: LogicalSize,
         scale: Scale,
     ) {
@@ -4120,7 +4120,7 @@ text/plain;charset=utf-8
         val windowParams = defaultWindowParams()
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
         val window = initialWindowData.window
-        initialWindowData.operations.moveTo(WINDOW_POS_TOP_LEFT)
+        initialWindowData.operations.moveWindowTo(WINDOW_POS_TOP_LEFT)
 
         withDropTargetTestApp { testAppData ->
             val testAppClientArea = moveTestAppWindowTo(
@@ -4202,7 +4202,7 @@ text/plain;charset=utf-8
 
         val windowParams = defaultWindowParams()
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
-        initialWindowData.operations.moveTo(WINDOW_POS_TOP_LEFT)
+        initialWindowData.operations.moveWindowTo(WINDOW_POS_TOP_LEFT)
 
         val mouseLocationForOurWindow =
             TestMousePosition(initialWindowData.operations.clientAreaPosition(), LogicalPixels(50.0), LogicalPixels(50.0))
@@ -4314,7 +4314,7 @@ text/plain;charset=utf-8
 
         val windowParams = defaultWindowParams()
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
-        initialWindowData.operations.moveTo(WINDOW_POS_TOP_LEFT)
+        initialWindowData.operations.moveWindowTo(WINDOW_POS_TOP_LEFT)
         val window = initialWindowData.window
 
         withBlankWindowTestApp { testAppData ->
