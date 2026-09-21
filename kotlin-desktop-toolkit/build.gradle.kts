@@ -282,6 +282,7 @@ val collectNativeArtifactsTaskByTarget = compileNativeTaskByTarget.mapValues { (
 
 val installCbindgenTask = tasks.register<InstallCargoProgram>("installCbindgen") {
     dependsOn(installRustTaskByPlatform[hostPlatform()]!!)
+    rustToolchainFile = nativeDir.file("rust-toolchain")
     cargoCommand = providers.cargoCommand().get()
     crate = "cbindgen"
     version = "0.29.4"
