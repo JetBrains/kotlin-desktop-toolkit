@@ -2828,7 +2828,6 @@ class WaylandTests : WaylandTestsBase() {
             awaitEvent({ it as? Event.KeyDown }, timeout = 100.milliseconds) { event ->
                 assertEquals(KeyCode.Tab, event.keyCode.value)
                 assertEquals(KeySym.Tab, event.key.value)
-                assertFalse(event.isRepeat)
                 assertEquals("\t", event.characters)
                 true
             }
@@ -2864,7 +2863,6 @@ class WaylandTests : WaylandTestsBase() {
             awaitEvent({ it as? Event.KeyDown }, timeout = 100.milliseconds) { event ->
                 assertEquals(KeyCode.Tab, event.keyCode.value)
                 assertEquals(KeySym.Tab, event.key.value)
-                assertFalse(event.isRepeat)
                 assertEquals("\t", event.characters)
                 true
             }

@@ -828,7 +828,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 keyCode = KeyCode(NativeEvent_NativeKeyDown_Body.code(body).toUInt()),
                 characters = characters,
                 key = KeySym(NativeEvent_NativeKeyDown_Body.key(body).toUInt()),
-                isRepeat = NativeEvent_NativeKeyDown_Body.is_repeat(body),
             )
         }
 

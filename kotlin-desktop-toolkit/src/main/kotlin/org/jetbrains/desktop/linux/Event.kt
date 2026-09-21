@@ -269,7 +269,6 @@ public sealed class Event {
         val keyCode: KeyCode,
         val characters: String?,
         val key: KeySym,
-        val isRepeat: Boolean,
     ) : Event()
 
     @ConsistentCopyVisibility

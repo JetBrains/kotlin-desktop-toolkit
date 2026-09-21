@@ -319,7 +319,6 @@ pub enum Event<'a> {
         characters: BorrowedUtf8<'a>,
         code: KeyCode,
         key: u32,
-        is_repeat: bool,
     },
 
     /// Modifier keys (e.g Ctrl, Shift, etc) are never reported. Use `ModifiersChanged` for them.

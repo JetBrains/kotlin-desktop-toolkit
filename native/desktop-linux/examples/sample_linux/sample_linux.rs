@@ -198,7 +198,6 @@ fn on_keydown(
     characters: Option<&str>,
     code: KeyCode,
     _key: u32,
-    _is_repeat: bool,
 ) -> Option<Action> {
     const KEY_MODIFIER_NONE: KeyModifiers = KeyModifiers::empty();
     const KEY_MODIFIER_CTRL: KeyModifiers = KeyModifiers::Ctrl;
@@ -654,7 +653,6 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
                 characters,
                 code,
                 key,
-                is_repeat,
             } => {
                 if let Some(action) = on_keydown(
                     app_ptr,
@@ -663,7 +661,6 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
                     characters.get_optional("KeyDownEvent: characters").unwrap(),
                     *code,
                     *key,
-                    *is_repeat,
                 ) {
                     actions.push(action);
                 }
