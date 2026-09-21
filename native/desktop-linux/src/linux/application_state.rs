@@ -11,6 +11,7 @@ use crate::linux::{
     window::SimpleWindow,
 };
 use anyhow::Context;
+use calloop::timer::TimeoutAction;
 use desktop_common::ffi_utils::BorrowedUtf8;
 use khronos_egl as egl;
 use log::{debug, info, warn};
@@ -69,7 +70,9 @@ use smithay_client_toolkit::{
     //
 };
 use std::collections::HashMap;
+use std::num::NonZeroU32;
 use std::rc::Rc;
+use std::time::Duration;
 
 /// cbindgen:ignore
 pub type EglInstance = khronos_egl::DynamicInstance<khronos_egl::EGL1_0>;
@@ -154,6 +157,8 @@ pub struct ApplicationState {
     pub pending_text_input_event: PendingTextInputEvent,
     pub notification_action_sender: Option<tokio::sync::mpsc::Sender<NotificationAction>>,
     pub calloop_scheduler: calloop::futures::Scheduler<()>,
+    pub key_repeat_rate: Option<NonZeroU32>,
+    pub pending_key_repeat: Option<calloop::RegistrationToken>,
 }
 
 impl ApplicationState {
@@ -225,6 +230,8 @@ impl ApplicationState {
             pending_text_input_event: PendingTextInputEvent::default(),
             notification_action_sender: None,
             calloop_scheduler,
+            key_repeat_rate: None,
+            pending_key_repeat: None,
         })
     }
 
@@ -331,6 +338,12 @@ impl ApplicationState {
         }
         Ok(())
     }
+
+    pub fn cancel_key_repeat(&mut self) {
+        if let Some(pending_key_repeat) = self.pending_key_repeat.take() {
+            self.loop_handle.remove(pending_key_repeat);
+        }
+    }
 }
 
 impl SeatHandler for ApplicationState {
@@ -362,8 +375,19 @@ impl SeatHandler for ApplicationState {
                     Box::new(|state, wl_kbd, event| {
                         // Since wl_keyboard version 10, [smithay_client_toolkit::seat::keyboard::KeyboardHandler::repeat_key]
                         // is used instead.
-                        if wl_kbd.version() < 10 {
-                            send_key_down_event(state, &event, EventSerial(0), true);
+                        if wl_kbd.version() < 10
+                            && let Some(repeat_rate) = state.key_repeat_rate
+                        {
+                            let timer = calloop::timer::Timer::from_duration(Duration::from_millis(u64::from(repeat_rate.get()) / 2u64));
+                            state.pending_key_repeat = Some(
+                                state
+                                    .loop_handle
+                                    .insert_source(timer, move |_time, _metadata, state| {
+                                        send_key_down_event(state, &event, EventSerial(0), true);
+                                        TimeoutAction::Drop
+                                    })
+                                    .unwrap(),
+                            );
                         }
                     }),
                 )

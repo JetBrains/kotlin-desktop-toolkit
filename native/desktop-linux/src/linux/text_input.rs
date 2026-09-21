@@ -117,6 +117,7 @@ impl Dispatch<ZwpTextInputV3, ()> for ApplicationState {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
+        this.cancel_key_repeat();
         match &event {
             zwp_text_input_v3::Event::Enter { surface } => {
                 debug!("zwp_text_input_v3::Event::Enter: {}", surface.id());

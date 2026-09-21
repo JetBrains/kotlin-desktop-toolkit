@@ -9,7 +9,7 @@ use smithay_client_toolkit::{
         Connection, QueueHandle,
         protocol::{wl_keyboard::WlKeyboard, wl_surface::WlSurface},
     },
-    seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
+    seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers, RepeatInfo},
 };
 
 pub fn send_key_down_event(state: &ApplicationState, event: &KeyEvent, serial: EventSerial, is_repeat: bool) {
@@ -51,6 +51,7 @@ impl KeyboardHandler for ApplicationState {
     }
 
     fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlKeyboard, surface: &WlSurface, serial: u32) {
+        self.cancel_key_repeat();
         if let Some(window_id) = self.get_window_id(surface) {
             self.send_event(&Event::WindowKeyboardLeave {
                 serial: EventSerial(serial),
@@ -60,6 +61,7 @@ impl KeyboardHandler for ApplicationState {
     }
 
     fn press_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _keyboard: &WlKeyboard, serial: u32, event: KeyEvent) {
+        self.cancel_key_repeat();
         self.last_keyboard_event_serial = Some(serial);
         send_key_down_event(self, &event, EventSerial(serial), false);
     }
@@ -69,6 +71,7 @@ impl KeyboardHandler for ApplicationState {
     }
 
     fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlKeyboard, serial: u32, event: KeyEvent) {
+        self.cancel_key_repeat();
         self.last_keyboard_event_serial = Some(serial);
         debug!("KeyboardHandler::release_key");
         self.send_event(&Event::KeyUp {
@@ -88,6 +91,7 @@ impl KeyboardHandler for ApplicationState {
         _raw_modifiers: RawModifiers,
         _layout: u32,
     ) {
+        self.cancel_key_repeat();
         self.last_keyboard_event_serial = Some(serial);
         let event = {
             let mut key_modifiers = KeyModifiers::empty();
@@ -115,5 +119,12 @@ impl KeyboardHandler for ApplicationState {
             }
         };
         self.send_event(&event);
+    }
+
+    fn update_repeat_info(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _keyboard: &WlKeyboard, info: RepeatInfo) {
+        self.key_repeat_rate = match info {
+            RepeatInfo::Repeat { rate, delay: _ } => Some(rate),
+            RepeatInfo::Disable => None,
+        };
     }
 }
