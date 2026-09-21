@@ -369,7 +369,7 @@ impl SeatHandler for ApplicationState {
             self.keyboard = Some(keyboard);
 
             if let Some(text_input_manager) = self.text_input_manager.as_ref() {
-                text_input_manager.get_text_input(&seat, qh, 42);
+                text_input_manager.get_text_input(&seat, qh, ());
             }
         }
 
