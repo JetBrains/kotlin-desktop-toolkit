@@ -521,7 +521,7 @@ abstract class X11TestEnv :
     private var startedProcesses = mutableListOf<Pair<Process, String>>()
     private var logFiles = mutableListOf<Path>()
 
-    private val homeTempDir by lazy { Files.createTempDirectory("test_home") }
+    private val homeTempDir by lazy { Files.createTempDirectory("test_home_x11") }
     private val xdgConfigHome by lazy { homeTempDir.resolve(".config").createDirectories() }
     private val xdgDataHome by lazy { homeTempDir.resolve(".local/share").createDirectories() }
     private val xdgRuntimeDir by lazy {
@@ -1128,7 +1128,7 @@ fun configureTestTask(test: Test, backends: List<Backend>) {
             }
         }
 
-        val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
+        val logFile = layout.buildDirectory.file("test-logs/$name-desktop_native.log")
         jvmArgumentProviders.add(
             CommandLineArgumentProvider {
                 listOf(
@@ -1174,7 +1174,7 @@ abstract class WaylandTestEnv :
     private var startedProcesses = mutableListOf<Pair<Process, String>>()
     private var logFiles = mutableListOf<Path>()
 
-    private val homeTempDir by lazy { Files.createTempDirectory("test_home") }
+    private val homeTempDir by lazy { Files.createTempDirectory("test_home_wayland") }
     private val xdgConfigHome by lazy { homeTempDir.resolve(".config").createDirectories() }
     private val xdgDataHome by lazy { homeTempDir.resolve(".local/share").createDirectories() }
     private val xdgRuntimeDir by lazy {
