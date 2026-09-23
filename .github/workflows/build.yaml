@@ -64,8 +64,18 @@ jobs:
         if: always() # Ensure this step runs even if the test step fails
         uses: dorny/test-reporter@v3
         with:
-          name: Tests Report (${{ matrix.os }})
+          name: Tests Report (${{ matrix.targets.os }})
           path: kotlin-desktop-toolkit/build/test-results/test/*.xml,kotlin-desktop-toolkit/build/test-results/testGtk/*.xml,kotlin-desktop-toolkit/build/test-results/testWayland/*.xml
           reporter: java-junit
           fail-on-empty: false
           fail-on-error: false
+
+      - name: Save Test Artifacts
+        if: always() # Ensure this step runs even if the test step fails
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-artifacts-${{ matrix.targets.os }}
+          if-no-files-found: error
+          path: |
+            kotlin-desktop-toolkit/build/test-logs/
+            /tmp/test_home*

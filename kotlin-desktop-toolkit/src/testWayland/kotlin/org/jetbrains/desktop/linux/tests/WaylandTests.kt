@@ -1193,6 +1193,7 @@ abstract class WaylandTestsBase {
             KotlinDesktopToolkit.init(
                 libraryFolderPath = Path.of(System.getProperty("kdt.linux.library.folder.path")!!),
                 consoleLogLevel = LogLevel.Debug,
+                fileLogLevel = LogLevel.Debug,
                 useDebugBuild = true,
             )
         }

@@ -798,6 +798,7 @@ abstract class X11TestsBase {
             KotlinDesktopToolkit.init(
                 libraryFolderPath = Path.of(System.getProperty("kdt.gtk.library.folder.path")!!),
                 consoleLogLevel = LogLevel.Debug,
+                fileLogLevel = LogLevel.Debug,
                 useDebugBuild = true,
             )
         }
