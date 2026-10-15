@@ -231,7 +231,7 @@ internal class SwayWm {
 
     private fun runSwayMsg(title: String, cmd: String) {
         val command = listOf("swaymsg", "[title=\"$title\"] $cmd")
-        waitUntilEq(true, waitStepMs = 100) {
+        waitUntilTrue("swaymsg $cmd", waitStep = 100.milliseconds) {
             val output = runCommandWithOutput(command)?.decodeToString()
             output?.contains("No matching node") == false
         }
@@ -535,24 +535,50 @@ private fun runCommand(command: List<String>, timeout: Duration = 5.seconds) {
     runCommandImpl(command, timeout).getOrThrow().deleteIfExists()
 }
 
-private fun <T> waitUntilEq(
-    expectedValue: T,
+private fun <T> waitUntilCheck(
+    msg: (T) -> String,
     timeout: Duration = 5.seconds,
-    waitStepMs: Long = 10,
-    msg: String? = null,
-    actualValueGetter: () -> T,
-) {
+    waitStep: Duration = 10.milliseconds,
+    getter: () -> T,
+    predicate: (T) -> Boolean,
+): Result<T> {
     val startTime = TimeSource.Monotonic.markNow()
-    var actualValue = actualValueGetter()
+    var actualValue = getter()
     while (startTime.elapsedNow() < timeout) {
-        if (actualValue == expectedValue) {
-            return
+        if (predicate(actualValue)) {
+            return Result.success(actualValue)
         }
-        Thread.sleep(waitStepMs)
-        actualValue = actualValueGetter()
+        Thread.sleep(waitStep.inWholeMilliseconds)
+        actualValue = getter()
     }
-    val msg = msg?.let { ", message: $it" } ?: ""
-    fail(withTimestamp("waitUntilEq timed out: Expected: $expectedValue, actual: $actualValue$msg"))
+    return Result.failure(Error(withTimestamp("${msg(actualValue)} timed out: last received: $actualValue")))
+}
+
+internal fun <T> waitUntil(
+    msg: (T) -> String,
+    timeout: Duration = 5.seconds,
+    waitStep: Duration = 10.milliseconds,
+    getter: () -> T,
+    predicate: (T) -> Boolean,
+): T {
+    val res = waitUntilCheck(msg = msg, timeout = timeout, getter = getter, predicate = predicate)
+    return res.getOrThrow()
+}
+
+internal fun <T> waitUntil(
+    msg: String,
+    timeout: Duration = 5.seconds,
+    waitStep: Duration = 10.milliseconds,
+    getter: () -> T,
+    predicate: (T) -> Boolean,
+): T {
+    return waitUntil(msg = { msg }, timeout = timeout, getter = getter, predicate = predicate)
+}
+
+internal fun waitUntilTrue(msg: String, timeout: Duration = 5.seconds, waitStep: Duration = 10.milliseconds, getter: () -> Boolean) {
+    waitUntil(msg = msg, timeout = timeout, waitStep = waitStep, getter = getter) { v ->
+        v
+    }
 }
 
 internal data class TestAppData(
@@ -596,7 +622,7 @@ private class TestApp(private val cmd: List<String>) {
             outputFile.deleteIfExists()
             log("Test app closed")
         }.use {
-            waitUntilEq(true) { !process.isAlive || outputFile.fileSize() > 0 }
+            waitUntilTrue("Test app started") { !process.isAlive || outputFile.fileSize() > 0 }
             assertTrue(process.isAlive)
 
             val lines = outputFile.readLines()
@@ -973,7 +999,7 @@ private fun withMako(block: () -> Unit) {
         process.destroy()
     }.use {
         assertTrue(process.isAlive)
-        waitUntilEq(true) { isNotificationServiceRunning() }
+        waitUntilTrue("mako running") { isNotificationServiceRunning() }
         block()
     }
 }
@@ -1577,7 +1603,7 @@ abstract class WaylandTestsBase {
         val otherEvents = mutableListOf<Event>()
         val checklist = Checklist(listOf("configure", "draw", "keyboardEnter", "scale", "screen", "textInput"))
         var drawEventCount = 0
-        waitUntilEq(emptySet()) {
+        waitUntil("createWindowAndWaitForFocus checklist empty", getter = {
             when (val event: Event? = eventQueue.poll(3000, TimeUnit.MILLISECONDS)) {
                 null -> {
                     fail("Timed out waiting for event, unchecked events: ${checklist.uncheckedEntries()}")
@@ -1635,7 +1661,8 @@ abstract class WaylandTestsBase {
                 }
             }
             checklist.uncheckedEntries()
-        }
+        }) { it.isEmpty() }
+
         return InitialWindowData(
             window = window,
             scale = scale,
@@ -1664,7 +1691,7 @@ abstract class WaylandTestsBase {
     internal fun waitForWindowFocusAfterMouseDown(windowId: WindowId): Event.MouseDown {
         val checklist = Checklist(listOf("configure", "keyboardEnter", "mouseDown"))
         var mouseDown: Event.MouseDown? = null
-        waitUntilEq(emptySet()) {
+        waitUntil("waitForWindowFocusAfterMouseDown checklist empty", getter = {
             when (val event: Event? = eventQueue.poll()) {
                 is Event.WindowConfigure -> {
                     assertEquals(windowId, event.windowId)
@@ -1687,7 +1714,7 @@ abstract class WaylandTestsBase {
                 else -> {}
             }
             checklist.uncheckedEntries()
-        }
+        }) { it.isEmpty() }
         return mouseDown!!
     }
 
@@ -1696,9 +1723,9 @@ abstract class WaylandTestsBase {
         return wm.getWindowState(windowTitle).clientArea.pos
     }
 
-    internal fun waitForWindowFocus(windowId: WindowId, msg: String? = null) {
+    internal fun waitForWindowFocus(windowId: WindowId, msg: String) {
         val checklist = Checklist(listOf("configure", "keyboardEnter"))
-        waitUntilEq(emptySet(), msg = msg) {
+        waitUntil(msg, getter = {
             when (val event: Event? = eventQueue.poll()) {
                 is Event.WindowConfigure -> {
                     assertEquals(windowId, event.windowId)
@@ -1715,12 +1742,12 @@ abstract class WaylandTestsBase {
                 else -> {}
             }
             checklist.uncheckedEntries()
-        }
+        }) { it.isEmpty() }
     }
 
     internal fun waitForTestAppFocus(windowId: WindowId, msg: String? = null) {
         val testAppFocusedChecklist = Checklist(listOf("configure", "keyboardLeave"))
-        waitUntilEq(emptySet(), msg = msg) {
+        waitUntil(msg ?: "Wait for test app focus", getter = {
             when (val event: Event? = eventQueue.poll()) {
                 is Event.WindowConfigure -> {
                     assertEquals(windowId, event.windowId)
@@ -1737,7 +1764,7 @@ abstract class WaylandTestsBase {
                 else -> {}
             }
             testAppFocusedChecklist.uncheckedEntries()
-        }
+        }) { it.isEmpty() }
     }
 
     internal fun waitForWindowClosed(windowId: WindowId) {
@@ -2134,7 +2161,7 @@ class WaylandTests : WaylandTestsBase() {
         val remainingChecks = checks.toMutableMap()
         log("checkNextEvents: ${remainingChecks.keys}")
         val otherEvents = mutableListOf<Event>()
-        waitUntilEq(emptySet()) {
+        waitUntil("checkNextEvents", getter = {
             val event = checkNotNull(eventQueue.poll(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)) {
                 withTimestamp("Timed out waiting for event, remaining: ${remainingChecks.keys}")
             }
@@ -2147,7 +2174,7 @@ class WaylandTests : WaylandTestsBase() {
                 remainingChecks.remove(matchedName)
             }
             remainingChecks.keys
-        }
+        }) { it.isEmpty() }
         return otherEvents
     }
 
@@ -2336,10 +2363,10 @@ class WaylandTests : WaylandTestsBase() {
         }
 
         assertEquals(windowTitle, wm.getWindowState(windowTitle).title)
-        "New title 🙂".also {
-            ui { window.setTitle(it) }
-            windowTitle = it
-            waitUntilEq(it) { wm.getWindowState(windowTitle).title }
+        "New title 🙂".also { titleToSet ->
+            ui { window.setTitle(titleToSet) }
+            windowTitle = titleToSet
+            waitUntil<String?>("Window title changed", getter = { wm.getWindowState(windowTitle).title }) { it == titleToSet }
         }
 
         for (useWm in listOf(true, false)) {
@@ -3428,7 +3455,7 @@ text/plain;charset=utf-8
             var uiCallbackCount = 0
             var eventOrNull: Event? = null
             val timeTaken = measureTime {
-                waitUntilEq(true) {
+                waitUntilTrue("Event received") {
                     eventOrNull = eventQueue.poll(10, TimeUnit.MILLISECONDS)
                     ui { uiCallbackCount += 1 }
                     eventOrNull != null
@@ -4725,13 +4752,13 @@ text/plain;charset=utf-8
             mousePos = mousePos.shifted(x = LogicalPixelsInt(10))
             moveMouseTo(mousePos)
             awaitEventOfType<Event.MouseExited> { true }
-            waitUntilEq(true) { dragIconDrawTriggered.isNotEmpty() }
+            waitUntilTrue("Received Event.DragIconDraw") { dragIconDrawTriggered.isNotEmpty() }
 
             mousePos = mousePos.shifted(x = LogicalPixelsInt(10))
             moveMouseTo(mousePos)
             mousePos = mousePos.shifted(x = LogicalPixelsInt(10))
             moveMouseTo(mousePos)
-            waitUntilEq(true) { queryDragAndDropTargetTriggered.isNotEmpty() }
+            waitUntilTrue("queryDragAndDropTarget called") { queryDragAndDropTargetTriggered.isNotEmpty() }
         }
 
         for (e in queryDragAndDropTargetTriggered) {
@@ -5135,8 +5162,10 @@ text/plain;charset=utf-8
         AutoCloseable {
             TEST_APP_BROWSER_LOG_PATH.deleteIfExists()
         }.use {
-            waitUntilEq(true) { TEST_APP_BROWSER_LOG_PATH.exists() }
-            waitUntilEq("startup_id=XDG_ACTIVATION_TOKEN, url=$url\n") { TEST_APP_BROWSER_LOG_PATH.readText() }
+            waitUntilTrue("Log created") { TEST_APP_BROWSER_LOG_PATH.exists() }
+            waitUntil("Log startup_id", getter = { TEST_APP_BROWSER_LOG_PATH.readText() }) {
+                it == "startup_id=XDG_ACTIVATION_TOKEN, url=$url\n"
+            }
         }
         testSuccessful = true
     }
@@ -5151,8 +5180,10 @@ text/plain;charset=utf-8
         AutoCloseable {
             TEST_APP_BROWSER_LOG_PATH.deleteIfExists()
         }.use {
-            waitUntilEq(true) { TEST_APP_BROWSER_LOG_PATH.exists() }
-            waitUntilEq("startup_id=, url=$url\n") { TEST_APP_BROWSER_LOG_PATH.readText() }
+            waitUntilTrue("Log created") { TEST_APP_BROWSER_LOG_PATH.exists() }
+            waitUntil("Log startup_id", getter = { TEST_APP_BROWSER_LOG_PATH.readText() }) {
+                it == "startup_id=, url=$url\n"
+            }
         }
         testSuccessful = true
     }
@@ -5185,26 +5216,26 @@ text/plain;charset=utf-8
         val request1Id = ui { window.requestActivationToken() }
         val activationToken1Event = awaitEvent({ it as? Event.ActivationTokenResponse }) { it.requestId == request1Id }
         ui { app.openFileManager(pathString, activationToken1Event.token) }
-        waitUntilEq(true) { logPath.exists() }
-        waitUntilEq(expectedLogLineWithStartupId) {
-            logPath.readText()
+        waitUntilTrue("Log created") { logPath.exists() }
+        waitUntil(expectedLogLineWithStartupId, getter = { logPath.readText() }) {
+            it == expectedLogLineWithStartupId
         }
         waitForTestAppFocus(windowParams.windowId, msg = "First not active")
         wm.focusWindowWithTitle(windowParams.title)
         waitForWindowFocus(windowParams.windowId, msg = "First active")
 
         ui { app.openFileManager(pathString, null) }
-        waitUntilEq(true) { logPath.exists() }
-        waitUntilEq(expectedLogLineWithoutStartupId) {
-            logPath.readText()
+        waitUntilTrue("Log created (2)") { logPath.exists() }
+        waitUntil(expectedLogLineWithoutStartupId, getter = { logPath.readText() }) {
+            it == expectedLogLineWithoutStartupId
         }
 
         val request2Id = ui { window.requestActivationToken() }
         val activationToken2Event = awaitEvent({ it as? Event.ActivationTokenResponse }) { it.requestId == request2Id }
         ui { app.openFileManager(pathString, activationToken2Event.token) }
-        waitUntilEq(true) { logPath.exists() }
-        waitUntilEq(expectedLogLineWithStartupId) {
-            logPath.readText()
+        waitUntilTrue("Log created (3)") { logPath.exists() }
+        waitUntil(expectedLogLineWithStartupId, getter = { logPath.readText() }) {
+            it == expectedLogLineWithStartupId
         }
         waitForTestAppFocus(windowParams.windowId, msg = "Second not active")
         wm.closeFocusedWindow()
