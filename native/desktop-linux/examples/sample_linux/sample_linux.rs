@@ -633,7 +633,7 @@ fn event_handler_impl(event: &Event) -> (Vec<Action>, AppPtr<'static>) {
                 }
                 _ => {}
             },
-            Event::ModifiersChanged { serial: _, modifiers } => {
+            Event::ModifiersChanged { modifiers } => {
                 state.key_modifiers = *modifiers;
             }
             Event::WindowKeyboardEnter {

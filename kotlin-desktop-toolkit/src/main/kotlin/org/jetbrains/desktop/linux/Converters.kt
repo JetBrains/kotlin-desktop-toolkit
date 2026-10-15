@@ -874,7 +874,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         desktop_linux_h.NativeEvent_ModifiersChanged() -> {
             val body = NativeEvent.modifiers_changed(s)
             Event.ModifiersChanged(
-                serial = EventSerial.fromNative(NativeEvent_NativeModifiersChanged_Body.serial(body)),
                 modifiers = keyModifiersFromNative(NativeEvent_NativeModifiersChanged_Body.modifiers(body)),
             )
         }

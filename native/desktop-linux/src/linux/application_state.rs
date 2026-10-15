@@ -316,10 +316,10 @@ impl ApplicationState {
             && let Some(keyboard) = &self.keyboard
             && let Some(keyboard_data) = keyboard.data::<KeyboardData<Self, ()>>()
         {
-            debug!("Using keyboard event serial");
+            debug!("Using keyboard event serial ({keyboard_event_serial})");
             Some((keyboard_data.seat(), keyboard_event_serial))
         } else if let Some(pointer_event_seat_and_serial) = pointer_event_seat_and_serial {
-            debug!("Using pointer event serial");
+            debug!("Using pointer event serial ({})", pointer_event_seat_and_serial.1);
             Some(pointer_event_seat_and_serial)
         } else {
             None

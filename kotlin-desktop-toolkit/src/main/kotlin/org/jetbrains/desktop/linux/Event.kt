@@ -279,10 +279,7 @@ public sealed class Event {
     ) : Event()
 
     @ConsistentCopyVisibility
-    public data class ModifiersChanged internal constructor(
-        val serial: EventSerial,
-        val modifiers: Set<KeyModifiers>,
-    ) : Event()
+    public data class ModifiersChanged internal constructor(val modifiers: Set<KeyModifiers>) : Event()
 
     @ConsistentCopyVisibility
     public data class MouseMoved internal constructor(

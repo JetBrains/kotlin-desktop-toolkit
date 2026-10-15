@@ -329,7 +329,6 @@ pub enum Event<'a> {
     },
 
     ModifiersChanged {
-        serial: EventSerial,
         modifiers: KeyModifiers,
     },
     MouseEntered {
