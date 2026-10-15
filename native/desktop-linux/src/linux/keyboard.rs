@@ -85,13 +85,12 @@ impl KeyboardHandler for ApplicationState {
         _: &Connection,
         _: &QueueHandle<Self>,
         _: &WlKeyboard,
-        serial: u32,
+        _serial: u32,
         modifiers: Modifiers,
         _raw_modifiers: RawModifiers,
         _layout: u32,
     ) {
         self.cancel_key_repeat();
-        self.last_keyboard_event_serial = Some(serial);
         let event = {
             let mut key_modifiers = KeyModifiers::empty();
             if modifiers.ctrl {
@@ -112,10 +111,7 @@ impl KeyboardHandler for ApplicationState {
             if modifiers.num_lock {
                 key_modifiers |= KeyModifiers::NumLock;
             }
-            Event::ModifiersChanged {
-                serial: EventSerial(serial),
-                modifiers: key_modifiers,
-            }
+            Event::ModifiersChanged { modifiers: key_modifiers }
         };
         self.send_event(&event);
     }
