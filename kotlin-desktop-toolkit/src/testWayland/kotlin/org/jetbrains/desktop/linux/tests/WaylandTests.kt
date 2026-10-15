@@ -2189,6 +2189,7 @@ class WaylandTests : WaylandTestsBase() {
             assertInstanceOf<Event.WindowCloseRequest>(event)
             assertEquals(windowParams.windowId, event.windowId)
         }
+        testSuccessful = true
     }
 
     @Test
@@ -2460,6 +2461,7 @@ class WaylandTests : WaylandTestsBase() {
         waitForWindowClosed(windowParams.windowId)
         withKeyPress(KeyCode.A) {}
         assertTrue(eventQueue.isEmpty(), "Event queue empty, but contained ${eventQueue.firstOrNull()}")
+        testSuccessful = true
     }
 
     @Test
@@ -2767,6 +2769,7 @@ class WaylandTests : WaylandTestsBase() {
                     true
                 }
         }
+        testSuccessful = true
     }
 
     @Test
@@ -3306,6 +3309,7 @@ text/plain;charset=utf-8
                 assertNull(event.content)
             }
         }
+        testSuccessful = true
     }
 
     @Test
@@ -3325,6 +3329,7 @@ text/plain;charset=utf-8
                 assertArrayEquals(byteArrayOf(), content.data)
             }
         }
+        testSuccessful = true
     }
 
     private fun testClipboardPasteImpl(
@@ -3399,6 +3404,7 @@ text/plain;charset=utf-8
                 assertNull(event.content)
             }
         }
+        testSuccessful = true
     }
 
     @Test
@@ -3441,6 +3447,7 @@ text/plain;charset=utf-8
                 assertNull(event.content)
             }
         }
+        testSuccessful = true
     }
 
     @Test
@@ -3480,6 +3487,7 @@ text/plain;charset=utf-8
                 fail("Too few UI callbacks: $uiCallbackCount")
             }
         }
+        testSuccessful = true
     }
 
     @Test
@@ -3502,6 +3510,7 @@ text/plain;charset=utf-8
                 assertNotEquals(textData.size, content.data.size)
             }
         }
+        testSuccessful = true
     }
 
     @Test
@@ -4325,6 +4334,7 @@ text/plain;charset=utf-8
         assertEquals(clientAreaBefore.pos.y + offsetY, clientAreaAfter.pos.y)
 
         fixStuckPressedButtons(button)
+        testSuccessful = true
     }
 
     @Test
@@ -4395,6 +4405,7 @@ text/plain;charset=utf-8
         assertEquals(clientAreaBefore.pos.y + expectedDecreaseY, clientAreaAfter.pos.y)
 
         fixStuckPressedButtons(button)
+        testSuccessful = true
     }
 
     @Test
@@ -4933,11 +4944,14 @@ text/plain;charset=utf-8
         val timeTaken = measureTime {
             val notification1RequestId = ui { app.requestShowNotification(showNotificationParams) }
             assertNotNull(notification1RequestId)
+            testSuccessful = true
             tearDown()
+            testSuccessful = false
         }
         if (timeTaken > 1.seconds) {
             fail("Took $timeTaken")
         }
+        testSuccessful = true
     }
 
     @Test

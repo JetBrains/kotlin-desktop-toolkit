@@ -344,12 +344,16 @@ impl DataSourceHandler for ApplicationState {
         debug!("DataSourceHandler::dnd_finished");
         self.drag_source = None;
         self.drag_icon = None;
-        let window_id = self.current_drag_source_window_id.take().unwrap();
-        let action = self.current_drag_source_action.take().unwrap();
-        self.send_event(&Event::DragAndDropFinished {
-            window_id,
-            action: DragAndDropAction::from(action),
-        });
+        let window_id = self.current_drag_source_window_id.take();
+        let action = self.current_drag_source_action.take();
+        if let Some(window_id) = window_id
+            && let Some(action) = action
+        {
+            self.send_event(&Event::DragAndDropFinished {
+                window_id,
+                action: DragAndDropAction::from(action),
+            });
+        }
         source.destroy();
     }
 
