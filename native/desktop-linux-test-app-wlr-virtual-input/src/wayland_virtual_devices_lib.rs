@@ -66,8 +66,10 @@ impl TestHelper {
         let virtual_keyboard_manager: zwp_virtual_keyboard_manager_v1::ZwpVirtualKeyboardManagerV1 = globals.bind(&qh, 1..=1, ())?;
         let virtual_keyboard = virtual_keyboard_manager.create_virtual_keyboard(&seat, &qh, ());
 
-        let virtual_pointer_manager: zwlr_virtual_pointer_manager_v1::ZwlrVirtualPointerManagerV1 = globals.bind(&qh, 1..=1, ())?;
-        let virtual_pointer = virtual_pointer_manager.create_virtual_pointer(Some(&seat), &qh, ());
+        let virtual_pointer = globals
+            .bind(&qh, 1..=1, ())
+            .ok()
+            .map(|m: zwlr_virtual_pointer_manager_v1::ZwlrVirtualPointerManagerV1| m.create_virtual_pointer(Some(&seat), &qh, ()));
 
         let mut state = TestHelperState {
             start_instant: Instant::now(),
@@ -207,7 +209,7 @@ struct TestHelperState {
     base_time: Instant,
     virtual_keyboard: zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1,
     xkb_state: Option<xkb::State>,
-    virtual_pointer: zwlr_virtual_pointer_v1::ZwlrVirtualPointerV1,
+    virtual_pointer: Option<zwlr_virtual_pointer_v1::ZwlrVirtualPointerV1>,
     wait_for_im_update: Arc<(Mutex<bool>, Condvar)>,
 }
 
@@ -430,14 +432,18 @@ impl TestHelperState {
     }
 
     fn send_virtual_pointer_axis_discrete(&self, timestamp: u32, axis: wl_pointer::Axis, scroll_120: i32) {
+        let Some(virtual_pointer) = &self.virtual_pointer else { return };
         // On touchpad, scrolling once produces
         // "wl_pointer vertical=AxisScroll { absolute: -10.0, discrete: 0, value120: -120, ...}"
         let value = f64::from(scroll_120) / 12.;
-        self.virtual_pointer.axis(timestamp, axis, value);
-        self.virtual_pointer.axis_discrete(timestamp, axis, value, scroll_120 / 120);
+        virtual_pointer.axis(timestamp, axis, value);
+        virtual_pointer.axis_discrete(timestamp, axis, value, scroll_120 / 120);
     }
 
     fn mouse_scroll(&self, data: &MouseScrollData) -> anyhow::Result<()> {
+        let Some(virtual_pointer) = &self.virtual_pointer else {
+            return Ok(());
+        };
         let timestamp = self.get_timestamp();
         let source = match data.axis_source {
             0 => wl_pointer::AxisSource::Wheel,
@@ -448,14 +454,14 @@ impl TestHelperState {
                 bail!("Invalid axis_source: {}", data.axis_source);
             }
         };
-        self.virtual_pointer.axis_source(source);
+        virtual_pointer.axis_source(source);
         if data.horizontal_scroll_120 != 0 {
             self.send_virtual_pointer_axis_discrete(timestamp, wl_pointer::Axis::HorizontalScroll, data.horizontal_scroll_120);
         }
         if data.vertical_scroll_120 != 0 {
             self.send_virtual_pointer_axis_discrete(timestamp, wl_pointer::Axis::VerticalScroll, data.vertical_scroll_120);
         }
-        self.virtual_pointer.frame();
+        virtual_pointer.frame();
         Ok(())
     }
 
@@ -542,13 +548,15 @@ impl TestHelperState {
                 f(success);
             }
             TestHelperCommand::MouseMove(data, f) => {
-                let success = if data.x > data.x_extent || data.y > data.y_extent {
-                    false
-                } else {
-                    self.virtual_pointer
-                        .motion_absolute(self.get_timestamp(), data.x, data.y, data.x_extent, data.y_extent);
-                    self.virtual_pointer.frame();
+                let success = if data.x <= data.x_extent
+                    && data.y <= data.y_extent
+                    && let Some(virtual_pointer) = &self.virtual_pointer
+                {
+                    virtual_pointer.motion_absolute(self.get_timestamp(), data.x, data.y, data.x_extent, data.y_extent);
+                    virtual_pointer.frame();
                     true
+                } else {
+                    false
                 };
                 f(success);
             }
@@ -558,9 +566,14 @@ impl TestHelperState {
                 } else {
                     wl_pointer::ButtonState::Released
                 };
-                self.virtual_pointer.button(self.get_timestamp(), data.button, state);
-                self.virtual_pointer.frame();
-                f(true);
+                let success = if let Some(virtual_pointer) = &self.virtual_pointer {
+                    virtual_pointer.button(self.get_timestamp(), data.button, state);
+                    virtual_pointer.frame();
+                    true
+                } else {
+                    false
+                };
+                f(success);
             }
             TestHelperCommand::MouseScroll(data, f) => {
                 let success = if let Err(e) = self.mouse_scroll(&data) {

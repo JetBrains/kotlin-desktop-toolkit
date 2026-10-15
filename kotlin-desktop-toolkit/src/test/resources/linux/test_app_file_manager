@@ -10,6 +10,8 @@ import traceback
 
 import gi
 
+gi.disable_legacy_autoinit()
+
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gio, GLib, Gtk
 
@@ -101,7 +103,7 @@ class MyApplication(Gtk.Application):
         return None
 
     def on_bus_acquired(self, connection: Gio.DBusConnection, name: str):
-        activation_id = connection.register_object(
+        activation_id = connection.register_object_with_closures2(
             "/org/freedesktop/FileManager1", self.node.interfaces[0], self.handle_method_call
         )
         logging.debug(f"on_bus_acquired: {name}: {connection.get_unique_name()}, activation_id={activation_id}")
@@ -121,7 +123,8 @@ class MyApplication(Gtk.Application):
         Gtk.Application.do_shutdown(self)
 
 def main():
-    logging.basicConfig(format='[%(asctime)s.%(msecs)03d %(levelname)s jb_kdt_ibus_test_engine] %(message)s', level=logging.DEBUG, datefmt='%Y%m%d %H:%M:%S')
+    logging.basicConfig(format='[%(asctime)s.%(msecs)03d %(levelname)s test_app_file_manager] %(message)s', level=logging.DEBUG, datefmt='%Y%m%d %H:%M:%S')
+    logging.debug(f"main start")
     app = MyApplication()
     app.hold()
     app.run()

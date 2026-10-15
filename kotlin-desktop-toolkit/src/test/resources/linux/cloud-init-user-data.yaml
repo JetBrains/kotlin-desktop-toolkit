@@ -1,0 +1,150 @@
+#cloud-config
+disable_ec2_metadata: true
+
+growpart:
+  mode: auto
+  devices: ['/']
+
+password: password1
+chpasswd:
+  expire: False
+ssh_pwauth: True
+ssh_authorized_keys:
+  - ${PUBLIC_KEY}
+
+apt:
+  conf: |
+    APT::Install-Recommends "0";
+    APT::Install-Suggests "0";
+
+packages:
+  - policy-rcd-declarative
+  - policy-rcd-declarative-deny-all
+  - build-essential
+  - pkg-config
+  - rustup
+  - openjdk-21-jre-headless
+  - libwayland-dev
+  - libxkbcommon-dev
+  - libudev-dev
+  - xdg-desktop-portal-gtk
+  - sway
+  - libgtk-4-dev
+  - xvfb
+  - python3-gi
+  - xclip
+  - i3
+  - dunst
+  - x11-xkb-utils
+  - x11-utils
+  - dbus-daemon
+  - ibus
+  - ibus-gtk4
+  - phinger-cursor-theme
+  - adwaita-icon-theme
+  - xsettingsd
+  - picom
+  - grim
+  - wl-clipboard
+  - xdg-desktop-portal-gnome
+  - mako-notifier
+  - fcitx5
+  - fcitx5-mozc
+  - libdbus-1-dev
+  - xdg-desktop-portal-kde
+  - kwin-common
+  - kwin-wayland
+  - qt6-wayland
+  - kwin-style-breeze
+  - libkf6config-bin
+
+write_files:
+  #- path: "/etc/modules-load.d/vkms.conf"
+  #  content: vkms
+  - path: "/etc/udev/rules.d/90-uinput.rules"
+    content: KERNEL=="uinput", MODE="0660", GROUP="sudo", OPTIONS+="static_node=uinput"
+  # cloud-init final stage waits for multi-user.target, which waits for snapd.seeded.service, which can take a long time
+  - path: "/etc/systemd/system/snapd.seeded.service.d/override.conf"
+    content: |
+      [Service]
+      ExecStart=
+      ExecStart=/bin/true
+  - path: "/etc/systemd/system/getty@tty1.service.d/autologin.conf"
+    content: |
+      [Service]
+      ExecStart=
+      ExecStart=-/sbin/agetty --noreset --noclear --autologin ubuntu - ${TERM}
+  - path: "/home/ubuntu/.config/sway/config"
+    owner: 'ubuntu:ubuntu'
+    defer: true
+    content: |
+      output Virtual-1 {
+          pos 0,0
+          mode 3000x1500@75Hz
+          scale 1.5
+      }
+
+      output WL-1 {
+          pos 0,0
+          mode 1200x700
+          scale 1.5
+      }
+
+      input * events disabled
+      input "4660:1:kdt_test_keyboard" events enabled
+      input "4660:2:kdt_test_mouse" events enabled
+
+      input "4660:2:kdt_test_mouse" accel_profile flat
+
+      input type:keyboard {
+          xkb_layout us
+      }
+
+      focus_follows_mouse no
+      focus_on_window_activation focus
+      for_window [title=".*"] floating enable, move position 10 10
+      swaybg_command -
+      swaynag_command -
+
+      bar {
+          position bottom
+      }
+
+      #exec dbus-update-activation-environment --systemd --all
+      exec env > /tmp/kdt-test-wm-env.tmp && mv /tmp/kdt-test-wm-env.tmp /tmp/kdt-test-wm-env
+
+  - path: "/home/ubuntu/.profile"
+    owner: 'ubuntu:ubuntu'
+    defer: true
+    content: |
+      if [ -z "$WAYLAND_DISPLAY" ] && [ -n "$XDG_VTNR" ] && [ "$XDG_VTNR" -eq 1 ] ; then
+          while :
+          do
+            sleep 1
+            echo "Waiting..."
+
+            if [ -f "${HOME}/kdt-test-wm-run" ]; then
+              exec "${HOME}/kdt-test-wm-run" 2> ~/kdt-wm.log
+            fi
+          done
+      fi
+
+runcmd:
+  - udevadm control --reload-rules
+  - systemctl daemon-reload
+  - udevadm trigger
+  # https://github.com/KDE/xdg-desktop-portal-kde/commit/0742d3897c1a744314099a644ccffea320343100
+  - bash -c '[[ -z $(grep StartupNotify /usr/share/applications/org.freedesktop.impl.portal.desktop.kde.desktop) ]] && echo "StartupNotify=false" >> /usr/share/applications/org.freedesktop.impl.portal.desktop.kde.desktop'
+  - |
+    # disable unnecessary services
+    systemctl disable man-db.timer man-db.service --now
+    systemctl disable apport.service apport-autoreport.service  --now
+    systemctl disable apt-daily.service apt-daily.timer --now
+    systemctl disable apt-daily-upgrade.service apt-daily-upgrade.timer --now
+    systemctl disable unattended-upgrades.service --now
+    systemctl disable motd-news.service motd-news.timer --now
+    systemctl disable bluetooth.target --now
+    systemctl disable ua-messaging.service ua-messaging.timer --now
+    systemctl disable ua-timer.timer ua-timer.service --now
+    systemctl disable systemd-tmpfiles-clean.timer --now
+  - systemctl restart getty@tty1.service

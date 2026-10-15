@@ -10,6 +10,12 @@ output WL-1 {
     scale 1.5
 }
 
+input * events disabled
+input "4660:1:kdt_test_keyboard" events enabled
+input "4660:2:kdt_test_mouse" events enabled
+
+input "4660:2:kdt_test_mouse" accel_profile flat
+
 input type:keyboard {
     xkb_layout us
 }

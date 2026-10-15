@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalPathApi::class)
+
 import org.jetbrains.desktop.buildscripts.Arch
 import org.jetbrains.desktop.buildscripts.CargoFmtTask
 import org.jetbrains.desktop.buildscripts.ClippyTask
@@ -21,21 +23,28 @@ import org.jetbrains.desktop.buildscripts.hostPlatform
 import org.jetbrains.desktop.buildscripts.targetArch
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermission
 import java.nio.file.attribute.PosixFilePermissions
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeFormatterBuilder
+import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.absolutePathString
+import kotlin.io.path.bufferedWriter
 import kotlin.io.path.copyTo
+import kotlin.io.path.copyToRecursively
 import kotlin.io.path.createDirectories
 import kotlin.io.path.createDirectory
 import kotlin.io.path.createFile
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.exists
+import kotlin.io.path.getPosixFilePermissions
+import kotlin.io.path.listDirectoryEntries
+import kotlin.io.path.moveTo
 import kotlin.io.path.name
 import kotlin.io.path.readLines
 import kotlin.io.path.readText
-import kotlin.io.path.writeLines
+import kotlin.io.path.setPosixFilePermissions
 import kotlin.io.path.writeText
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -132,7 +141,7 @@ data class RustTarget(
 
 val enabledPlatforms = crossCompilationSettings.enabled()
 
-val profiles = listOf("dev", "release")
+val profiles = listOf("dev") // , "release")
 
 private fun backendsForOS(os: Os): List<Backend> {
     val backends = when (os) {
@@ -301,6 +310,14 @@ val installCbindgenTask = tasks.register<InstallCargoProgram>("installCbindgen")
     cargoCommand = providers.cargoCommand().get()
     crate = "cbindgen"
     version = "0.29.4"
+}
+
+val installKdotoolTask = tasks.register<InstallCargoProgram>("installKdotool") {
+    dependsOn(installRustTaskByPlatform[hostPlatform()]!!)
+    rustToolchainFile = nativeDir.file("rust-toolchain")
+    cargoCommand = providers.cargoCommand().get()
+    crate = "kdotool"
+    version = "0.3.0"
 }
 
 val generateBindingsTasks = Backend.entries.map { backend ->
@@ -631,12 +648,12 @@ abstract class X11TestEnv :
     }
 
     private fun runCommand(vararg args: String): Pair<Int, List<String>> {
-        println("Running: ${args.joinToString(" ") { "\"$it\"" }}")
         val p = ProcessBuilder(*args).also { pb ->
             val env = pb.environment()
             env.clear()
             env.putAll(newEnv)
         }.start()
+        println("Running as PID ${p.pid()}: ${args.joinToString(" ") { "\"$it\"" }}")
         val stdOut = p.inputReader().readLines()
         return Pair(p.waitFor(), stdOut)
     }
@@ -955,6 +972,7 @@ fun registerTaskForRustBinary(name: String): TaskProvider<Exec> {
 }
 
 val buildTestAppWaylandVirtualDevices = registerTaskForRustBinary("desktop-linux-test-app-wlr-virtual-input")
+val buildTestAppUInputVirtualDevices = registerTaskForRustBinary("desktop-linux-test-app-uinput-virtual-input")
 val buildTestAppDataSource = registerTaskForRustBinary("desktop-linux-test-app-data-source")
 
 sourceSets {
@@ -1057,25 +1075,33 @@ val testWayland = tasks.register<Test>("testWayland") {
 
     if (backendsForOS(runTestsWithPlatform.os).contains(Backend.WAYLAND)) {
         dependsOn(buildTestAppWaylandVirtualDevices)
+        dependsOn(buildTestAppUInputVirtualDevices)
         dependsOn(buildTestAppDataSource)
+        dependsOn(installKdotoolTask)
         val waylandTestEnvProvider = gradle.sharedServices.registerIfAbsent("waylandTestEnv", WaylandTestEnv::class)
         usesService(waylandTestEnvProvider)
         val testResourcesDir = layout.projectDirectory.dir("src/test/resources/linux")
         val runVirtualDevicesCmd = buildTestAppWaylandVirtualDevices.map { it.outputs.files.first() }.get().absolutePath
+        val runUInputVirtualDevicesCmd = buildTestAppUInputVirtualDevices.map { it.outputs.files.first() }.get().absolutePath
         val testAppDataSourceCmd = buildTestAppDataSource.map { it.outputs.files.first() }.get().absolutePath
+        val kdotoolCmd = installKdotoolTask.flatMap { it.targetBinPath }.get()
+        val ime = project.property("tests.wayland.ime") as String
+        val wm = project.property("tests.wayland.wm") as String
+        val currentEnv = environment
         doFirst {
             val waylandTestEnv = waylandTestEnvProvider.get()
             try {
                 val newEnv = waylandTestEnv.run(
                     this@register,
-                    swayConfig = testResourcesDir.file("sway_test_config"),
-                    dbusConfigFile = testResourcesDir.file("dbus-session-conf.xml"),
+                    ime = ime,
+                    wm = wm,
+                    currentEnv = currentEnv,
                     testResourcesDir = testResourcesDir,
+                    kdotoolCmd = kdotoolCmd,
                     runVirtualDevicesCmd = runVirtualDevicesCmd,
                     testAppDataSourceCmd = testAppDataSourceCmd,
-                    testAppBrowser = testResourcesDir.file("test_app_browser"),
-                    testAppFileManager = testResourcesDir.file("test_app_file_manager"),
-                    headless = true,
+                    runUInputVirtualDevicesCmd = runUInputVirtualDevicesCmd,
+                    headless = false,
                 )
                 println(newEnv)
                 setEnvironment(newEnv)
@@ -1188,6 +1214,8 @@ abstract class WaylandTestEnv :
 
     private var startedProcesses = mutableListOf<Pair<Process, String>>()
     private var logFiles = mutableListOf<Path>()
+    private var tempFiles = mutableListOf<Path>()
+    private var wmPid: Int? = null
 
     private val homeTempDir by lazy { Files.createTempDirectory("test_home_wayland") }
     private val xdgConfigHome by lazy { homeTempDir.resolve(".config").createDirectories() }
@@ -1200,23 +1228,78 @@ abstract class WaylandTestEnv :
 
     private val newEnv by lazy {
         mutableMapOf(
-            "XDG_CURRENT_DESKTOP" to "GNOME",
-            "SWAYSOCK" to homeTempDir.resolve("sway-socket").absolutePathString(),
+//            "XDG_CURRENT_DESKTOP" to "GNOME",
             "LANG" to "en_US.UTF-8",
             "HOME" to homeTempDir.absolutePathString(),
             "XDG_DATA_HOME" to xdgDataHome.absolutePathString(),
             "XDG_RUNTIME_DIR" to xdgRuntimeDir.absolutePathString(),
             "XDG_SESSION_TYPE" to "wayland",
+            "XDG_DATA_DIRS" to "/usr/share/",
+            "PATH" to "/usr/sbin:/usr/bin:/sbin:/bin",
 //            "WAYLAND_DEBUG" to "1",
         )
+    }
+
+    private fun generateIBusXmlFileContent(ibusTestEngineFile: Path): String {
+        return """<?xml version="1.0" encoding="utf-8"?>
+<component>
+    <name>com.jetbrains.kdt.IBusTestEngine</name>
+    <description>An IBus engine for KDT testing</description>
+    <version>0.1.0</version>
+    <license>Proprietary</license>
+    <author>JetBrains</author>
+    <homepage>https://www.jetbrains.com/</homepage>
+    <exec>/usr/bin/python3 ${ibusTestEngineFile.absolutePathString()}</exec>
+    <textdomain>jb-kdt-ibus-test-engine</textdomain>
+    <engines>
+        <engine>
+            <name>jb_kdt_ibus_test_engine</name>
+            <longname>JetBrains KDT IBus test engine</longname>
+            <description>An IBus engine for KDT testing</description>
+            <language>en</language>
+            <license>Proprietary</license>
+            <author>JetBrains</author>
+            <layout>us</layout>
+            <layout_variant/>
+            <layout_option/>
+            <hotkeys/>
+            <symbol/>
+            <setup/>
+            <version/>
+            <textdomain/>
+            <rank>0</rank>
+        </engine>
+    </engines>
+</component>
+"""
+    }
+
+    private fun waitUntil(msg: String, sleepInterval: Duration = 10.milliseconds, predicate: () -> Boolean) {
+        val startTime = TimeSource.Monotonic.markNow()
+        while (!predicate()) {
+            if (startTime.elapsedNow() > 10.seconds) {
+                throw Error("Timed out waiting for $msg")
+            }
+            Thread.sleep(sleepInterval.inWholeMilliseconds)
+        }
+    }
+
+    private fun runCommand(vararg args: String): Pair<Int, Process> {
+        val p = ProcessBuilder(*args).also { pb ->
+            val env = pb.environment()
+            env.clear()
+            env.putAll(newEnv)
+        }.start()
+        println("Running as PID ${p.pid()}: ${args.joinToString(" ") { "\"$it\"" }}")
+        val exitCode = p.waitFor()
+        return Pair(exitCode, p)
     }
 
     private fun newProcess(
         vararg args: String,
         logStdOut: Boolean = false,
         getAdditionalEnvs: ((Map<String, String>) -> Map<String, String>)? = null,
-        afterStart: ((Process) -> Unit)? = null,
-    ) {
+    ): Pair<Process, Path> {
         println("Running: ${args.joinToString(" ") { "\"$it\"" }}")
         val exeName = args.first().let {
             val p = Path.of(it)
@@ -1226,43 +1309,51 @@ abstract class WaylandTestEnv :
                 it
             }
         }
-        ProcessBuilder(*args).also { pb ->
+        val logFileStderr = Path.of(newEnv["HOME"]!!).resolve("$exeName-stderr.log")
+        val p = ProcessBuilder(*args).also { pb ->
             val env = pb.environment()
             val additionalEnvs = getAdditionalEnvs?.invoke(env)
             env.clear()
             env.putAll(newEnv)
             additionalEnvs?.let { env.putAll(it) }
 
-            val logFileStderr = Path.of(newEnv["HOME"]!!).resolve("$exeName-stderr.log").also {
-                println(it)
-                logFiles.add(it)
-            }
+            println(logFileStderr)
+            logFiles.add(logFileStderr)
             val logRedirect = ProcessBuilder.Redirect.to(logFileStderr.toFile())
             if (logStdOut) {
                 pb.redirectOutput(logRedirect)
             } else {
                 pb.redirectError(logRedirect)
             }
-        }.start().let {
-            check(it.isAlive)
-            afterStart?.invoke(it)
-            startedProcesses.add(Pair(it, exeName))
-        }
+        }.start()
+
+        println("$exeName started: ${p.pid()}")
+        check(p.isAlive)
+        startedProcesses.add(Pair(p, exeName))
+        return Pair(p, logFileStderr)
     }
 
     fun run(
         test: Test,
-        swayConfig: RegularFile,
-        dbusConfigFile: RegularFile,
+        ime: String,
+        wm: String,
+        currentEnv: Map<String, Any>,
         testResourcesDir: Directory,
+        kdotoolCmd: String,
         runVirtualDevicesCmd: String,
+        runUInputVirtualDevicesCmd: String,
         testAppDataSourceCmd: String,
-        testAppBrowser: RegularFile,
-        testAppFileManager: RegularFile,
         headless: Boolean,
     ): Map<String, String> {
         println("WaylandTestEnv run")
         this.test = test
+        val testResourcesDir = testResourcesDir.asFile.toPath()
+
+        val swayConfig = testResourcesDir.resolve("sway_test_config")
+        val dbusConfigFile = testResourcesDir.resolve("dbus-session-conf.xml")
+        val ibusTestEngineFile = testResourcesDir.resolve("ibus_test_engine.py")
+        val testAppBrowser = testResourcesDir.resolve("test_app_browser")
+        val testAppFileManager = testResourcesDir.resolve("test_app_file_manager")
 
         val dbusServicesDir = xdgDataHome.resolve(
             "dbus-1/services",
@@ -1273,17 +1364,11 @@ Name=org.freedesktop.Notifications
 Exec=/bin/true
 """,
         )
-        dbusServicesDir.resolve("org.gnome.Nautilus.service").writeText(
-            """[D-BUS Service]
-Name=org.gnome.Nautilus
-Exec=/bin/true
-""",
-        )
 
         dbusServicesDir.resolve("org.freedesktop.FileManager1.service").writeText(
             """[D-BUS Service]
 Name=org.freedesktop.FileManager1
-Exec=${testAppFileManager.asFile.absolutePath}
+Exec=${testAppFileManager.absolutePathString()}
 """,
         )
 
@@ -1292,7 +1377,7 @@ Exec=${testAppFileManager.asFile.absolutePath}
         userApplicationsDir.resolve("test_app_browser.desktop").writeText(
             """[Desktop Entry]
 Type=Application
-Exec=${testAppBrowser.asFile.absolutePath} %u
+Exec=${testAppBrowser.absolutePathString()} %u
 Terminal=false
 Categories=GNOME;GTK;Network;WebBrowser;
 MimeType=x-scheme-handler/chrome;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/mailto
@@ -1307,64 +1392,224 @@ x-scheme-handler/https=test_app_browser.desktop;
 """,
         )
 
-        val testSwayOut = Files.createTempDirectory(xdgRuntimeDir, "test_sway_out")
-        val testSwayDisplayName = testSwayOut.resolve("display_name")
-        val testSwayConfig = Files.createTempFile(xdgRuntimeDir, "test_sway_config", "")
-        testSwayConfig.writeLines(
-            swayConfig.asFile.readLines() + listOf(
-                $$"""exec echo -n "$WAYLAND_DISPLAY" > $${testSwayDisplayName}.tmp && mv $${testSwayDisplayName}.tmp $$testSwayDisplayName""",
-            ),
+        xdgConfigHome.resolve("xdg-desktop-portal").createDirectories().resolve("portals.conf").writeText(
+            """[preferred]
+default=kde
+org.freedesktop.impl.portal.Settings=gtk
+org.freedesktop.impl.portal.Screenshot=kde
+org.freedesktop.impl.portal.Secret=kwallet
+""",
         )
 
-        newProcess(
-            "sway",
-//            "--debug",
-//            "--verbose",
-            "--config",
-            testSwayConfig.absolutePathString(),
-            getAdditionalEnvs = { env ->
-                buildMap {
-                    if (headless) {
-                        put("WLR_BACKENDS", "headless")
-                        put("WLR_RENDERER", "pixman")
-                    } else {
-                        val orgXdgRuntimeDir = env["XDG_RUNTIME_DIR"]!!
-                        val orgWaylandDisplay = env["WAYLAND_DISPLAY"]!!
-                        put("WAYLAND_DISPLAY", Path.of(orgXdgRuntimeDir).resolve(orgWaylandDisplay).absolutePathString())
-                    }
-                }
-            },
-            afterStart = { p ->
-                val startTime = TimeSource.Monotonic.markNow()
-                while (true) {
-                    if (testSwayDisplayName.exists()) {
-                        break
-                    }
-                    if (startTime.elapsedNow() > 3.seconds) {
-                        throw Error("Could not run sway: ${p.errorReader().readText()}")
-                    }
-                    Thread.sleep(10)
-                }
-            },
-        )
+        homeTempDir.resolve("Pictures").createDirectory()
 
-        val testDisplay = testSwayDisplayName.readText().trim()
-        testSwayDisplayName.deleteIfExists()
-        testSwayOut.deleteIfExists()
-        newEnv["WAYLAND_DISPLAY"] = testDisplay
+        val waylandDisplay = "wayland-0"
+        newEnv["WAYLAND_DISPLAY"] = waylandDisplay
 
-        newProcess(
+        when (wm) {
+            "kwin" -> {
+                newEnv["KDE_SESSION_VERSION"] = "6"
+                newEnv["XDG_CURRENT_DESKTOP"] = "KDE"
+                newEnv["KWIN_SCREENSHOT_NO_PERMISSION_CHECKS"] = "1"
+//                newEnv["KWIN_WAYLAND_NO_PERMISSION_CHECKS"] = "1"
+//                newEnv["KWIN_FORCE_SW_CURSOR"] = "1"
+            }
+        }
+
+        val dbusSessionBusAddress = newProcess(
             "dbus-daemon",
-            "--config-file=${dbusConfigFile.asFile.absolutePath}",
+            "--config-file=${dbusConfigFile.absolutePathString()}",
             "--nofork",
             "--nopidfile",
             "--nosyslog",
             "--print-address",
-        ) {
-            newEnv["DBUS_SESSION_BUS_ADDRESS"] = it.inputReader().readLine()
+        ).let { (p, _) ->
+            p.inputReader().readLine()
+        }
+        newEnv["DBUS_SESSION_BUS_ADDRESS"] = dbusSessionBusAddress
+
+        newProcess(runUInputVirtualDevicesCmd)
+
+        var mouseEventDevice: String? = null
+        waitUntil("Fake mouse device created") {
+            mouseEventDevice = Path.of("/sys/class/input/").listDirectoryEntries("event*").firstNotNullOfOrNull {
+                if (it.resolve("device/name").readText().trim() == "kdt_test_mouse") {
+                    it.name
+                } else {
+                    null
+                }
+            }
+            mouseEventDevice != null
         }
 
         newProcess("busctl", "--user", "monitor", logStdOut = true)
+
+        val kdtTestWmRunScript = Path.of((currentEnv["HOME"] as String)).resolve("kdt-test-wm-run")
+        kdtTestWmRunScript.parent.resolve("kdt-test-wm-run.tmp").also { tmp ->
+            tmp.bufferedWriter().use { writer ->
+                for ((k, v) in newEnv) {
+                    if (k != "WAYLAND_DISPLAY") {
+                        writer.write("$k=$v ")
+                    }
+                }
+                when (wm) {
+                    "kwin" -> {
+                        writer.write("exec kwin_wayland --no-lockscreen --no-global-shortcuts --no-kactivities")
+                    }
+                    else -> {
+                        writer.write("exec ${wm} -c /home/ubuntu/.config/sway/config")
+                    }
+                }
+            }
+            val permissions = tmp.getPosixFilePermissions().toMutableSet()
+            permissions.add(PosixFilePermission.OWNER_EXECUTE)
+            tmp.setPosixFilePermissions(permissions)
+            tmp.moveTo(kdtTestWmRunScript)
+        }
+        tempFiles.add(kdtTestWmRunScript)
+
+        when (wm) {
+            "kwin" -> {
+                waitUntil("Compositor started") {
+                    xdgRuntimeDir.resolve(waylandDisplay).exists()
+                }
+
+                waitUntil("KWin started") {
+                    wmPid = runCommand(
+                        "busctl",
+                        "--user",
+                        "call",
+                        "org.freedesktop.DBus",
+                        "/org/freedesktop/DBus",
+                        "org.freedesktop.DBus",
+                        "GetConnectionUnixProcessID",
+                        "s",
+                        "org.kde.KWin",
+                    ).let { (exitCode, p) ->
+                        if (exitCode == 0) {
+                            val out = p.inputReader().readText().trim()
+                            out.split(' ').last().toInt()
+                        } else {
+                            null
+                        }
+                    }
+                    wmPid != null
+                }
+            }
+            "sway" -> {
+                val wmEnv = Path.of("/tmp/kdt-test-wm-env").let { testWmEnvFile ->
+                    waitUntil("WM started") { testWmEnvFile.exists() }
+                    val testWmEnvFileContent = testWmEnvFile.readLines()
+                    testWmEnvFile.deleteIfExists()
+                    val env = mutableMapOf<String, String>()
+                    for (l in testWmEnvFileContent) {
+                        val (k, v) = l.split('=', limit = 2)
+                        env[k] = v
+                    }
+                    env
+                }
+
+                wmEnv["SWAYSOCK"]?.let {
+                    newEnv["SWAYSOCK"] = it
+                }
+                newEnv["WAYLAND_DISPLAY"] = wmEnv["WAYLAND_DISPLAY"]!!
+            }
+        }
+
+//        if (headless) {
+//
+//            newProcess("kwin_wayland", "--virtual", "--socket", waylandDisplay)
+//        } else {
+//            val wmEnv = Path.of("/tmp/kdt-test-wm-env").let { testWmEnvFile ->
+//                waitUntil("WM started") { testWmEnvFile.exists() }
+//                val testWmEnvFileContent = testWmEnvFile.readLines()
+//                val env = mutableMapOf<String, String>()
+//                for (l in testWmEnvFileContent) {
+//                    val (k, v) = l.split('=', limit = 2)
+//                    env[k] = v
+//                }
+//                env
+//            }
+//
+//            wmEnv["SWAYSOCK"]?.let {
+//                newEnv["SWAYSOCK"] = it
+//            }
+//            val orgXdgRuntimeDir = currentEnv["XDG_RUNTIME_DIR"] as String
+//            val orgWaylandDisplay = wmEnv["WAYLAND_DISPLAY"] ?: "wayland-0"
+//            waitUntil("Compositor started") {
+//                Path.of(orgXdgRuntimeDir).resolve(orgWaylandDisplay).exists()
+//            }
+//            xdgRuntimeDir.resolve(orgWaylandDisplay).createSymbolicLinkPointingTo(Path.of(orgXdgRuntimeDir).resolve(orgWaylandDisplay))
+//            newEnv["WAYLAND_DISPLAY"] = orgWaylandDisplay
+//        }
+
+        runCommand("dbus-update-activation-environment", "WAYLAND_DISPLAY=${newEnv["WAYLAND_DISPLAY"]}")
+
+        if (wm == "kwin") {
+            runCommand(
+                "busctl",
+                "--user",
+                "get-property",
+                "org.kde.KWin",
+                "/org/kde/KWin/InputDevice/$mouseEventDevice",
+                "org.kde.KWin.InputDevice",
+                "supportsPointerAccelerationProfileFlat",
+            ).let { (exitCode, p) ->
+                if (exitCode == 0) {
+                    println("supportsPointerAccelerationProfileFlat: ${p.inputReader().readText()}")
+                } else {
+                    println("supportsPointerAccelerationProfileFlat error: ${p.errorReader().readText()}")
+                }
+            }
+
+            runCommand(
+                "busctl",
+                "--user",
+                "set-property",
+                "org.kde.KWin",
+                "/org/kde/KWin/InputDevice/$mouseEventDevice",
+                "org.kde.KWin.InputDevice",
+                "pointerAccelerationProfileFlat",
+                "b",
+                "true",
+            ).let { (exitCode, p) ->
+                if (exitCode == 0) {
+                    println("set pointerAccelerationProfileFlat: ${p.inputReader().readText()}")
+                } else {
+                    println("set pointerAccelerationProfileFlat error: ${p.errorReader().readText()}")
+                }
+            }
+            runCommand(
+                "busctl",
+                "--user",
+                "get-property",
+                "org.kde.KWin",
+                "/org/kde/KWin/InputDevice/$mouseEventDevice",
+                "org.kde.KWin.InputDevice",
+                "pointerAccelerationProfileFlat",
+            ).let { (exitCode, p) ->
+                if (exitCode == 0) {
+                    println("pointerAccelerationProfileFlat: ${p.inputReader().readText()}")
+                } else {
+                    println("pointerAccelerationProfileFlat error: ${p.errorReader().readText()}")
+                }
+            }
+            runCommand(
+                "busctl",
+                "--user",
+                "get-property",
+                "org.kde.KWin",
+                "/org/kde/KWin/InputDevice/$mouseEventDevice",
+                "org.kde.KWin.InputDevice",
+                "pointerAccelerationProfileAdaptive",
+            ).let { (exitCode, p) ->
+                if (exitCode == 0) {
+                    println("pointerAccelerationProfileAdaptive: ${p.inputReader().readText()}")
+                } else {
+                    println("pointerAccelerationProfileAdaptive error: ${p.errorReader().readText()}")
+                }
+            }
+        }
 
         ProcessBuilder(
             "gsettings",
@@ -1378,8 +1623,118 @@ x-scheme-handler/https=test_app_browser.desktop;
             env.putAll(newEnv)
         }.start().waitFor()
 
-        newProcess(runVirtualDevicesCmd)
+//        newProcess("/usr/libexec/xdg-desktop-portal", "--replace", "--verbose")
 
+        runCommand("busctl", "--user", "call",
+            "org.freedesktop.impl.portal.PermissionStore",
+            "/org/freedesktop/impl/portal/PermissionStore",
+            "org.freedesktop.impl.portal.PermissionStore",
+            "SetPermission",
+            "sbssas",
+            "screenshot",
+            "true",
+            "screenshot",
+            "",
+            "1",
+            "yes"
+        ).let { (exitCode, p) ->
+            if (exitCode == 0) {
+                println("PermissionStore: ${p.inputReader().readText()}")
+            } else {
+                println("PermissionStore error: ${p.errorReader().readText()}")
+            }
+        }
+
+//        runCommand("kwriteconfig6", "--file", "kscreensaverrc", "--group", "Daemon", "--key", "Autolock", "false")
+//        runCommand("dbus-send", "--dest=org.freedesktop.ScreenSaver", "/MainApplication", "org.freedesktop.ScreenSaver.reparseConfiguration")
+        runCommand("busctl", "--user", "tree").let { (exitCode, p) ->
+            if (exitCode == 0) {
+                println("busctl tree: ${p.inputReader().readText()}")
+            } else {
+                println("busctl tree error: ${p.errorReader().readText()}")
+            }
+        }
+
+        runCommand("busctl", "--user", "introspect", "org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop").let { (exitCode, p) ->
+            if (exitCode == 0) {
+                println("org.freedesktop.portal.Desktop: ${p.inputReader().readText()}")
+            } else {
+                println("org.freedesktop.portal.Desktop error: ${p.errorReader().readText()}")
+            }
+        }
+
+        when (ime) {
+            "fcitx5" -> {
+                testResourcesDir.resolve(
+                    "fcitx5",
+                ).copyToRecursively(xdgConfigHome.resolve("fcitx5"), overwrite = false, followLinks = false)
+                val fcitx5Log = newProcess("fcitx5", "--disable", "clipboard", "--verbose", "*=5").let { (p, log) -> log }
+                newEnv["FCITX5_LOG_FILE"] = fcitx5Log.absolutePathString()
+            }
+            // Requires at least version 1.5.32 for proper Wayland integration
+            "ibus" -> {
+                val ibusTempDir = xdgRuntimeDir.resolve("test_ibus").createDirectory()
+                val ibusAddressFile = ibusTempDir.resolve("ibus-addr").createFile() // suppress the IBus warning about the non-existing file
+                val ibusSocketFile = ibusTempDir.resolve("ibus-socket")
+                val ibusComponentPath = ibusTempDir.resolve("component").createDirectory()
+                val ibusComponentFile = ibusComponentPath.resolve("ibus_test_engine.xml")
+                val ibusEngineTmpCapsOutputFile = ibusTempDir.resolve("test-engine-caps-out.txt")
+                val ibusEngineTmpContentTypeOutputFile = ibusTempDir.resolve("test-engine-content-type-out.txt")
+                val ibusEngineTmpCursorLocationOutputFile = ibusTempDir.resolve("test-engine-cursor-location-out.txt")
+
+                ibusComponentFile.writeText(generateIBusXmlFileContent(ibusTestEngineFile))
+
+                newEnv["IBUS_ADDRESS_FILE"] = ibusAddressFile.absolutePathString()
+                newEnv["IBUS_COMPONENT_PATH"] = "${ibusComponentPath.absolutePathString()}:/usr/share/ibus/component"
+
+                runCommand("gsettings", "set", "org.freedesktop.ibus.general", "use-system-keyboard-layout", "true").let { (exitCode, p) ->
+                    check(exitCode == 0) { "exit code $exitCode" }
+                }
+
+                newProcess(
+                    "ibus",
+                    "start",
+                    "--verbose",
+                    "--type=wayland",
+                    "-a",
+                    "unix:path=${ibusSocketFile.absolutePathString()}",
+                    "--xim",
+                    "--panel",
+                    "disable",
+                    "--emoji-extension",
+                    "disable",
+                    "--cache=none",
+                    "--verbose",
+                )
+                waitUntil("IBus socket file exists") { ibusSocketFile.exists() }
+
+                newProcess(ibusTestEngineFile.absolutePathString())
+
+                runCommand("ibus", "address").let { (exitCode, p) ->
+                    check(exitCode == 0) { "exit code $exitCode" }
+                    val ibusAddress = p.inputReader().readText().trim()
+                    newProcess(
+                        "dbus-monitor",
+                        "--address",
+                        ibusAddress,
+                        logStdOut = true,
+                    )
+                }
+
+                newEnv["TEST_IBUS_ENGINE_CAPS_OUT_FILE"] = ibusEngineTmpCapsOutputFile.absolutePathString()
+                newEnv["TEST_IBUS_ENGINE_CONTENT_TYPE_OUT_FILE"] = ibusEngineTmpContentTypeOutputFile.absolutePathString()
+                newEnv["TEST_IBUS_ENGINE_CURSOR_LOCATION_OUT_FILE"] = ibusEngineTmpCursorLocationOutputFile.absolutePathString()
+
+                tempFiles.add(ibusAddressFile)
+                tempFiles.add(ibusSocketFile)
+                tempFiles.add(ibusEngineTmpCapsOutputFile)
+                tempFiles.add(ibusEngineTmpContentTypeOutputFile)
+                tempFiles.add(ibusEngineTmpCursorLocationOutputFile)
+                tempFiles.add(ibusComponentFile)
+                tempFiles.add(ibusComponentPath)
+                tempFiles.add(ibusTempDir)
+            }
+        }
 //        ProcessBuilder("foot").also { pb ->
 //            val env = pb.environment()
 //            env.clear()
@@ -1387,8 +1742,10 @@ x-scheme-handler/https=test_app_browser.desktop;
 //            pb.start().waitFor()
 //        }
 
-        newEnv["TEST_RESOURCES_DIR"] = testResourcesDir.asFile.absolutePath
+        newEnv["TEST_IME"] = ime
+        newEnv["TEST_RESOURCES_DIR"] = testResourcesDir.absolutePathString()
         newEnv["TEST_APP_DATA_SOURCE_CMD"] = testAppDataSourceCmd
+        newEnv["KDOTOOL_CMD"] = kdotoolCmd
 
         // Work around the Ubuntu 22.04 apparmor issues: https://github.com/emersion/mako/issues/257
         val testMakoPath = homeTempDir.resolve("mako")
@@ -1408,11 +1765,26 @@ x-scheme-handler/https=test_app_browser.desktop;
         }
         test = null
 
+        if (wmPid != null) {
+            ProcessBuilder("kill", wmPid.toString()).start().waitFor()
+        } else if (newEnv.containsKey("SWAYSOCK")) {
+            runCommand("swaymsg", "exit").let { (exitCode, p) ->
+                if (exitCode == 0) {
+                    println("swaymsg exit: ${p.inputReader().readText()}")
+                } else {
+                    println("swaymsg exit error: ${p.errorReader().readText()}")
+                }
+            }
+        }
+
         startedProcesses.reverse()
         for ((p, name) in startedProcesses) {
             val wasAlive = p.isAlive
             if (!wasAlive) {
                 println("ERROR: $name is not alive")
+            }
+            if (name == "fcitx5") {
+                ProcessBuilder("fcitx5-remote", "-e").start().waitFor()
             }
 
             p.toHandle().destroy()
@@ -1427,6 +1799,9 @@ x-scheme-handler/https=test_app_browser.desktop;
         }
         startedProcesses.clear()
 
+        for (f in tempFiles) {
+            f.deleteIfExists()
+        }
         if (!testsFailed) {
             for (logFile in logFiles) {
                 logFile.deleteIfExists()

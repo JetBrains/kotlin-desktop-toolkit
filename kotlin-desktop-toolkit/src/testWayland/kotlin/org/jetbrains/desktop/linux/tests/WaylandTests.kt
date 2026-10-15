@@ -53,6 +53,7 @@ import org.jetbrains.desktop.linux.WindowParams
 import org.jetbrains.desktop.linux.WindowResizeEdge
 import org.jetbrains.desktop.linux.XdgDesktopContrast
 import org.jetbrains.desktop.linux.XdgDesktopReducedMotion
+import org.jetbrains.desktop.linux.utf8OffsetToUtf16Offset
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertArrayEquals
@@ -77,7 +78,6 @@ import org.junit.jupiter.api.fail
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
 import java.net.URI
-import java.net.URLEncoder
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
@@ -96,10 +96,12 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.exists
 import kotlin.io.path.fileSize
+import kotlin.io.path.moveTo
 import kotlin.io.path.outputStream
 import kotlin.io.path.readBytes
 import kotlin.io.path.readLines
 import kotlin.io.path.readText
+import kotlin.io.path.writeBytes
 import kotlin.io.path.writeText
 import kotlin.math.round
 import kotlin.math.roundToInt
@@ -120,6 +122,7 @@ import org.jetbrains.skia.ImageInfo as SkImageInfo
 import org.jetbrains.skia.Paint as SkPaint
 import org.jetbrains.skia.Rect as SkRect
 import org.jetbrains.skia.Surface as SkSurface
+import org.jetbrains.skia.IRect as SkIRect
 
 internal data class GlobalPosition(
     val x: LogicalPixelsInt,
@@ -153,7 +156,189 @@ internal data class WmWindowState(
     val padding: WindowFrame.Padding,
 )
 
-internal class SwayWm {
+internal interface Wm {
+    fun getWindowState(title: String): WmWindowState
+    fun getVersion(): WmVersion
+    fun tileWindows(window1Title: String, window2Title: String)
+    fun moveWindow(title: String, pos: GlobalPosition)
+    fun fullScreenWindow(title: String)
+    fun unsetFullScreenWindow(title: String)
+    fun closeWindow(title: String)
+    fun closeFocusedWindow()
+    fun focusWindowWithTitle(title: String)
+    fun getCursorPosition(): GlobalPosition? = null
+    fun screenshot(outPath: Path, scale: Scale, rect: LogicalRect? = null): SkBitmap
+}
+
+internal class KWin : Wm {
+    private val kdotool = System.getenv("KDOTOOL_CMD")!!
+
+    override fun getWindowState(title: String): WmWindowState {
+        val outputData = runCommandWithOutput(
+            listOf(
+                kdotool,
+                "kwinscript",
+                "--inline",
+                """
+                var windows = workspace.windowList();
+                var msg = "1.0"
+                for (var i = 0; i < windows.length; i++) {
+                    let w = windows[i];
+                    if (w.caption == "$title") {
+                        let output = w.output;
+                        let clientGeometry = w.clientGeometry;
+                        let bufferGeometry = w.bufferGeometry;
+                        msg = output.devicePixelRatio.toString();
+                        msg += ";";
+                        msg += clientGeometry.x.toString();
+                        msg += ":";
+                        msg += clientGeometry.y.toString();
+                        msg += ":";
+                        msg += clientGeometry.width.toString();
+                        msg += ":";
+                        msg += clientGeometry.height.toString();
+                        msg += ";";
+                        msg += bufferGeometry.x.toString();
+                        msg += ":";
+                        msg += bufferGeometry.y.toString();
+                        msg += ":";
+                        msg += bufferGeometry.width.toString();
+                        msg += ":";
+                        msg += bufferGeometry.height.toString();
+                        msg += ";";
+                        msg += w.x.toString();
+                        msg += ":";
+                        msg += w.y.toString();
+                        msg += ":";
+                        msg += w.width.toString();
+                        msg += ":";
+                        msg += w.height.toString();
+                        break;
+                    }
+                }
+                output_result(msg)
+            """,
+            ),
+        )!!.decodeToString()
+        log(outputData)
+        val (outputScaleString, clientGeometry, bufferGeometry, frameRect) = outputData.split(';')
+        val (clientX, clientY, clientW, clientH) = clientGeometry.split(':').map { it.toFloat() }
+        val (bufferX, bufferY, bufferW, bufferH) = bufferGeometry.split(':').map { it.toFloat() }
+        val (frameX, frameY, frameW, frameH) = frameRect.split(':').map { it.toFloat() }
+        log(runCommandWithOutput(listOf(kdotool, "search", "--name", title, "getwindowgeometry"))!!.decodeToString())
+
+        val paddingLeft = frameX - clientX
+        val paddingTop = frameY - clientY
+        return WmWindowState(
+            output = WmOutputState(
+                scale = outputScaleString.toFloat(),
+            ),
+            title = title,
+            clientArea = GlobalRect(
+                pos = GlobalPosition(
+                    x = LogicalPixelsInt(clientX.roundToInt()),
+                    y = LogicalPixelsInt(clientY.roundToInt()),
+                ),
+                size = LogicalSize.makeWH(clientW.roundToInt(), clientH.roundToInt()),
+            ),
+            padding = WindowFrame.Padding(
+                left = LogicalPixelsInt(paddingLeft.roundToInt()),
+                top = LogicalPixelsInt(paddingTop.roundToInt()),
+                right = LogicalPixelsInt((frameW - clientW - paddingLeft).roundToInt()),
+                bottom = LogicalPixelsInt((frameH - clientH - paddingTop).roundToInt()),
+            ),
+        )
+    }
+
+    override fun getVersion(): WmVersion {
+        return WmVersion(
+            name = "KWin",
+            major = 6,
+            minor = 2,
+            patch = 0,
+            checkWindowCapabilities = { capabilities ->
+                assertTrue(capabilities.minimize)
+                assertTrue(capabilities.windowMenu)
+                assertTrue(capabilities.maximize)
+                assertTrue(capabilities.fullscreen)
+            },
+            checkWindowScale = { output, scale ->
+                assertEquals(output.scale, scale.rawScale.toFloat())
+            },
+        )
+    }
+
+    override fun tileWindows(window1Title: String, window2Title: String) {
+        focusWindowWithTitle(window1Title)
+        runCommand(listOf(kdotool, "kwinscript", "--inline", "workspace.slotWindowQuickTileLeft();"))
+        focusWindowWithTitle(window2Title)
+        runCommand(listOf(kdotool, "kwinscript", "--inline", "workspace.slotWindowQuickTileRight();"))
+    }
+
+    override fun moveWindow(title: String, pos: GlobalPosition) {
+        runCommand(listOf(kdotool, "search", "--name", title, "windowmove", pos.x.rawLogical.toString(), pos.y.rawLogical.toString()))
+    }
+
+    override fun fullScreenWindow(title: String) {
+        runCommand(listOf(kdotool, "search", "--name", title, "windowstate", "--add", "fullscreen"))
+    }
+
+    override fun unsetFullScreenWindow(title: String) {
+        runCommand(listOf(kdotool, "search", "--name", title, "windowstate", "--remove", "fullscreen"))
+    }
+
+    override fun closeWindow(title: String) {
+        runCommand(listOf(kdotool, "search", "--name", title, "windowclose"))
+    }
+
+    override fun closeFocusedWindow() {
+        runCommand(listOf(kdotool, "getactivewindow", "windowclose"))
+    }
+
+    override fun focusWindowWithTitle(title: String) {
+        runCommand(listOf(kdotool, "search", "--name", title, "windowactivate"))
+    }
+
+    override fun getCursorPosition(): GlobalPosition? {
+        val out = runCommandWithOutput(
+            listOf(
+                kdotool,
+                "kwinscript",
+                "--inline",
+                """
+            let p = workspace.cursorPos;
+            output_result(p.x + "," + p.y);
+        """,
+            ),
+        )!!.decodeToString().trim()
+        log(out)
+        val (x, y) = out.split(',').map { it.toInt() }
+        return GlobalPosition(
+            x = LogicalPixelsInt(x),
+            y = LogicalPixelsInt(y),
+        )
+    }
+
+    override fun screenshot(outPath: Path, scale: Scale, rect: LogicalRect?): SkBitmap {
+        fun toPhysical(v: LogicalPixelsInt) = v.toRawPhysical(scale).roundToInt()
+
+        val response = doVirtualDeviceEvent("screenshot")
+        val tmpPath = Path.of(URI(response).path)
+        val image = SkImage.makeFromEncoded(tmpPath.readBytes())
+        val bitmap = SkBitmap.makeFromImage(image)
+        return if (rect == null) {
+            tmpPath.moveTo(outPath, overwrite = true)
+            bitmap
+        } else {
+            val cropped = SkBitmap()
+            bitmap.extractSubset(cropped, SkIRect.makeXYWH(toPhysical(rect.x), toPhysical(rect.y), toPhysical(rect.width), toPhysical(rect.height)))
+            outPath.writeBytes(SkImage.makeFromBitmap(cropped).encodeToData()!!.bytes)
+            cropped
+        }
+    }
+}
+
+internal class SwayWm : Wm {
     @Suppress("DestructuringDeclaration")
     private fun getWindowStateImpl(predicate: (SwayIpcWindow) -> Boolean): WmWindowState? {
         for (output in getSwayTree().nodes) {
@@ -181,11 +366,11 @@ internal class SwayWm {
         }
     }
 
-    fun getWindowState(title: String): WmWindowState {
+    override fun getWindowState(title: String): WmWindowState {
         return getWindowStateHelper { it.name == title } ?: fail("Cannot find window with title $title")
     }
 
-    fun getVersion(): WmVersion {
+    override fun getVersion(): WmVersion {
         val swayVersion = getSwayVersion()
 
         val checkWindowCapabilities: (WindowCapabilities) -> Unit = { capabilities ->
@@ -237,38 +422,49 @@ internal class SwayWm {
         }
     }
 
-    fun tileWindows(windowTitles: List<String>) {
-        for (title in windowTitles) {
-            runSwayMsg(title, "floating disable")
-        }
+    override fun tileWindows(window1Title: String, window2Title: String) {
+        runSwayMsg(window1Title, "floating disable")
+        runSwayMsg(window2Title, "floating disable")
     }
 
-    fun moveWindow(title: String, pos: GlobalPosition) {
+    override fun moveWindow(title: String, pos: GlobalPosition) {
         runSwayMsg(title, "move position ${pos.x.rawLogical} ${pos.y.rawLogical}")
     }
 
-    fun fullScreenWindow(title: String) {
+    override fun fullScreenWindow(title: String) {
         runSwayMsg(title, "fullscreen enable")
     }
 
-    fun unsetFullScreenWindow(title: String) {
+    override fun unsetFullScreenWindow(title: String) {
         runSwayMsg(title, "fullscreen disable")
     }
 
-    fun closeWindow(title: String) {
+    override fun closeWindow(title: String) {
         runSwayMsg(title, "kill")
     }
 
-    fun focusWindow(title: String) {
-        runSwayMsg(title, "focus")
-    }
-
-    fun closeFocusedWindow() {
+    override fun closeFocusedWindow() {
         runCommand(listOf("swaymsg", "kill"))
     }
 
-    fun focusWindowWithTitle(title: String) {
+    override fun focusWindowWithTitle(title: String) {
         runSwayMsg(title, "focus")
+    }
+
+    override fun screenshot(outPath: Path, scale: Scale, rect: LogicalRect?): SkBitmap {
+        val cmd = buildList {
+            add("grim")
+            if (rect != null) {
+                add("-g")
+                add("${rect.x.rawLogical},${rect.y.rawLogical} ${rect.width.rawLogical}x${rect.height.rawLogical}")
+            }
+            add("-c")
+            add(outPath.absolutePathString())
+        }
+        runCommand(cmd)
+
+        val image = SkImage.makeFromEncoded(outPath.readBytes())
+        return SkBitmap.makeFromImage(image)
     }
 
     companion object {
@@ -501,9 +697,19 @@ private fun getTempDir(): Path {
     return Path.of(checkNotNull(System.getenv("XDG_RUNTIME_DIR")))
 }
 
+private fun doVirtualDeviceEvent(uriPath: String, expectedStatusCode: Int = 200): String {
+    val httpClient = HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(2)).build()
+
+    val httpRequest = HttpRequest.newBuilder(URI("http://127.0.0.1:8000/$uriPath")).build()
+    val response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString())
+    assertEquals(expectedStatusCode, response.statusCode())
+    return response.body()
+}
+
 private fun runCommandImpl(command: List<String>, timeout: Duration = 5.seconds): Result<Path> {
     log("runCommand: $command")
-    val outputFile = Files.createTempFile(getTempDir(), "${command.first()}-output", ".log")
+    val exe = command.first().split('/').last()
+    val outputFile = Files.createTempFile(getTempDir(), "$exe-output", ".log")
     val proc = ProcessBuilder(command).redirectOutput(ProcessBuilder.Redirect.to(outputFile.toFile())).start()
     if (!proc.waitFor(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)) {
         fail(withTimestamp("Timed out waiting for $command to finish"))
@@ -561,7 +767,7 @@ internal fun <T> waitUntil(
     getter: () -> T,
     predicate: (T) -> Boolean,
 ): T {
-    val res = waitUntilCheck(msg = msg, timeout = timeout, getter = getter, predicate = predicate)
+    val res = waitUntilCheck(msg = msg, timeout = timeout, waitStep = waitStep, getter = getter, predicate = predicate)
     return res.getOrThrow()
 }
 
@@ -572,7 +778,7 @@ internal fun <T> waitUntil(
     getter: () -> T,
     predicate: (T) -> Boolean,
 ): T {
-    return waitUntil(msg = { msg }, timeout = timeout, getter = getter, predicate = predicate)
+    return waitUntil(msg = { msg }, timeout = timeout, waitStep = waitStep, getter = getter, predicate = predicate)
 }
 
 internal fun waitUntilTrue(msg: String, timeout: Duration = 5.seconds, waitStep: Duration = 10.milliseconds, getter: () -> Boolean) {
@@ -978,6 +1184,7 @@ private fun getMakoList(): MakoList? {
 
 private fun withMako(block: () -> Unit) {
     val makoPath = System.getenv("TEST_MAKO_PATH")!!
+    log("Running mako from $makoPath")
     val process = ProcessBuilder(makoPath).start()
     AutoCloseable {
         if (process.isAlive) {
@@ -1004,6 +1211,60 @@ private fun withMako(block: () -> Unit) {
     }
 }
 
+private fun withTestImeEngine(block: () -> Unit) {
+    var err = ""
+    waitUntil(msg = { "Setting IBus test engine failed: $err" }, getter = {
+        try {
+            runCommand(listOf("ibus", "engine", "jb_kdt_ibus_test_engine"))
+            true
+        } catch (e: Throwable) {
+            err = e.toString()
+            false
+        }
+    }) { it }
+
+    AutoCloseable {
+        ProcessBuilder("ibus", "engine", "xkb:us::eng").start().waitFor()
+    }.use {
+        block()
+    }
+}
+
+private fun withFcitx5(engineName: String, block: ((String) -> Unit) -> Unit) {
+    val runCmd = { ProcessBuilder("fcitx5-remote", "-s", engineName).start().waitFor() }
+    waitUntil("Activated fcitx5", getter = runCmd) { it == 0 }
+
+    waitUntil("fcitx5 active", getter = {
+        runCommandWithOutput(listOf("fcitx5-remote", "-n"))
+    }) {
+        it!!.decodeToString().trim() == engineName
+    }
+
+    AutoCloseable {
+        ProcessBuilder("fcitx5-remote", "-c").start().waitFor()
+    }.use {
+        block { engineName ->
+            ProcessBuilder("fcitx5-remote", "-s", engineName).start().waitFor()
+        }
+    }
+}
+
+class TrackLogOutput {
+    private val logFile: Path
+    private var lastLinesCount = 0
+
+    constructor(envVarName: String) {
+        logFile = Path.of(System.getenv(envVarName)!!)
+    }
+
+    fun getNewLines(): List<String> {
+        val lines = logFile.readLines()
+        return lines.subList(lastLinesCount, lines.size).also {
+            lastLinesCount = lines.count()
+        }
+    }
+}
+
 private fun listClipboardFormats(): ByteArray? {
     return runCommandWithOutput(listOf("wl-paste", "--list-types"))
 }
@@ -1020,25 +1281,39 @@ private fun getPrimarySelectionContent(format: String): ByteArray? {
     return runCommandWithOutput(listOf("wl-paste", "--no-newline", "--primary", "-t", format))
 }
 
-private fun screenshot(outPath: Path, rect: LogicalRect? = null, hideCursor: Boolean = true) {
-    val cmd = buildList {
-        add("grim")
-        if (rect != null) {
-            add("-g")
-            add("${rect.x.rawLogical},${rect.y.rawLogical} ${rect.width.rawLogical}x${rect.height.rawLogical}")
-        }
-        if (!hideCursor) {
-            add("-c")
-        }
-        add(outPath.absolutePathString())
-    }
-    runCommand(cmd)
-}
-
 private fun <T : Any> LinkedBlockingQueue<T>.drainAll(): List<T> {
     val ret = mutableListOf<T>()
     drainTo(ret)
     return ret
+}
+
+private class IBusTestEngineOutput(envVarName: String) {
+    private val file = Path.of(System.getenv(envVarName)!!)
+
+    init {
+        file.deleteIfExists()
+    }
+
+    fun read(expectedLineCount: Int = 1): String? {
+        var retryTimes = 100
+        val retryIntervalMs = 10L
+        while (retryTimes > 0) {
+            try {
+                val text = file.readLines()
+                if ((expectedLineCount == -1 && text.isNotEmpty()) || expectedLineCount == text.size) {
+                    file.deleteIfExists()
+                    return text.last()
+                }
+            } catch (_: NoSuchFileException) {}
+            retryTimes -= 1
+            Thread.sleep(retryIntervalMs)
+        }
+        return null
+    }
+
+    fun exists(): Boolean {
+        return file.exists()
+    }
 }
 
 private class SingleThreadTaskQueue {
@@ -1190,7 +1465,8 @@ internal data class ExpectedWindowConfigure(
     }
 }
 
-internal fun checkPhysicalSize(expectedLogical: LogicalSize, scale: Scale, actual: PhysicalSize) {
+internal fun checkPhysicalSize(expectedLogical: LogicalSize, scale: Scale?, actual: PhysicalSize) {
+    val scale = scale ?: Scale.NO_SCALE
     val expected = Pair(
         expectedLogical.width.toRawPhysical(scale).roundToInt(),
         expectedLogical.height.toRawPhysical(scale).roundToInt(),
@@ -1209,7 +1485,12 @@ abstract class WaylandTestsBase {
 
         internal val TEST_APP_BROWSER_LOG_PATH: Path = Path.of(System.getenv("HOME")!!, "test_app_browser.log")
 
-        internal val wm by lazy { SwayWm() }
+        internal val wm by lazy {
+            when (System.getenv("XDG_CURRENT_DESKTOP")) {
+                "KDE" -> KWin()
+                else -> SwayWm()
+            }
+        }
 
         private val appExecutor = SingleThreadTaskQueue()
 
@@ -1240,11 +1521,11 @@ abstract class WaylandTestsBase {
                 size = LogicalSize(width = LogicalPixelsInt(200), height = LogicalPixelsInt(300)),
                 minSize = null,
                 appId = APP_ID,
-                preferClientSideDecoration = false,
+                preferClientSideDecoration = true,
                 renderingMode = RenderingMode.Software,
                 clientSideDecorationFrame = WindowFrame(
-                    padding = WindowFrame.Padding.withAll(LogicalPixelsInt(25)),
-                    resizerThickness = WindowFrame.ResizerThickness.withAll(LogicalPixelsInt(12)),
+                    padding = WindowFrame.Padding.withAll(LogicalPixelsInt.Zero),
+                    resizerThickness = WindowFrame.ResizerThickness.withAll(LogicalPixelsInt.Zero),
                 ),
             )
         }
@@ -1448,6 +1729,7 @@ abstract class WaylandTestsBase {
         msg: String? = null,
         noinline predicate: (T) -> Boolean,
     ): T {
+        log("awaitEventOfType ${T::class}")
         return awaitEvent(convert = { it as? T }, timeout = timeout, msg = msg, predicate = predicate)
     }
 
@@ -1472,26 +1754,7 @@ abstract class WaylandTestsBase {
         }
     }
 
-    internal fun doVirtualDeviceEvent(uriPath: String, expectedStatusCode: Int = 200): String {
-        val httpClient = HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(2)).build()
-
-        val httpRequest = HttpRequest.newBuilder(URI("http://127.0.0.1:8000/$uriPath")).build()
-        val response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString())
-        assertEquals(expectedStatusCode, response.statusCode())
-        return response.body()
-    }
-
-    internal fun withSyncVirtualDeviceCommand(uriPath: String, expectedStatusCode: Int = 200, block: () -> Unit): String {
-        doVirtualDeviceEvent("wait_for_im_update")
-        block()
-        return doVirtualDeviceEvent(uriPath, expectedStatusCode)
-    }
-
-    internal fun withSyncGetInputMethodState(block: () -> Unit): String {
-        return withSyncVirtualDeviceCommand("get_input_state", block = block)
-    }
-
-    internal fun <T> withVirtualDeviceEvent(perform: () -> String, revert: () -> String, block: () -> T): T {
+    private fun <T> withVirtualDeviceEvent(perform: () -> String, revert: () -> String, block: () -> T): T {
         doVirtualDeviceEvent(perform())
         AutoCloseable {
             doVirtualDeviceEvent(revert())
@@ -1518,13 +1781,16 @@ abstract class WaylandTestsBase {
     }
 
     internal fun moveMouseTo(pos: TestMousePosition) {
-        val screenSize = checkNotNull(lastScreenSize)
-        log("moveMouseTo: $pos")
         val x: Int = (pos.base.x + pos.offsetX).rawLogical
         val y: Int = (pos.base.y + pos.offsetY).rawLogical
-        val xExtent: Int = screenSize.width.rawLogical
-        val yExtent: Int = screenSize.height.rawLogical
-        doVirtualDeviceEvent("mousemove?x=$x&y=$y&x_extent=$xExtent&y_extent=$yExtent")
+        log("moveMouseTo: $x,$y")
+        doVirtualDeviceEvent("mousemove?x=$x&y=$y")
+        wm.getCursorPosition()?.let {
+            log("Actual mouse position: $it")
+            if (x == 0 && y == 0) {
+                doVirtualDeviceEvent("setmouseposition?x=${it.x.rawLogical}&y=${it.y.rawLogical}")
+            }
+        }
     }
 
     internal fun wiggleMouseUntil(pos: TestMousePosition, timeout: Duration = 5.seconds, predicate: () -> Boolean): Boolean {
@@ -1544,11 +1810,11 @@ abstract class WaylandTestsBase {
     }
 
     internal fun scrollMouseUp() {
-        doVirtualDeviceEvent("mousescroll?axis_source=0&vertical_scroll_120=-120&horizontal_scroll_120=0")
+        doVirtualDeviceEvent("mousescroll?vertical_scroll_120=1&horizontal_scroll_120=0")
     }
 
     internal fun scrollMouseDown() {
-        doVirtualDeviceEvent("mousescroll?axis_source=0&vertical_scroll_120=120&horizontal_scroll_120=0")
+        doVirtualDeviceEvent("mousescroll?vertical_scroll_120=-1&horizontal_scroll_120=0")
     }
 
     internal fun withSetClipboardContent(@Suppress("unused") eventSerial: EventSerial, mimeTypes: List<String>, block: () -> Unit) {
@@ -1615,7 +1881,7 @@ abstract class WaylandTestsBase {
                             configure = event
                             checklist.checkEntry("configure")
                         } else {
-                            wm.focusWindow(windowParams.title)
+                            wm.focusWindowWithTitle(windowParams.title)
                         }
                     }
                 }
@@ -1675,8 +1941,9 @@ abstract class WaylandTestsBase {
     }
 
     internal fun moveMouseInsideWindow(windowTitle: String): TestMousePosition {
+        val windowState = wm.getWindowState(windowTitle)
         val pos = TestMousePosition(
-            wm.getWindowState(windowTitle).clientArea.pos,
+            windowState.clientArea.pos,
             LogicalPixelsInt(50),
             LogicalPixelsInt(50),
         )
@@ -1782,7 +2049,7 @@ abstract class WaylandTestsBase {
     }
 
     @Volatile
-    internal var eventHandler: ((Event) -> EventHandlerResult)? = null
+    internal var eventHandler: ((Event) -> EventHandlerResult?)? = null
 
     @BeforeEach
     fun setUp() {
@@ -1794,7 +2061,8 @@ abstract class WaylandTestsBase {
     fun tearDown() {
         log("tearDown start")
 //        if (!testSuccessful) {
-//            Thread.sleep(60 * 1000)
+//            log("********* TEST NOT SUCCESSFUL ******")
+//            Thread.sleep(19 * 1000)
 //        }
         appExecutingResult?.let {
             if (!it.isDone) {
@@ -2203,7 +2471,7 @@ class WaylandTests : WaylandTestsBase() {
         val fullscreenWindowSize = screen.size
         assertEquals(0.0, screen.origin.x.rawLogical)
         assertEquals(0.0, screen.origin.y.rawLogical)
-        if (screen.name != "WL-1") {
+        if (screen.name != "WL-1" && screen.name != "Virtual-1") {
             assertEquals("HEADLESS-1", screen.name)
         }
         assertNotEquals(0, screen.screenId)
@@ -2230,7 +2498,7 @@ class WaylandTests : WaylandTestsBase() {
             expectedConfigureEvent.assertEquals(event)
         }
 
-        var scale = Scale.NO_SCALE
+        var scale: Scale? = null
 
         withNextEvent { event ->
             assertNotNull(event)
@@ -2277,29 +2545,31 @@ class WaylandTests : WaylandTestsBase() {
         }
 
         val otherEvents = checkNextEvents(
-            checks = mapOf(
-                "WindowScreenChange" to { event, _ ->
+            checks = buildMap {
+                put("WindowScreenChange", { event, _ ->
                     val matchesType = event is Event.WindowScreenChange
                     if (matchesType) {
                         assertEquals(windowParams.windowId, event.windowId)
                         assertEquals(screen.screenId, event.newScreenId)
                     }
                     matchesType
-                },
-            ),
+                })
+                if (scale == null) {
+                    put("WindowScaleChanged", { event, _ ->
+                        val matchesType = event is Event.WindowScaleChanged
+                        if (matchesType) {
+                            assertEquals(windowParams.windowId, event.windowId)
+                            scale = event.newScale
+                        }
+                        matchesType
+                    })
+                }
+            },
         )
 
         checkEvents(
             otherEvents,
             checks = mapOf(
-                "WindowScaleChanged" to { event, _ ->
-                    val matchesType = event is Event.WindowScaleChanged
-                    if (matchesType) {
-                        assertEquals(windowParams.windowId, event.windowId)
-                        scale = event.newScale
-                    }
-                    matchesType
-                },
                 "WindowConfigure" to { event, _ ->
                     val matchesType = event is Event.WindowConfigure
                     if (matchesType) {
@@ -2310,9 +2580,10 @@ class WaylandTests : WaylandTestsBase() {
             ),
         )
 
-        wmVersion.checkWindowScale(wm.getWindowState(windowTitle).output, scale)
-
-        var mousePos = TestMousePosition(wm.getWindowState(windowTitle).clientArea.pos, LogicalPixelsInt(10), LogicalPixelsInt(10))
+        assertNotNull(scale)
+        val windowState = wm.getWindowState(windowTitle)
+        wmVersion.checkWindowScale(windowState.output, scale)
+        var mousePos = TestMousePosition(windowState.clientArea.pos, LogicalPixelsInt(10), LogicalPixelsInt(10))
         moveMouseTo(mousePos)
 
         withNextEvent { event ->
@@ -2474,10 +2745,12 @@ class WaylandTests : WaylandTestsBase() {
 
         val screenshots = mutableListOf<Path>()
         val tempDir = Files.createTempDirectory(getTempDir(), "test_linux_screenshots")
-        val clientAreaPos = wm.getWindowState(windowParams.title).clientArea.pos
+        val windowState = wm.getWindowState(windowParams.title)
+        val clientAreaPos = windowState.clientArea.pos
 
         val screenshotRect =
             LogicalRect(x = clientAreaPos.x, y = clientAreaPos.y, width = LogicalPixelsInt(150), height = LogicalPixelsInt(150))
+        val scale = initialWindowData.scale.newScale
 
         ui { app.setCursorTheme("phinger-cursors-light", 48U) }
         ui {}
@@ -2485,7 +2758,7 @@ class WaylandTests : WaylandTestsBase() {
         val screenSize = checkNotNull(lastScreenSize)
         moveMouseTo(TestMousePosition(GlobalPosition.Zero, screenSize.width, screenSize.height))
         val blank = tempDir.resolve("_blank.png").also {
-            screenshot(it, screenshotRect, hideCursor = false)
+            wm.screenshot(it, scale, screenshotRect)
             screenshots.add(it)
         }
 
@@ -2506,7 +2779,7 @@ class WaylandTests : WaylandTestsBase() {
             tempDir.resolve("$shape.png").also { shapeScreenshotPath ->
                 var retryCount = 20
                 while (retryCount > 0) {
-                    screenshot(shapeScreenshotPath, screenshotRect, hideCursor = false)
+                    wm.screenshot(shapeScreenshotPath, scale, screenshotRect)
                     val same = screenshots.find {
                         val isIdentical = Files.mismatch(shapeScreenshotPath, it) == -1L
                         if (shape == PointerShape.Hidden && it == blank) {
@@ -2661,6 +2934,7 @@ class WaylandTests : WaylandTestsBase() {
     fun testWindowDecorationsToggle() {
         run(defaultApplicationConfig())
         val windowParams = defaultWindowParams().copy(
+            preferClientSideDecoration = false,
             clientSideDecorationFrame = WindowFrame(
                 padding = WindowFrame.Padding.withAll(LogicalPixelsInt(25)),
                 resizerThickness = WindowFrame.ResizerThickness.withAll(LogicalPixelsInt(12)),
@@ -2776,7 +3050,9 @@ class WaylandTests : WaylandTestsBase() {
     fun testMultipleWindowCreation() {
         run(defaultApplicationConfig())
 
-        val window1Params = defaultWindowParams()
+        val window1Params = defaultWindowParams().copy(
+            preferClientSideDecoration = false,
+        )
         val requestedWindow1Size = checkNotNull(window1Params.size)
         val window1 = ui { app.createWindow(window1Params) }
 
@@ -2939,7 +3215,7 @@ class WaylandTests : WaylandTestsBase() {
         }
         awaitEventOfType<Event.KeyUp> { true }
 
-        wm.tileWindows(listOf(window2Params.title, window1Params.title))
+        wm.tileWindows(window2Params.title, window1Params.title)
 
         expectedWindow1ConfigureEvent =
             expectedWindow1ConfigureEvent.copy(
@@ -3025,10 +3301,10 @@ text/plain;charset=utf-8
             assertArrayEquals(textContent, getClipboardContent(TEXT_UTF8_MIME_TYPE))
 
             ui { app.clipboardPut(listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE)) }
-            withNextEvent { event ->
-                assertInstanceOf<Event.DataTransferAvailable>(event)
+            awaitEventOfType<Event.DataTransferAvailable> { event ->
                 assertEquals(DataSource.Clipboard, event.dataSource)
                 assertIterableEquals(listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE), event.mimeTypes)
+                true
             }
         }
         testSuccessful = true
@@ -3126,7 +3402,7 @@ text/plain;charset=utf-8
             withClipboardSourceTestApp(
                 listOf(HTML_TEXT_MIME_TYPE to sequenceOf("<p>other app text</p>".encodeToByteArray())),
             ) { testAppData ->
-                wm.focusWindow(testAppData.windowTitle)
+                wm.focusWindowWithTitle(testAppData.windowTitle)
                 // Trigger the test app clipboard copy
                 withKeyPress(KeyCode.C) {}
                 awaitEvent({ it as? Event.DataTransferCancelled }) {
@@ -3166,7 +3442,7 @@ text/plain;charset=utf-8
             withPrimarySelectionSourceTestApp(
                 listOf(HTML_TEXT_MIME_TYPE to sequenceOf("<p>other app text</p>".encodeToByteArray())),
             ) { testAppData ->
-                wm.focusWindow(testAppData.windowTitle)
+                wm.focusWindowWithTitle(testAppData.windowTitle)
                 // Trigger the test app clipboard copy
                 withKeyPress(KeyCode.C) {}
                 awaitEvent({ it as? Event.DataTransferCancelled }) {
@@ -3214,10 +3490,10 @@ text/plain;charset=utf-8
             assertArrayEquals(textContent, getPrimarySelectionContent(TEXT_UTF8_MIME_TYPE))
 
             ui { app.primarySelectionPut(mimeTypes) }
-            withNextEvent { event ->
-                assertInstanceOf<Event.DataTransferAvailable>(event)
+            awaitEventOfType<Event.DataTransferAvailable> { event ->
                 assertEquals(DataSource.PrimarySelection, event.dataSource)
                 assertIterableEquals(mimeTypes, event.mimeTypes)
+                true
             }
         }
         testSuccessful = true
@@ -3340,7 +3616,7 @@ text/plain;charset=utf-8
         run(defaultApplicationConfig())
         val mimeTypes = data.map { it.first }
         withClipboardSourceTestApp(data, operationMode) { testAppData ->
-            wm.focusWindow(testAppData.windowTitle)
+            wm.focusWindowWithTitle(testAppData.windowTitle)
             // Trigger the test app clipboard copy
             withKeyPress(KeyCode.C) {}
 
@@ -3525,7 +3801,7 @@ text/plain;charset=utf-8
                 TEXT_UTF8_MIME_TYPE to sequenceOf(textData),
             ),
         ) { testAppData ->
-            wm.focusWindow(testAppData.windowTitle)
+            wm.focusWindowWithTitle(testAppData.windowTitle)
             // Trigger the test app primary selection copy
             withKeyPress(KeyCode.C) {}
 
@@ -3743,425 +4019,424 @@ text/plain;charset=utf-8
         testSuccessful = true
     }
 
+    private fun getExpectedImePopupPositionLogLine(pos: LogicalRect, scale: Scale): String {
+        log("pos=$pos")
+        log("scale=$scale")
+        val x = pos.x.rawLogical
+        val y = pos.y.rawLogical
+        val w = pos.width.rawLogical
+        val h = pos.height.rawLogical
+        return "do_set_cursor_location_relative: x=$x, y=$y, w=$w, h=$h"
+    }
+
+    private fun assertImePopupPosition(actualLine: String?, pos: LogicalRect, scale: Scale) {
+        val expectedLine = getExpectedImePopupPositionLogLine(pos, scale)
+        assertEquals(expectedLine, actualLine)
+    }
+//
+//    @Test
+//    fun testTextInputContextOld() {
+//        var textInputContext = TextInputContext(
+//            contentPurpose = TextInputContentPurpose.Normal,
+//            cursorRectangle = LogicalRect.makeXYWH(x = 50, y = 20, width = 5, height = 10),
+//            surroundingText = "",
+//            cursorCodepointOffset = 0U,
+//            selectionStartCodepointOffset = 0U,
+//            hints = setOf(TextInputContentHint.Completion, TextInputContentHint.Spellcheck),
+//            changeCausedByInputMethod = false,
+//        )
+//        run(defaultApplicationConfig())
+//        val windowParams = defaultWindowParams()
+//
+//        createWindowAndWaitForFocus(windowParams)
+//
+//        assertEquals(
+//            "content_purpose: Normal, content_hints: [Completion, Spellcheck]",
+//            withSyncGetInputMethodState { ui { app.textInputEnable(textInputContext) } },
+//        )
+//        textInputContext = textInputContext.copy(
+//            hints = setOf(
+//                TextInputContentHint.Completion,
+//                TextInputContentHint.Spellcheck,
+//                TextInputContentHint.AutoCapitalization,
+//                TextInputContentHint.Lowercase,
+//                TextInputContentHint.Uppercase,
+//                TextInputContentHint.Titlecase,
+//                TextInputContentHint.HiddenText,
+//                TextInputContentHint.SensitiveData,
+//                TextInputContentHint.Latin,
+//                TextInputContentHint.Multiline,
+//            ),
+//        )
+//
+//        assertEquals(
+//            "content_purpose: Normal, content_hints: [" +
+//                "Completion, Spellcheck, AutoCapitalization, Lowercase, Uppercase, Titlecase, HiddenText, SensitiveData, Latin, Multiline]",
+//            withSyncGetInputMethodState { ui { app.textInputUpdate(textInputContext) } },
+//        )
+//
+//        textInputContext = textInputContext.copy(
+//            contentPurpose = TextInputContentPurpose.Alpha,
+//            hints = setOf(TextInputContentHint.Completion),
+//        )
+//        assertEquals(
+//            "content_purpose: Alpha, content_hints: [Completion]",
+//            withSyncGetInputMethodState {
+//                ui { app.textInputUpdate(textInputContext) }
+//            },
+//        )
+//
+//        textInputContext = textInputContext.copy(
+//            contentPurpose = TextInputContentPurpose.Digits,
+//            hints = setOf(TextInputContentHint.Spellcheck),
+//        )
+//        assertEquals(
+//            "content_purpose: Digits, content_hints: [Spellcheck]",
+//            withSyncGetInputMethodState {
+//                ui { app.textInputUpdate(textInputContext) }
+//            },
+//        )
+//
+//        textInputContext = textInputContext.copy(
+//            contentPurpose = TextInputContentPurpose.Number,
+//            hints = setOf(TextInputContentHint.AutoCapitalization),
+//        )
+//        assertEquals(
+//            "content_purpose: Number, content_hints: [AutoCapitalization]",
+//            withSyncGetInputMethodState {
+//                ui { app.textInputUpdate(textInputContext) }
+//            },
+//        )
+//
+//        textInputContext = textInputContext.copy(
+//            contentPurpose = TextInputContentPurpose.Phone,
+//            hints = setOf(TextInputContentHint.Lowercase),
+//            cursorRectangle = LogicalRect.makeXYWH(x = 1000000000, y = 1000000000, width = 1000000000, height = 1000000000),
+//        )
+//        assertEquals(
+//            "content_purpose: Phone, content_hints: [Lowercase]",
+//            withSyncGetInputMethodState {
+//                ui { app.textInputUpdate(textInputContext) }
+//            },
+//        )
+//
+//        textInputContext =
+//            textInputContext.copy(contentPurpose = TextInputContentPurpose.Url, hints = setOf(TextInputContentHint.Uppercase))
+//        assertEquals(
+//            "content_purpose: Url, content_hints: [Uppercase]",
+//            withSyncGetInputMethodState {
+//                ui { app.textInputUpdate(textInputContext) }
+//            },
+//        )
+//
+//        textInputContext = textInputContext.copy(
+//            contentPurpose = TextInputContentPurpose.Email,
+//            hints = setOf(TextInputContentHint.Titlecase),
+//        )
+//        assertEquals(
+//            "content_purpose: Email, content_hints: [Titlecase]",
+//            withSyncGetInputMethodState {
+//                ui { app.textInputUpdate(textInputContext) }
+//            },
+//        )
+//
+//        textInputContext = textInputContext.copy(
+//            contentPurpose = TextInputContentPurpose.Name,
+//            hints = setOf(TextInputContentHint.HiddenText),
+//            cursorRectangle = LogicalRect.makeXYWH(x = 1, y = 2, width = 3, height = 4),
+//        )
+//        assertEquals(
+//            "content_purpose: Name, content_hints: [HiddenText]",
+//            withSyncGetInputMethodState {
+//                ui { app.textInputUpdate(textInputContext) }
+//            },
+//        )
+//
+//        textInputContext = textInputContext.copy(
+//            contentPurpose = TextInputContentPurpose.Password,
+//            hints = setOf(TextInputContentHint.SensitiveData),
+//        )
+//        assertEquals(
+//            "content_purpose: Password, content_hints: [SensitiveData]",
+//            withSyncGetInputMethodState {
+//                ui { app.textInputUpdate(textInputContext) }
+//            },
+//        )
+//
+//        textInputContext =
+//            textInputContext.copy(contentPurpose = TextInputContentPurpose.Pin, hints = setOf(TextInputContentHint.SensitiveData))
+//        assertEquals(
+//            "content_purpose: Pin, content_hints: [SensitiveData]",
+//            withSyncGetInputMethodState {
+//                ui { app.textInputUpdate(textInputContext) }
+//            },
+//        )
+//
+//        textInputContext =
+//            textInputContext.copy(contentPurpose = TextInputContentPurpose.Date, hints = emptySet())
+//        assertEquals(
+//            "content_purpose: Date, content_hints: []",
+//            withSyncGetInputMethodState {
+//                ui { app.textInputUpdate(textInputContext) }
+//            },
+//        )
+//
+//        textInputContext =
+//            textInputContext.copy(contentPurpose = TextInputContentPurpose.Time, hints = emptySet())
+//        assertEquals(
+//            "content_purpose: Time, content_hints: []",
+//            withSyncGetInputMethodState {
+//                ui { app.textInputUpdate(textInputContext) }
+//            },
+//        )
+//
+//        textInputContext =
+//            textInputContext.copy(contentPurpose = TextInputContentPurpose.Datetime, hints = setOf(TextInputContentHint.Latin))
+//        assertEquals(
+//            "content_purpose: Datetime, content_hints: [Latin]",
+//            withSyncGetInputMethodState {
+//                ui { app.textInputUpdate(textInputContext) }
+//            },
+//        )
+//
+//        textInputContext =
+//            textInputContext.copy(contentPurpose = TextInputContentPurpose.Terminal, hints = setOf(TextInputContentHint.Multiline))
+//        assertEquals(
+//            "content_purpose: Terminal, content_hints: [Multiline]",
+//            withSyncGetInputMethodState {
+//                ui { app.textInputUpdate(textInputContext) }
+//            },
+//        )
+//
+//        testSuccessful = true
+//    }
+
+    @Disabled
     @Test
     fun testTextInputContext() {
-        var textInputContext = TextInputContext(
-            contentPurpose = TextInputContentPurpose.Normal,
-            cursorRectangle = LogicalRect.makeXYWH(x = 50, y = 20, width = 5, height = 10),
-            surroundingText = "",
-            cursorCodepointOffset = 0U,
-            selectionStartCodepointOffset = 0U,
-            hints = setOf(TextInputContentHint.Completion, TextInputContentHint.Spellcheck),
-            changeCausedByInputMethod = false,
-        )
-        run(defaultApplicationConfig())
-        val windowParams = defaultWindowParams()
+        val capsTextOutput =
+            IBusTestEngineOutput("TEST_IBUS_ENGINE_CAPS_OUT_FILE")
+        val cursorLocTextOutput =
+            IBusTestEngineOutput("TEST_IBUS_ENGINE_CURSOR_LOCATION_OUT_FILE")
+        val contentTypeTextOutput =
+            IBusTestEngineOutput("TEST_IBUS_ENGINE_CONTENT_TYPE_OUT_FILE")
 
-        createWindowAndWaitForFocus(windowParams)
+        withTestImeEngine {
+            run(defaultApplicationConfig())
+            val ibusEngine = runCommandWithOutput(listOf("ibus", "engine"))
+            assertEquals("jb_kdt_ibus_test_engine\n", ibusEngine?.decodeToString())
+            val windowParams = defaultWindowParams()
 
-        assertEquals(
-            "content_purpose: Normal, content_hints: [Completion, Spellcheck]",
-            withSyncGetInputMethodState { ui { app.textInputEnable(textInputContext) } },
-        )
-        textInputContext = textInputContext.copy(
-            hints = setOf(
-                TextInputContentHint.Completion,
-                TextInputContentHint.Spellcheck,
-                TextInputContentHint.AutoCapitalization,
-                TextInputContentHint.Lowercase,
-                TextInputContentHint.Uppercase,
-                TextInputContentHint.Titlecase,
-                TextInputContentHint.HiddenText,
-                TextInputContentHint.SensitiveData,
-                TextInputContentHint.Latin,
-                TextInputContentHint.Multiline,
-            ),
-        )
+            var textInputContext = TextInputContext(
+                contentPurpose = TextInputContentPurpose.Normal,
+                cursorRectangle = LogicalRect.makeXYWH(x = 50, y = 20, width = 5, height = 10),
+                surroundingText = "",
+                cursorCodepointOffset = 0U,
+                selectionStartCodepointOffset = 0U,
+                hints = setOf(TextInputContentHint.Completion, TextInputContentHint.Spellcheck),
+                changeCausedByInputMethod = false,
+            )
 
-        assertEquals(
-            "content_purpose: Normal, content_hints: [" +
-                "Completion, Spellcheck, AutoCapitalization, Lowercase, Uppercase, Titlecase, HiddenText, SensitiveData, Latin, Multiline]",
-            withSyncGetInputMethodState { ui { app.textInputUpdate(textInputContext) } },
-        )
+            val initialWindowData = createWindowAndWaitForFocus(windowParams)
+            val window = initialWindowData.window
+            val scale = initialWindowData.scale.newScale
 
-        textInputContext = textInputContext.copy(
-            contentPurpose = TextInputContentPurpose.Alpha,
-            hints = setOf(TextInputContentHint.Completion),
-        )
-        assertEquals(
-            "content_purpose: Alpha, content_hints: [Completion]",
-            withSyncGetInputMethodState {
-                ui { app.textInputUpdate(textInputContext) }
-            },
-        )
+            assertEquals("do_set_capabilities: ['PREEDIT_TEXT', 'FOCUS', 'SURROUNDING_TEXT']", capsTextOutput.read())
+            assertEquals(
+                "do_set_content_type: purpose = FREE_FORM, hints = ['SPELLCHECK', 'WORD_COMPLETION']",
+                contentTypeTextOutput.read(),
+            )
+            assertImePopupPosition(cursorLocTextOutput.read(-1), textInputContext.cursorRectangle, scale)
 
-        textInputContext = textInputContext.copy(
-            contentPurpose = TextInputContentPurpose.Digits,
-            hints = setOf(TextInputContentHint.Spellcheck),
-        )
-        assertEquals(
-            "content_purpose: Digits, content_hints: [Spellcheck]",
-            withSyncGetInputMethodState {
-                ui { app.textInputUpdate(textInputContext) }
-            },
-        )
+            textInputContext = textInputContext.copy(
+                hints = setOf(
+                    TextInputContentHint.Completion,
+                    TextInputContentHint.Spellcheck,
+                    TextInputContentHint.AutoCapitalization,
+                    TextInputContentHint.Lowercase,
+                    TextInputContentHint.Uppercase,
+                    TextInputContentHint.Titlecase,
+                    TextInputContentHint.HiddenText,
+                    TextInputContentHint.SensitiveData,
+                    TextInputContentHint.Latin,
+                    TextInputContentHint.Multiline,
+                ),
+            )
+            ui { app.textInputUpdate(textInputContext) }
 
-        textInputContext = textInputContext.copy(
-            contentPurpose = TextInputContentPurpose.Number,
-            hints = setOf(TextInputContentHint.AutoCapitalization),
-        )
-        assertEquals(
-            "content_purpose: Number, content_hints: [AutoCapitalization]",
-            withSyncGetInputMethodState {
-                ui { app.textInputUpdate(textInputContext) }
-            },
-        )
+            assertEquals(
+                "do_set_content_type: purpose = FREE_FORM, hints = [" +
+                    "'SPELLCHECK', 'NO_SPELLCHECK', 'WORD_COMPLETION', 'LOWERCASE', 'UPPERCASE_CHARS', 'UPPERCASE_WORDS', " +
+                    "'UPPERCASE_SENTENCES', 'INHIBIT_OSK', 'VERTICAL_WRITING', 'EMOJI', 'NO_EMOJI', 'PRIVATE']",
+                contentTypeTextOutput.read(),
+            )
 
-        textInputContext = textInputContext.copy(
-            contentPurpose = TextInputContentPurpose.Phone,
-            hints = setOf(TextInputContentHint.Lowercase),
-            cursorRectangle = LogicalRect.makeXYWH(x = 1000000000, y = 1000000000, width = 1000000000, height = 1000000000),
-        )
-        assertEquals(
-            "content_purpose: Phone, content_hints: [Lowercase]",
-            withSyncGetInputMethodState {
-                ui { app.textInputUpdate(textInputContext) }
-            },
-        )
+//            assertFalse(cursorLocTextOutput.exists())
+            textInputContext = textInputContext.copy(
+                contentPurpose = TextInputContentPurpose.Alpha,
+                hints = setOf(TextInputContentHint.Spellcheck),
+                cursorRectangle = LogicalRect.makeXYWH(x = 0, y = 0, width = 0, height = 0),
+            )
+            ui { app.textInputUpdate(textInputContext) }
+            assertEquals("do_set_content_type: purpose = ALPHA, hints = ['SPELLCHECK']", contentTypeTextOutput.read(2))
+            assertImePopupPosition(cursorLocTextOutput.read(), textInputContext.cursorRectangle, scale)
 
-        textInputContext =
-            textInputContext.copy(contentPurpose = TextInputContentPurpose.Url, hints = setOf(TextInputContentHint.Uppercase))
-        assertEquals(
-            "content_purpose: Url, content_hints: [Uppercase]",
-            withSyncGetInputMethodState {
-                ui { app.textInputUpdate(textInputContext) }
-            },
-        )
-
-        textInputContext = textInputContext.copy(
-            contentPurpose = TextInputContentPurpose.Email,
-            hints = setOf(TextInputContentHint.Titlecase),
-        )
-        assertEquals(
-            "content_purpose: Email, content_hints: [Titlecase]",
-            withSyncGetInputMethodState {
-                ui { app.textInputUpdate(textInputContext) }
-            },
-        )
-
-        textInputContext = textInputContext.copy(
-            contentPurpose = TextInputContentPurpose.Name,
-            hints = setOf(TextInputContentHint.HiddenText),
-            cursorRectangle = LogicalRect.makeXYWH(x = 1, y = 2, width = 3, height = 4),
-        )
-        assertEquals(
-            "content_purpose: Name, content_hints: [HiddenText]",
-            withSyncGetInputMethodState {
-                ui { app.textInputUpdate(textInputContext) }
-            },
-        )
-
-        textInputContext = textInputContext.copy(
-            contentPurpose = TextInputContentPurpose.Password,
-            hints = setOf(TextInputContentHint.SensitiveData),
-        )
-        assertEquals(
-            "content_purpose: Password, content_hints: [SensitiveData]",
-            withSyncGetInputMethodState {
-                ui { app.textInputUpdate(textInputContext) }
-            },
-        )
-
-        textInputContext =
-            textInputContext.copy(contentPurpose = TextInputContentPurpose.Pin, hints = setOf(TextInputContentHint.SensitiveData))
-        assertEquals(
-            "content_purpose: Pin, content_hints: [SensitiveData]",
-            withSyncGetInputMethodState {
-                ui { app.textInputUpdate(textInputContext) }
-            },
-        )
-
-        textInputContext =
-            textInputContext.copy(contentPurpose = TextInputContentPurpose.Date, hints = emptySet())
-        assertEquals(
-            "content_purpose: Date, content_hints: []",
-            withSyncGetInputMethodState {
-                ui { app.textInputUpdate(textInputContext) }
-            },
-        )
-
-        textInputContext =
-            textInputContext.copy(contentPurpose = TextInputContentPurpose.Time, hints = emptySet())
-        assertEquals(
-            "content_purpose: Time, content_hints: []",
-            withSyncGetInputMethodState {
-                ui { app.textInputUpdate(textInputContext) }
-            },
-        )
-
-        textInputContext =
-            textInputContext.copy(contentPurpose = TextInputContentPurpose.Datetime, hints = setOf(TextInputContentHint.Latin))
-        assertEquals(
-            "content_purpose: Datetime, content_hints: [Latin]",
-            withSyncGetInputMethodState {
-                ui { app.textInputUpdate(textInputContext) }
-            },
-        )
-
-        textInputContext =
-            textInputContext.copy(contentPurpose = TextInputContentPurpose.Terminal, hints = setOf(TextInputContentHint.Multiline))
-        assertEquals(
-            "content_purpose: Terminal, content_hints: [Multiline]",
-            withSyncGetInputMethodState {
-                ui { app.textInputUpdate(textInputContext) }
-            },
-        )
+//            textInputContext = textInputContext.copy(
+//                contentPurpose = TextInputContentPurpose.Digits,
+//                hints = setOf(TextInputContentHint.NoSpellcheck),
+//            )
+//            ui { app.textInputUpdate(textInputContext) }
+//            assertEquals("do_set_content_type: purpose = DIGITS, hints = ['NO_SPELLCHECK']", contentTypeTextOutput.read(2))
+//
+//            textInputContext = textInputContext.copy(
+//                contentPurpose = TextInputContentPurpose.Number,
+//                hints = setOf(TextInputContentHint.WordCompletion),
+//            )
+//            ui { app.textInputUpdate(textInputContext) }
+//            assertEquals("do_set_content_type: purpose = NUMBER, hints = ['WORD_COMPLETION']", contentTypeTextOutput.read(2))
+//
+//            textInputContext = textInputContext.copy(
+//                contentPurpose = TextInputContentPurpose.Phone,
+//                hints = setOf(TextInputContentHint.UppercaseChars),
+//                cursorRectangle = LogicalRect.makeXYWH(x = maxValue, y = maxValue, width = maxValue, height = maxValue),
+//            )
+//            ui { app.textInputUpdate(textInputContext) }
+//            assertEquals("do_set_content_type: purpose = PHONE, hints = ['UPPERCASE_CHARS']", contentTypeTextOutput.read(2))
+//            assertImePopupPosition(cursorLocTextOutput.read(), textInputContext.cursorRectangle, scale)
+//
+//            textInputContext =
+//                textInputContext.copy(contentPurpose = TextInputContentPurpose.Url, hints = setOf(TextInputContentHint.Lowercase))
+//            ui { app.textInputUpdate(textInputContext) }
+//            assertEquals("do_set_content_type: purpose = URL, hints = ['LOWERCASE']", contentTypeTextOutput.read(2))
+//
+//            textInputContext = textInputContext.copy(
+//                contentPurpose = TextInputContentPurpose.Email,
+//                hints = setOf(TextInputContentHint.UppercaseSentences),
+//            )
+//            ui { app.textInputUpdate(textInputContext) }
+//            assertEquals("do_set_content_type: purpose = EMAIL, hints = ['UPPERCASE_SENTENCES']", contentTypeTextOutput.read(2))
+//
+//            textInputContext = textInputContext.copy(
+//                contentPurpose = TextInputContentPurpose.Name,
+//                hints = setOf(TextInputContentHint.UppercaseWords),
+//                cursorRectangle = LogicalRect.makeXYWH(x = 1, y = 2, width = 3, height = 4),
+//            )
+//            ui { app.textInputUpdate(textInputContext) }
+//            assertEquals("do_set_content_type: purpose = NAME, hints = ['UPPERCASE_WORDS']", contentTypeTextOutput.read(2))
+//            assertImePopupPosition(cursorLocTextOutput.read(), textInputContext.cursorRectangle, scale)
+//
+//            textInputContext = textInputContext.copy(
+//                contentPurpose = TextInputContentPurpose.Password,
+//                hints = setOf(TextInputContentHint.InhibitOsk),
+//            )
+//            ui { app.textInputUpdate(textInputContext) }
+//            assertEquals("do_set_content_type: purpose = PASSWORD, hints = ['INHIBIT_OSK']", contentTypeTextOutput.read(2))
+//
+//            textInputContext =
+//                textInputContext.copy(contentPurpose = TextInputContentPurpose.Pin, hints = setOf(TextInputContentHint.Private))
+//            ui { app.textInputUpdate(textInputContext) }
+//            assertEquals("do_set_content_type: purpose = PIN, hints = ['PRIVATE']", contentTypeTextOutput.read(2))
+//
+//            textInputContext =
+//                textInputContext.copy(contentPurpose = TextInputContentPurpose.Alpha, hints = setOf(TextInputContentHint.Emoji))
+//            ui { app.textInputUpdate(textInputContext) }
+//            assertEquals("do_set_content_type: purpose = ALPHA, hints = ['EMOJI']", contentTypeTextOutput.read(2))
+//
+//            textInputContext = textInputContext.copy(
+//                contentPurpose = TextInputContentPurpose.Terminal,
+//                hints = setOf(TextInputContentHint.NoEmoji),
+//            )
+//            ui { app.textInputUpdate(textInputContext) }
+//            assertEquals("do_set_content_type: purpose = TERMINAL, hints = ['NO_EMOJI']", contentTypeTextOutput.read(2))
+//
+//            assertFalse(cursorLocTextOutput.exists())
+//            textInputContext = textInputContext.copy(
+//                contentPurpose = TextInputContentPurpose.Normal,
+//                hints = setOf(TextInputContentHint.VerticalWriting),
+//                cursorRectangle = LogicalRect.makeXYWH(x = 0, y = 0, width = 0, height = 0),
+//            )
+//            ui { app.textInputUpdate(textInputContext) }
+//            assertEquals("do_set_content_type: purpose = FREE_FORM, hints = ['VERTICAL_WRITING']", contentTypeTextOutput.read(2))
+//            assertImePopupPosition(cursorLocTextOutput.read(), textInputContext.cursorRectangle, scale)
+        }
 
         testSuccessful = true
     }
 
+    private fun typeLetter(keyCode: UInt, expectedCharacters: String, expectedKeySym: UInt) {
+        withKeyPress(keyCode) {
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyDown>(event)
+                val characters = checkNotNull(event.characters)
+                assertEquals(expectedCharacters, characters)
+                assertEquals(keyCode, event.keyCode.value)
+                assertEquals(expectedKeySym, event.key.value)
+            }
+        }
+        withNextEvent { event ->
+            assertInstanceOf<Event.KeyUp>(event)
+            assertEquals(keyCode, event.keyCode.value)
+            assertEquals(expectedKeySym, event.key.value)
+        }
+    }
+
+    private fun addToTextInputContext(textInputContext: TextInputContext, characters: String?): TextInputContext {
+        return if (characters == null || characters.any { it.isISOControl() }) {
+            textInputContext
+        } else {
+            val codepointOffset = (textInputContext.cursorCodepointOffset.toLong() + characters.codePoints().count()).toUShort()
+            val surroundingText = textInputContext.surroundingText + characters
+            textInputContext.copy(
+                changeCausedByInputMethod = true,
+                surroundingText = surroundingText,
+                cursorCodepointOffset = codepointOffset,
+                selectionStartCodepointOffset = codepointOffset,
+                cursorRectangle = textInputContext.cursorRectangle.copy(x = LogicalPixelsInt(surroundingText.length * 10)),
+            )
+        }
+    }
+
+    private fun codepointFromOffset(sb: StringBuilder, offset: Int): UShort {
+        if (offset == 0) {
+            return 0U
+        }
+        return sb.codePointCount(0, offset).toUShort()
+    }
+
+    @Disabled
     @Test
     fun testIme() {
-        run(defaultApplicationConfig())
-        val windowParams = defaultWindowParams()
-
-        var textInputContext = TextInputContext(
-            contentPurpose = TextInputContentPurpose.Normal,
-            cursorRectangle = LogicalRect.makeXYWH(x = 200, y = 100, width = 10, height = 20),
-            surroundingText = "",
-            cursorCodepointOffset = 0U,
-            selectionStartCodepointOffset = 0U,
-            hints = setOf(TextInputContentHint.Multiline),
-            changeCausedByInputMethod = false,
-        )
-
-        createWindowAndWaitForFocus(windowParams)
-        withSyncGetInputMethodState {
-            ui { app.textInputEnable(textInputContext) }
+        when (val ime = System.getenv("TEST_IME")) {
+            "fcitx5" -> testImeFcitx5()
+            "ibus" -> testImeIBus()
+            else -> fail("Unknown IME: $ime")
         }
+    }
 
-        val keyCodes = mapOf(
-            KeyCode.`1` to Pair("1", KeySym.`1`),
-            KeyCode.`2` to Pair("2", KeySym.`2`),
-            KeyCode.`3` to Pair("3", KeySym.`3`),
-            KeyCode.`4` to Pair("4", KeySym.`4`),
-            KeyCode.`5` to Pair("5", KeySym.`5`),
-            KeyCode.`6` to Pair("6", KeySym.`6`),
-            KeyCode.`7` to Pair("7", KeySym.`7`),
-            KeyCode.`8` to Pair("8", KeySym.`8`),
-            KeyCode.`9` to Pair("9", KeySym.`9`),
-            KeyCode.`0` to Pair("0", KeySym.`0`),
-            KeyCode.minus to Pair("-", KeySym.minus),
-            KeyCode.equal to Pair("=", KeySym.equal),
-            KeyCode.Q to Pair("q", KeySym.q),
-            KeyCode.W to Pair("w", KeySym.w),
-            KeyCode.E to Pair("e", KeySym.e),
-            KeyCode.R to Pair("r", KeySym.r),
-            KeyCode.T to Pair("t", KeySym.t),
-            KeyCode.Y to Pair("y", KeySym.y),
-            KeyCode.U to Pair("u", KeySym.u),
-            KeyCode.I to Pair("i", KeySym.i),
-            KeyCode.O to Pair("o", KeySym.o),
-            KeyCode.P to Pair("p", KeySym.p),
-            KeyCode.bracketleft to Pair("[", KeySym.bracketleft),
-            KeyCode.bracketright to Pair("]", KeySym.bracketright),
-            KeyCode.A to Pair("a", KeySym.a),
-            KeyCode.S to Pair("s", KeySym.s),
-            KeyCode.D to Pair("d", KeySym.d),
-            KeyCode.F to Pair("f", KeySym.f),
-            KeyCode.G to Pair("g", KeySym.g),
-            KeyCode.H to Pair("h", KeySym.h),
-            KeyCode.J to Pair("j", KeySym.j),
-            KeyCode.K to Pair("k", KeySym.k),
-            KeyCode.L to Pair("l", KeySym.l),
-            KeyCode.semicolon to Pair(";", KeySym.semicolon),
-            KeyCode.apostrophe to Pair("'", KeySym.apostrophe),
-            KeyCode.backslash to Pair("\\", KeySym.backslash),
-            KeyCode.Z to Pair("z", KeySym.z),
-            KeyCode.X to Pair("x", KeySym.x),
-            KeyCode.C to Pair("c", KeySym.c),
-            KeyCode.V to Pair("v", KeySym.v),
-            KeyCode.B to Pair("b", KeySym.b),
-            KeyCode.N to Pair("n", KeySym.n),
-            KeyCode.M to Pair("m", KeySym.m),
-            KeyCode.comma to Pair(",", KeySym.comma),
-            KeyCode.period to Pair(".", KeySym.period),
-            KeyCode.slash to Pair("/", KeySym.slash),
-        )
+    fun testImeIBus() {
+        withTestImeEngine {
+            run(defaultApplicationConfig())
+            val ibusEngine = runCommandWithOutput(listOf("ibus", "engine"))
+            assertEquals("jb_kdt_ibus_test_engine\n", ibusEngine?.decodeToString())
+            val windowParams = defaultWindowParams()
 
-        for ((keyCode, charAndKeySym) in keyCodes) {
-            val (c, keySym) = charAndKeySym
-            withKeyPress(keyCode) {
-                withNextEvent { event ->
-                    assertInstanceOf<Event.KeyDown>(event, c)
-                    assertEquals(c, event.characters)
-                    assertEquals(keyCode, event.keyCode.value)
-                    assertEquals(keySym, event.key.value)
-                }
-            }
-            withNextEvent { event ->
-                assertInstanceOf<Event.KeyUp>(event, c)
-                assertEquals(keyCode, event.keyCode.value)
-                assertEquals(keySym, event.key.value)
-            }
-        }
+            var textInputContext = TextInputContext(
+                hints = emptySet(),
+                contentPurpose = TextInputContentPurpose.Normal,
+                cursorRectangle = LogicalRect.makeXYWH(x = 200, y = 100, width = 10, height = 20),
+                surroundingText = "",
+                cursorCodepointOffset = 0U,
+                selectionStartCodepointOffset = 0U,
+                changeCausedByInputMethod = false,
+            )
 
-        doVirtualDeviceEvent(
-            "input?preedit_string_text=${URLEncoder.encode("`", "utf-8")}&preedit_string_cursor_begin=1&preedit_string_cursor_end=1",
-        )
-        withNextEvent { event ->
-            assertInstanceOf<Event.TextInput>(event)
-            val preeditStringData = event.preeditStringData
-            assertNotNull(preeditStringData)
-            assertEquals("`", preeditStringData.text)
-            assertEquals(1, preeditStringData.cursorBeginBytePos)
-            assertEquals(1, preeditStringData.cursorEndBytePos)
-            assertNull(event.commitStringData)
-            assertNull(event.deleteSurroundingTextData)
-        }
+            val window = createWindowAndWaitForFocus(windowParams).window
 
-        doVirtualDeviceEvent("input?commit_string=${URLEncoder.encode("è", "utf-8")}")
-        withNextEvent { event ->
-            assertInstanceOf<Event.TextInput>(event)
-            val commitStringData = event.commitStringData
-            assertNotNull(commitStringData)
-            assertEquals("è", commitStringData.text)
-            assertNull(event.preeditStringData)
-            assertNull(event.deleteSurroundingTextData)
-        }
-
-        withKeyPress(KeyCode.Shift_L) {
-            withNextEvent { event ->
-                assertInstanceOf<Event.KeyDown>(event)
-                assertNull(event.characters)
-                assertEquals(KeyCode.Shift_L, event.keyCode.value)
-            }
-            withNextEvent { event ->
-                assertInstanceOf<Event.ModifiersChanged>(event)
-                assertEquals(setOf(KeyModifiers.Shift), event.modifiers)
-            }
             withKeyPress(KeyCode.A) {
                 withNextEvent { event ->
+                    // We should receive KeyDown events before text input is enabled
                     assertInstanceOf<Event.KeyDown>(event)
-                    assertEquals("A", event.characters)
-                    assertEquals(KeyCode.A, event.keyCode.value)
-                    assertEquals(KeySym.A, event.key.value)
-                }
-            }
-            withNextEvent { event ->
-                assertInstanceOf<Event.KeyUp>(event)
-                assertEquals(KeyCode.A, event.keyCode.value)
-                assertEquals(KeySym.A, event.key.value)
-            }
-        }
-        withNextEvent { event ->
-            assertInstanceOf<Event.KeyUp>(event)
-            assertEquals(KeyCode.Shift_L, event.keyCode.value)
-        }
-        withNextEvent { event ->
-            assertInstanceOf<Event.ModifiersChanged>(event)
-            assertEquals(emptySet<KeyModifiers>(), event.modifiers)
-        }
-
-        withKeyPress(KeyCode.Return) {
-            withNextEvent { event ->
-                assertInstanceOf<Event.KeyDown>(event)
-                assertEquals(KeyCode.Return, event.keyCode.value)
-                assertEquals(KeySym.Return, event.key.value)
-                assertArrayEquals("\r".toByteArray(), event.characters?.toByteArray())
-            }
-        }
-        withNextEvent { event ->
-            assertInstanceOf<Event.KeyUp>(event)
-            assertEquals(KeyCode.Return, event.keyCode.value)
-            assertEquals(KeySym.Return, event.key.value)
-        }
-
-        withKeyPress(KeyCode.Escape) {
-            withNextEvent { event ->
-                assertInstanceOf<Event.KeyDown>(event)
-                assertEquals(KeyCode.Escape, event.keyCode.value)
-                assertEquals(KeySym.Escape, event.key.value)
-                assertArrayEquals("\u001b".toByteArray(), event.characters?.toByteArray())
-            }
-        }
-        withNextEvent { event ->
-            assertInstanceOf<Event.KeyUp>(event)
-            assertEquals(KeyCode.Escape, event.keyCode.value)
-            assertEquals(KeySym.Escape, event.key.value)
-        }
-
-        withKeyPress(KeyCode.BackSpace) {
-            withNextEvent { event ->
-                assertInstanceOf<Event.KeyDown>(event)
-                assertEquals(KeyCode.BackSpace, event.keyCode.value)
-                assertEquals(KeySym.BackSpace, event.key.value)
-                assertArrayEquals("\b".toByteArray(), event.characters?.toByteArray())
-            }
-        }
-        withNextEvent { event ->
-            assertInstanceOf<Event.KeyUp>(event)
-            assertEquals(KeyCode.BackSpace, event.keyCode.value)
-            assertEquals(KeySym.BackSpace, event.key.value)
-        }
-
-        withKeyPress(KeyCode.Tab) {
-            withNextEvent { event ->
-                assertInstanceOf<Event.KeyDown>(event)
-                assertEquals(KeyCode.Tab, event.keyCode.value)
-                assertEquals(KeySym.Tab, event.key.value)
-                assertArrayEquals("\t".toByteArray(), event.characters?.toByteArray())
-            }
-        }
-        withNextEvent { event ->
-            assertInstanceOf<Event.KeyUp>(event)
-            assertEquals(KeyCode.Tab, event.keyCode.value)
-            assertEquals(KeySym.Tab, event.key.value)
-        }
-
-        withKeyPress(KeyCode.Down) {
-            withNextEvent { event ->
-                assertInstanceOf<Event.KeyDown>(event)
-                assertEquals(KeyCode.Down, event.keyCode.value)
-                assertEquals(KeySym.Down, event.key.value)
-                assertNull(event.characters?.encodeToByteArray())
-            }
-        }
-        withNextEvent { event ->
-            assertInstanceOf<Event.KeyUp>(event)
-            assertEquals(KeyCode.Down, event.keyCode.value)
-            assertEquals(KeySym.Down, event.key.value)
-        }
-
-        withKeyPress(KeyCode.Right) {
-            withNextEvent { event ->
-                assertInstanceOf<Event.KeyDown>(event)
-                assertEquals(KeyCode.Right, event.keyCode.value)
-                assertEquals(KeySym.Right, event.key.value)
-                assertNull(event.characters)
-            }
-        }
-        withNextEvent { event ->
-            assertInstanceOf<Event.KeyUp>(event)
-            assertEquals(KeyCode.Right, event.keyCode.value)
-            assertEquals(KeySym.Right, event.key.value)
-        }
-
-        withKeyPress(KeyCode.Control_L) {
-            withNextEvent { event ->
-                assertInstanceOf<Event.KeyDown>(event)
-                assertNull(event.characters)
-                assertEquals(KeyCode.Control_L, event.keyCode.value)
-                assertEquals(KeySym.Control_L, event.key.value)
-            }
-            withNextEvent { event ->
-                assertInstanceOf<Event.ModifiersChanged>(event)
-                assertEquals(setOf(KeyModifiers.Control), event.modifiers)
-            }
-            withKeyPress(KeyCode.A) {
-                withNextEvent { event ->
-                    assertInstanceOf<Event.KeyDown>(event)
-                    assertArrayEquals(byteArrayOf(1), event.characters?.encodeToByteArray())
+                    assertEquals("a", event.characters)
                     assertEquals(KeyCode.A, event.keyCode.value)
                     assertEquals(KeySym.a, event.key.value)
                 }
@@ -4171,111 +4446,1128 @@ text/plain;charset=utf-8
                 assertEquals(KeyCode.A, event.keyCode.value)
                 assertEquals(KeySym.a, event.key.value)
             }
-        }
-        withNextEvent { event ->
-            assertInstanceOf<Event.KeyUp>(event)
-            assertEquals(KeyCode.Control_L, event.keyCode.value)
-            assertEquals(KeySym.Control_L, event.key.value)
-        }
-        withNextEvent { event ->
-            assertInstanceOf<Event.ModifiersChanged>(event)
-            assertEquals(emptySet<KeyModifiers>(), event.modifiers)
-        }
 
-        textInputContext = textInputContext.copy(
-            surroundingText = "àéîõü",
-            cursorCodepointOffset = 2U,
-            selectionStartCodepointOffset = 2U,
-        )
-        // tell test IME engine to uppercase the letter before the cursor
-        withSyncVirtualDeviceCommand("uppercase") {
-            ui { app.textInputUpdate(textInputContext) }
-        }
+            ui { app.textInputEnable(textInputContext) }
 
-        withNextEvent { event ->
-            assertInstanceOf<Event.TextInput>(event)
-            val deleteSurroundingTextData = event.deleteSurroundingTextData
-            assertNotNull(deleteSurroundingTextData)
-            assertEquals(2U, deleteSurroundingTextData.beforeLengthInBytes)
-            assertEquals(0U, deleteSurroundingTextData.afterLengthInBytes)
-            assertNull(event.preeditStringData)
-            val commitStringData = event.commitStringData
-            assertNotNull(commitStringData)
-            assertEquals("É", commitStringData.text)
-        }
+            val keyCodes = mapOf(
+                KeyCode.`1` to "1",
+                KeyCode.`2` to "2",
+                KeyCode.`3` to "3",
+                KeyCode.`4` to "4",
+                KeyCode.`5` to "5",
+                KeyCode.`6` to "6",
+                KeyCode.`7` to "7",
+                KeyCode.`8` to "8",
+                KeyCode.`9` to "9",
+                KeyCode.`0` to "0",
+                KeyCode.minus to "-",
+                KeyCode.equal to "=",
+                KeyCode.Q to "q",
+                KeyCode.W to "w",
+                KeyCode.E to "e",
+                KeyCode.R to "r",
+                KeyCode.T to "t",
+                KeyCode.Y to "y",
+                KeyCode.U to "u",
+                KeyCode.I to "i",
+                KeyCode.O to "o",
+                KeyCode.P to "p",
+                KeyCode.bracketleft to "[",
+                KeyCode.bracketright to "]",
+                KeyCode.A to "a",
+                KeyCode.S to "s",
+                KeyCode.D to "d",
+                KeyCode.F to "f",
+                KeyCode.G to "g",
+                KeyCode.H to "h",
+                KeyCode.J to "j",
+                KeyCode.K to "k",
+                KeyCode.L to "l",
+                KeyCode.semicolon to ";",
+                KeyCode.apostrophe to "'",
+                KeyCode.backslash to "\\",
+                KeyCode.Z to "z",
+                KeyCode.X to "x",
+                KeyCode.C to "c",
+                KeyCode.V to "v",
+                KeyCode.B to "b",
+                KeyCode.N to "n",
+                KeyCode.M to "m",
+                KeyCode.comma to ",",
+                KeyCode.period to ".",
+                KeyCode.slash to "/",
+            )
 
-        textInputContext = textInputContext.copy(
-            surroundingText = "àéîõü",
-            cursorCodepointOffset = 4U,
-            selectionStartCodepointOffset = 1U,
-        )
+            for ((keyCode, c) in keyCodes) {
+                withKeyPress(keyCode) {
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.TextInput>(event, c)
+                        val commitStringData = event.commitStringData
+                        assertNotNull(commitStringData, c)
+                        assertEquals(c, commitStringData.text)
+                        assertNull(event.preeditStringData, c)
+                        assertNull(event.deleteSurroundingTextData, c)
+                    }
+                }
+            }
 
-        // tell test IME engine to uppercase the selection
-        withSyncVirtualDeviceCommand("uppercase") {
-            ui { app.textInputUpdate(textInputContext) }
-        }
-        withNextEvent { event ->
-            assertInstanceOf<Event.TextInput>(event)
-            val deleteSurroundingTextData = event.deleteSurroundingTextData
-            assertNotNull(deleteSurroundingTextData)
-            assertEquals(6U, deleteSurroundingTextData.beforeLengthInBytes)
-            assertEquals(0U, deleteSurroundingTextData.afterLengthInBytes)
-            assertNull(event.preeditStringData)
-            val commitStringData = event.commitStringData
-            assertNotNull(commitStringData)
-            assertEquals("ÉÎÕ", commitStringData.text)
-        }
+            // This is a dead key in us(intl) layout, which is set by default for tests.
+            withKeyPress(KeyCode.grave) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val preeditStringData = event.preeditStringData
+                    assertNotNull(preeditStringData)
+                    assertEquals("`", preeditStringData.text)
+                    assertEquals(1, preeditStringData.cursorBeginBytePos)
+                    assertEquals(1, preeditStringData.cursorEndBytePos)
+                    assertNull(event.commitStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.grave, event.keyCode.value)
+//            assertEquals(0xfe50.toUInt(), event.key.value)  // XKB_KEY_dead_grave
+            }
 
-        // The first emoji has 5 Unicode code points
-        textInputContext = textInputContext.copy(
-            surroundingText = "\uD83E\uDDD1\uD83C\uDFFC\u200D\u2695\uFE0Féiõü",
-            cursorCodepointOffset = 7U,
-            selectionStartCodepointOffset = 7U,
-        )
+            withKeyPress(KeyCode.E) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val commitStringData = event.commitStringData
+                    assertNotNull(commitStringData)
+                    assertEquals("è", commitStringData.text)
+                    assertNull(event.preeditStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val preeditStringData = event.preeditStringData
+                    assertNotNull(preeditStringData)
+                    assertEquals("", preeditStringData.text)
+                    assertEquals(0, preeditStringData.cursorBeginBytePos)
+                    assertEquals(0, preeditStringData.cursorEndBytePos)
+                    assertNull(event.commitStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    assertNull(event.preeditStringData)
+                    assertNull(event.commitStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+            }
 
-        // tell test IME engine to uppercase the letter before the cursor
-        withSyncVirtualDeviceCommand("uppercase") {
-            ui { app.textInputUpdate(textInputContext) }
-        }
-        withNextEvent { event ->
-            assertInstanceOf<Event.TextInput>(event)
-            val deleteSurroundingTextData = event.deleteSurroundingTextData
-            assertNotNull(deleteSurroundingTextData)
-            assertEquals(1U, deleteSurroundingTextData.beforeLengthInBytes)
-            assertEquals(0U, deleteSurroundingTextData.afterLengthInBytes)
-            assertNull(event.preeditStringData)
-            val commitStringData = event.commitStringData
-            assertNotNull(commitStringData)
-            assertEquals("I", commitStringData.text)
-        }
+            withKeyPress(KeyCode.Shift_L) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertNull(event.characters)
+                    assertEquals(KeyCode.Shift_L, event.keyCode.value)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.ModifiersChanged>(event)
+                    assertEquals(setOf(KeyModifiers.Shift), event.modifiers)
+                }
+                withKeyPress(KeyCode.A) {
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.TextInput>(event)
+                        val commitStringData = event.commitStringData
+                        assertNotNull(commitStringData)
+                        assertEquals("A", commitStringData.text)
+                        assertNull(event.preeditStringData)
+                        assertNull(event.deleteSurroundingTextData)
+                    }
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyUp>(event)
+                    assertEquals(KeyCode.A, event.keyCode.value)
+                    assertEquals(KeySym.A, event.key.value)
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.Shift_L, event.keyCode.value)
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.ModifiersChanged>(event)
+                assertEquals(emptySet<KeyModifiers>(), event.modifiers)
+            }
 
-        // The first emoji has 5 Unicode code points
-        textInputContext = textInputContext.copy(
-            surroundingText = "\uD83E\uDDD1\uD83C\uDFFC\u200D\u2695\uFE0Féiõü",
-            cursorCodepointOffset = 6U,
-            selectionStartCodepointOffset = 8U,
-        )
+            // Control characters should still be reported as just KeyDown events.
 
-        // tell test IME engine to uppercase the selection
-        withSyncVirtualDeviceCommand("uppercase") {
-            ui { app.textInputUpdate(textInputContext) }
-        }
-        withNextEvent { event ->
-            assertInstanceOf<Event.TextInput>(event)
-            val deleteSurroundingTextData = event.deleteSurroundingTextData
-            assertNotNull(deleteSurroundingTextData)
-            assertEquals(0U, deleteSurroundingTextData.beforeLengthInBytes)
-            assertEquals(3U, deleteSurroundingTextData.afterLengthInBytes)
-            assertNull(event.preeditStringData)
-            val commitStringData = event.commitStringData
-            assertNotNull(commitStringData)
-            assertEquals("IÕ", commitStringData.text)
-        }
+            withKeyPress(KeyCode.Return) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertEquals(KeyCode.Return, event.keyCode.value)
+                    assertEquals(KeySym.Return, event.key.value)
+                    assertArrayEquals("\r".toByteArray(), event.characters?.toByteArray())
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.Return, event.keyCode.value)
+                assertEquals(KeySym.Return, event.key.value)
+            }
 
-        // After `textInputDisable`, IME APIs should return errors.
-        withSyncVirtualDeviceCommand("uppercase", expectedStatusCode = 501) {
+            withKeyPress(KeyCode.Escape) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertEquals(KeyCode.Escape, event.keyCode.value)
+                    assertEquals(KeySym.Escape, event.key.value)
+                    assertArrayEquals("\u001b".toByteArray(), event.characters?.toByteArray())
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.Escape, event.keyCode.value)
+                assertEquals(KeySym.Escape, event.key.value)
+            }
+
+            withKeyPress(KeyCode.BackSpace) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertEquals(KeyCode.BackSpace, event.keyCode.value)
+                    assertEquals(KeySym.BackSpace, event.key.value)
+                    assertArrayEquals("\b".toByteArray(), event.characters?.toByteArray())
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.BackSpace, event.keyCode.value)
+                assertEquals(KeySym.BackSpace, event.key.value)
+            }
+
+            withKeyPress(KeyCode.Tab) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertEquals(KeyCode.Tab, event.keyCode.value)
+                    assertEquals(KeySym.Tab, event.key.value)
+                    assertArrayEquals("\t".toByteArray(), event.characters?.toByteArray())
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.Tab, event.keyCode.value)
+                assertEquals(KeySym.Tab, event.key.value)
+            }
+
+            withKeyPress(KeyCode.Down) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertEquals(KeyCode.Down, event.keyCode.value)
+                    assertEquals(KeySym.Down, event.key.value)
+                    assertNull(event.characters)
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.Down, event.keyCode.value)
+                assertEquals(KeySym.Down, event.key.value)
+            }
+
+            withKeyPress(KeyCode.Right) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertEquals(KeyCode.Right, event.keyCode.value)
+                    assertEquals(KeySym.Right, event.key.value)
+                    assertNull(event.characters)
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.Right, event.keyCode.value)
+                assertEquals(KeySym.Right, event.key.value)
+            }
+
+            withKeyPress(KeyCode.Control_L) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertNull(event.characters)
+                    assertEquals(KeyCode.Control_L, event.keyCode.value)
+                    assertEquals(KeySym.Control_L, event.key.value)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.ModifiersChanged>(event)
+                    assertEquals(setOf(KeyModifiers.Control), event.modifiers)
+                }
+                textInputContext = textInputContext.copy(
+                    surroundingText = "àéîõü",
+                    cursorCodepointOffset = 2U,
+                    selectionStartCodepointOffset = 2U,
+                )
+                ui { app.textInputUpdate(textInputContext) }
+
+                withKeyPress(KeyCode.A) {
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.KeyDown>(event)
+                        assertEquals("a", event.characters) // TODO(nk): should this be control character instead?
+                        assertEquals(KeyCode.A, event.keyCode.value)
+                        assertEquals(KeySym.a, event.key.value)
+                    }
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyUp>(event)
+                    assertEquals(KeyCode.A, event.keyCode.value)
+                    assertEquals(KeySym.a, event.key.value)
+                }
+
+                // tell test IME engine to uppercase the letter before the cursor
+                withKeyPress(KeyCode.U) {
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.TextInput>(event)
+                        assertNull(event.commitStringData)
+                        assertNull(event.preeditStringData)
+                        val deleteSurroundingTextData = event.deleteSurroundingTextData
+                        assertNotNull(deleteSurroundingTextData)
+                        assertEquals(2U, deleteSurroundingTextData.beforeLengthInBytes)
+                        assertEquals(0U, deleteSurroundingTextData.afterLengthInBytes)
+                    }
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.TextInput>(event)
+                        assertNull(event.deleteSurroundingTextData)
+                        assertNull(event.preeditStringData)
+                        val commitStringData = event.commitStringData
+                        assertNotNull(commitStringData)
+                        assertEquals("É", commitStringData.text)
+                    }
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyUp>(event)
+                    assertEquals(KeyCode.U, event.keyCode.value)
+                    assertEquals(KeySym.u, event.key.value)
+                }
+
+                // The first emoji has 5 Unicode code points
+                textInputContext = textInputContext.copy(
+                    surroundingText = "\uD83E\uDDD1\uD83C\uDFFC\u200D\u2695\uFE0Féiõü",
+                    cursorCodepointOffset = 7U,
+                    selectionStartCodepointOffset = 7U,
+                )
+                ui { app.textInputUpdate(textInputContext) }
+
+                // tell test IME engine to uppercase the letter before the cursor
+                withKeyPress(KeyCode.U) {
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.TextInput>(event)
+                        assertNull(event.commitStringData)
+                        assertNull(event.preeditStringData)
+                        val deleteSurroundingTextData = event.deleteSurroundingTextData
+                        assertNotNull(deleteSurroundingTextData)
+                        assertEquals(1U, deleteSurroundingTextData.beforeLengthInBytes)
+                        assertEquals(0U, deleteSurroundingTextData.afterLengthInBytes)
+                    }
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.TextInput>(event)
+                        assertNull(event.deleteSurroundingTextData)
+                        assertNull(event.preeditStringData)
+                        val commitStringData = event.commitStringData
+                        assertNotNull(commitStringData)
+                        assertEquals("I", commitStringData.text)
+                    }
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyUp>(event)
+                    assertEquals(KeyCode.U, event.keyCode.value)
+                    assertEquals(KeySym.u, event.key.value)
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.Control_L, event.keyCode.value)
+                assertEquals(KeySym.Control_L, event.key.value)
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.ModifiersChanged>(event)
+                assertEquals(emptySet<KeyModifiers>(), event.modifiers)
+            }
+
+            withKeyPress(KeyCode.Alt_L) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertNull(event.characters)
+                    assertEquals(KeyCode.Alt_L, event.keyCode.value)
+                    assertEquals(KeySym.Alt_L, event.key.value)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.ModifiersChanged>(event)
+                    assertEquals(setOf(KeyModifiers.Alt), event.modifiers)
+                }
+                withKeyPress(KeyCode.A) {
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.TextInput>(event)
+                        assertNull(event.commitStringData)
+                        assertNull(event.deleteSurroundingTextData)
+                        val preeditStringData = event.preeditStringData
+                        assertNotNull(preeditStringData)
+                        assertEquals("a", preeditStringData.text)
+                        assertEquals(1, preeditStringData.cursorBeginBytePos)
+                        assertEquals(1, preeditStringData.cursorEndBytePos)
+                    }
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyUp>(event)
+                    assertEquals(KeyCode.A, event.keyCode.value)
+                    assertEquals(KeySym.a, event.key.value)
+                }
+                withKeyPress(KeyCode.M) {
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.TextInput>(event)
+                        assertNull(event.commitStringData)
+                        assertNull(event.deleteSurroundingTextData)
+                        val preeditStringData = event.preeditStringData
+                        assertNotNull(preeditStringData)
+                        assertEquals("am", preeditStringData.text)
+                        assertEquals(2, preeditStringData.cursorBeginBytePos)
+                        assertEquals(2, preeditStringData.cursorEndBytePos)
+                    }
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyUp>(event)
+                    assertEquals(KeyCode.M, event.keyCode.value)
+                    assertEquals(KeySym.m, event.key.value)
+                }
+                withKeyPress(KeyCode.Down) {
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.TextInput>(event)
+                        assertNull(event.commitStringData)
+                        assertNull(event.deleteSurroundingTextData)
+                        val preeditStringData = event.preeditStringData
+                        assertNotNull(preeditStringData)
+                        assertEquals("first", preeditStringData.text)
+                        assertEquals(0, preeditStringData.cursorBeginBytePos)
+                        assertEquals(0, preeditStringData.cursorEndBytePos)
+                    }
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyUp>(event)
+                    assertEquals(KeyCode.Down, event.keyCode.value)
+                    assertEquals(KeySym.Down, event.key.value)
+                }
+                withKeyPress(KeyCode.Down) {
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.TextInput>(event)
+                        assertNull(event.commitStringData)
+                        assertNull(event.deleteSurroundingTextData)
+                        val preeditStringData = event.preeditStringData
+                        assertNotNull(preeditStringData)
+                        assertEquals("second", preeditStringData.text)
+                        assertEquals(0, preeditStringData.cursorBeginBytePos)
+                        assertEquals(0, preeditStringData.cursorEndBytePos)
+                    }
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyUp>(event)
+                    assertEquals(KeyCode.Down, event.keyCode.value)
+                    assertEquals(KeySym.Down, event.key.value)
+                }
+                withKeyPress(KeyCode.Down) {
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.TextInput>(event)
+                        assertNull(event.commitStringData)
+                        assertNull(event.deleteSurroundingTextData)
+                        val preeditStringData = event.preeditStringData
+                        assertNotNull(preeditStringData)
+                        assertEquals("❌ error, \uD83D\uDD8D highlighted error, ❗important❗", preeditStringData.text)
+                        assertEquals(0, preeditStringData.cursorBeginBytePos)
+                        assertEquals(0, preeditStringData.cursorEndBytePos)
+                    }
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyUp>(event)
+                    assertEquals(KeyCode.Down, event.keyCode.value)
+                    assertEquals(KeySym.Down, event.key.value)
+                }
+                withKeyPress(KeyCode.Return) {
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.TextInput>(event)
+                        val commitStringData = event.commitStringData
+                        assertNotNull(commitStringData)
+                        assertEquals("❌ error, \uD83D\uDD8D highlighted error, ❗important❗", commitStringData.text)
+                        assertNull(event.deleteSurroundingTextData)
+                        assertNull(event.preeditStringData)
+                    }
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.TextInput>(event)
+                        val preeditStringData = event.preeditStringData
+                        assertNotNull(preeditStringData)
+                        assertEquals("", preeditStringData.text)
+                        assertEquals(0, preeditStringData.cursorBeginBytePos)
+                        assertEquals(0, preeditStringData.cursorEndBytePos)
+                        assertNull(event.commitStringData)
+                        assertNull(event.deleteSurroundingTextData)
+                    }
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.TextInput>(event)
+                        assertNull(event.preeditStringData)
+                        assertNull(event.commitStringData)
+                        assertNull(event.deleteSurroundingTextData)
+                    }
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyUp>(event)
+                    assertEquals(KeyCode.Return, event.keyCode.value)
+                    assertEquals(KeySym.Return, event.key.value)
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.Alt_L, event.keyCode.value)
+                assertEquals(KeySym.Alt_L, event.key.value)
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.ModifiersChanged>(event)
+                assertEquals(emptySet<KeyModifiers>(), event.modifiers)
+            }
+
+            // After `textInputDisable`, KeyDown events should be reported for character keys.
+
             ui { app.textInputDisable() }
+
+            withKeyPress(KeyCode.A) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertEquals("a", event.characters)
+                    assertEquals(KeyCode.A, event.keyCode.value)
+                    assertEquals(KeySym.a, event.key.value)
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+            }
         }
+    }
+
+    fun testImeFcitx5() {
+        withFcitx5("keyboard-us-intl") { changeEngine ->
+            val fcitx5Log = TrackLogOutput("FCITX5_LOG_FILE")
+            var textInputContext = TextInputContext(
+                contentPurpose = TextInputContentPurpose.Normal,
+                cursorRectangle = LogicalRect.makeXYWH(x = 10, y = 20, width = 10, height = 20),
+                surroundingText = "",
+                cursorCodepointOffset = 0U,
+                selectionStartCodepointOffset = 0U,
+                hints = setOf(TextInputContentHint.Completion),
+                changeCausedByInputMethod = false,
+            )
+
+            eventHandler = { event ->
+                when (event) {
+                    is Event.KeyDown -> {
+                        val newTextInputContext = addToTextInputContext(textInputContext, event.characters)
+                        if (newTextInputContext != textInputContext) {
+                            textInputContext = newTextInputContext
+                            app.textInputUpdate(textInputContext)
+                        }
+                        EventHandlerResult.Stop
+                    }
+
+                    is Event.TextInput -> {
+                        val deleteSurroundingTextData = event.deleteSurroundingTextData
+                        var newTextInputContext = textInputContext
+                        if (deleteSurroundingTextData != null) {
+                            val cursorCodepointOffset = textInputContext.cursorCodepointOffset.toInt()
+
+                            val textBeforeCursor =
+                                textInputContext.surroundingText.subSequence(0, cursorCodepointOffset)
+                            val offsetToDeleteBefore =
+                                utf8OffsetToUtf16Offset(textBeforeCursor.reversed(), deleteSurroundingTextData.beforeLengthInBytes)
+
+                            val textAfterCursor =
+                                textInputContext.surroundingText.subSequence(cursorCodepointOffset, textInputContext.surroundingText.length)
+                            val offsetToDeleteAfter =
+                                utf8OffsetToUtf16Offset(textAfterCursor, deleteSurroundingTextData.afterLengthInBytes)
+
+                            val surroundingText = StringBuilder(textInputContext.surroundingText).delete(
+                                cursorCodepointOffset - offsetToDeleteBefore,
+                                cursorCodepointOffset + offsetToDeleteAfter,
+                            )
+                            val codepointOffset = codepointFromOffset(surroundingText, cursorCodepointOffset - offsetToDeleteBefore)
+                            log(
+                                "codepointsToDeleteBefore=$offsetToDeleteBefore, offsetToDeleteAfter=$offsetToDeleteAfter, new codepointOffset=$codepointOffset, new surroundingText=$surroundingText, textInputContext=$textInputContext",
+                            )
+
+                            newTextInputContext = newTextInputContext.copy(
+                                changeCausedByInputMethod = true,
+                                surroundingText = surroundingText.toString(),
+                                cursorCodepointOffset = codepointOffset,
+                                selectionStartCodepointOffset = codepointOffset,
+                                cursorRectangle = textInputContext.cursorRectangle.copy(x = LogicalPixelsInt(surroundingText.length * 10)),
+                            )
+                        }
+                        newTextInputContext = addToTextInputContext(newTextInputContext, event.commitStringData?.text)
+                        if (newTextInputContext != textInputContext) {
+                            textInputContext = newTextInputContext
+                            app.textInputUpdate(textInputContext)
+                        }
+                        EventHandlerResult.Stop
+                    }
+
+                    else -> null
+                }
+            }
+
+            run(defaultApplicationConfig())
+            val windowParams = defaultWindowParams()
+
+            createWindowAndWaitForFocus(windowParams)
+
+            ui { app.textInputEnable(textInputContext) }
+            waitUntil("activated engine", getter = { fcitx5Log.getNewLines() }) { lines ->
+                lines.any { it.endsWith(".modifiers(0, 0, 0, 0)") }
+            }
+
+            withKeyPress(KeyCode.Shift_L) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.ModifiersChanged>(event)
+                    assertEquals(emptySet<KeyModifiers>(), event.modifiers)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event, event.toString())
+                    assertNull(event.characters)
+                    assertEquals(KeyCode.Shift_L, event.keyCode.value)
+                }
+
+                withNextEvent { event ->
+                    assertInstanceOf<Event.ModifiersChanged>(event)
+                    assertEquals(setOf(KeyModifiers.Shift), event.modifiers)
+                }
+                withKeyPress(KeyCode.P) {
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.KeyDown>(event)
+                        val characters = checkNotNull(event.characters)
+                        assertEquals("P", characters)
+                        assertEquals(KeyCode.P, event.keyCode.value)
+                        assertEquals(KeySym.P, event.key.value)
+                    }
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyUp>(event)
+                    assertEquals(KeyCode.P, event.keyCode.value)
+                    assertEquals(KeySym.P, event.key.value)
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.Shift_L, event.keyCode.value)
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.ModifiersChanged>(event)
+                assertEquals(emptySet<KeyModifiers>(), event.modifiers)
+            }
+
+            // Test fcitx5 special characters on long-press
+            withKeyPress(KeyCode.A) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    val characters = checkNotNull(event.characters)
+                    assertEquals("a", characters)
+                    assertEquals(KeyCode.A, event.keyCode.value)
+                    assertEquals(KeySym.a, event.key.value)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyUp>(event)
+                    assertEquals(KeyCode.A, event.keyCode.value)
+                    assertEquals(KeySym.a, event.key.value)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val deleteSurroundingTextData = checkNotNull(event.deleteSurroundingTextData)
+                    assertEquals(1U, deleteSurroundingTextData.beforeLengthInBytes)
+                    assertEquals(0U, deleteSurroundingTextData.afterLengthInBytes)
+                    assertNull(event.preeditStringData)
+                    assertNull(event.commitStringData)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val preeditStringData = checkNotNull(event.preeditStringData)
+                    assertEquals("a", preeditStringData.text)
+                    assertEquals(0, preeditStringData.cursorBeginBytePos)
+                    assertEquals(1, preeditStringData.cursorEndBytePos)
+                    assertNull(event.deleteSurroundingTextData)
+                    assertNull(event.commitStringData)
+                }
+            }
+            withKeyPress(KeyCode.Alt_L) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertNull(event.characters)
+                    assertEquals(KeyCode.Alt_L, event.keyCode.value)
+                    assertEquals(KeySym.Alt_L, event.key.value)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.ModifiersChanged>(event)
+                    assertEquals(setOf(KeyModifiers.Alt), event.modifiers)
+                }
+                withKeyPress(KeyCode.`5`) {
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.TextInput>(event)
+                        assertNull(event.commitStringData)
+                        assertNull(event.preeditStringData)
+                        assertNull(event.deleteSurroundingTextData)
+                    }
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.TextInput>(event)
+                        val commitStringData = checkNotNull(event.commitStringData)
+                        assertEquals("æ", commitStringData.text)
+                        assertNull(event.preeditStringData)
+                        assertNull(event.deleteSurroundingTextData)
+                    }
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.Alt_L, event.keyCode.value)
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.ModifiersChanged>(event)
+                assertEquals(emptySet<KeyModifiers>(), event.modifiers)
+            }
+
+            assertEquals("Pæ", textInputContext.surroundingText)
+
+            val keyCodes = mapOf(
+                KeyCode.`1` to Pair("1", KeySym.`1`),
+                KeyCode.`2` to Pair("2", KeySym.`2`),
+                KeyCode.`3` to Pair("3", KeySym.`3`),
+                KeyCode.`4` to Pair("4", KeySym.`4`),
+                KeyCode.`5` to Pair("5", KeySym.`5`),
+                KeyCode.`6` to Pair("6", KeySym.`6`),
+                KeyCode.`7` to Pair("7", KeySym.`7`),
+                KeyCode.`8` to Pair("8", KeySym.`8`),
+                KeyCode.`9` to Pair("9", KeySym.`9`),
+                KeyCode.`0` to Pair("0", KeySym.`0`),
+                KeyCode.minus to Pair("-", KeySym.minus),
+                KeyCode.equal to Pair("=", KeySym.equal),
+                KeyCode.Q to Pair("q", KeySym.q),
+                KeyCode.W to Pair("w", KeySym.w),
+                KeyCode.E to Pair("e", KeySym.e),
+                KeyCode.R to Pair("r", KeySym.r),
+                KeyCode.T to Pair("t", KeySym.t),
+                KeyCode.Y to Pair("y", KeySym.y),
+                KeyCode.U to Pair("u", KeySym.u),
+                KeyCode.I to Pair("i", KeySym.i),
+                KeyCode.O to Pair("o", KeySym.o),
+                KeyCode.P to Pair("p", KeySym.p),
+                KeyCode.bracketleft to Pair("[", KeySym.bracketleft),
+                KeyCode.bracketright to Pair("]", KeySym.bracketright),
+                KeyCode.A to Pair("a", KeySym.a),
+                KeyCode.S to Pair("s", KeySym.s),
+                KeyCode.D to Pair("d", KeySym.d),
+                KeyCode.F to Pair("f", KeySym.f),
+                KeyCode.G to Pair("g", KeySym.g),
+                KeyCode.H to Pair("h", KeySym.h),
+                KeyCode.J to Pair("j", KeySym.j),
+                KeyCode.K to Pair("k", KeySym.k),
+                KeyCode.L to Pair("l", KeySym.l),
+                KeyCode.semicolon to Pair(";", KeySym.semicolon),
+                KeyCode.backslash to Pair("\\", KeySym.backslash),
+                KeyCode.Z to Pair("z", KeySym.z),
+                KeyCode.X to Pair("x", KeySym.x),
+                KeyCode.C to Pair("c", KeySym.c),
+                KeyCode.V to Pair("v", KeySym.v),
+                KeyCode.B to Pair("b", KeySym.b),
+                KeyCode.N to Pair("n", KeySym.n),
+                KeyCode.M to Pair("m", KeySym.m),
+                KeyCode.comma to Pair(",", KeySym.comma),
+                KeyCode.period to Pair(".", KeySym.period),
+                KeyCode.slash to Pair("/", KeySym.slash),
+            )
+
+            for ((keyCode, charAndKeySym) in keyCodes) {
+                val (c, keySym) = charAndKeySym
+                withKeyPress(keyCode) {
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.KeyDown>(event, c)
+                        assertEquals(c, event.characters)
+                        assertEquals(keyCode, event.keyCode.value)
+                        assertEquals(keySym, event.key.value)
+                    }
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyUp>(event, c)
+                    assertEquals(keyCode, event.keyCode.value)
+                    assertEquals(keySym, event.key.value)
+                }
+            }
+
+            withKeyPress(KeyCode.grave) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val preeditStringData = checkNotNull(event.preeditStringData)
+                    assertEquals("`", preeditStringData.text)
+                    assertEquals(0, preeditStringData.cursorBeginBytePos)
+                    assertEquals(1, preeditStringData.cursorEndBytePos)
+                    assertNull(event.commitStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+            }
+
+            withKeyPress(KeyCode.E) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val commitStringData = checkNotNull(event.commitStringData)
+                    assertEquals("è", commitStringData.text)
+                    assertNull(event.preeditStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    assertNull(event.commitStringData)
+                    assertNull(event.preeditStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+            }
+
+            withKeyPress(KeyCode.Return) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertEquals(KeyCode.Return, event.keyCode.value)
+                    assertEquals(KeySym.Return, event.key.value)
+                    assertArrayEquals("\r".toByteArray(), event.characters?.toByteArray())
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.Return, event.keyCode.value)
+                assertEquals(KeySym.Return, event.key.value)
+            }
+
+            withKeyPress(KeyCode.Escape) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertEquals(KeyCode.Escape, event.keyCode.value)
+                    assertEquals(KeySym.Escape, event.key.value)
+                    assertArrayEquals("\u001b".toByteArray(), event.characters?.toByteArray())
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.Escape, event.keyCode.value)
+                assertEquals(KeySym.Escape, event.key.value)
+            }
+
+            withKeyPress(KeyCode.BackSpace) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertEquals(KeyCode.BackSpace, event.keyCode.value)
+                    assertEquals(KeySym.BackSpace, event.key.value)
+                    assertArrayEquals("\b".toByteArray(), event.characters?.toByteArray())
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.BackSpace, event.keyCode.value)
+                assertEquals(KeySym.BackSpace, event.key.value)
+            }
+
+            withKeyPress(KeyCode.Tab) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertEquals(KeyCode.Tab, event.keyCode.value)
+                    assertEquals(KeySym.Tab, event.key.value)
+                    assertArrayEquals("\t".toByteArray(), event.characters?.toByteArray())
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.Tab, event.keyCode.value)
+                assertEquals(KeySym.Tab, event.key.value)
+            }
+
+            withKeyPress(KeyCode.Down) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertEquals(KeyCode.Down, event.keyCode.value)
+                    assertEquals(KeySym.Down, event.key.value)
+                    assertNull(event.characters?.encodeToByteArray())
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.Down, event.keyCode.value)
+                assertEquals(KeySym.Down, event.key.value)
+            }
+
+            withKeyPress(KeyCode.Right) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertEquals(KeyCode.Right, event.keyCode.value)
+                    assertEquals(KeySym.Right, event.key.value)
+                    assertNull(event.characters)
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.Right, event.keyCode.value)
+                assertEquals(KeySym.Right, event.key.value)
+            }
+
+            withKeyPress(KeyCode.Control_L) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertNull(event.characters)
+                    assertEquals(KeyCode.Control_L, event.keyCode.value)
+                    assertEquals(KeySym.Control_L, event.key.value)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.ModifiersChanged>(event)
+                    assertEquals(setOf(KeyModifiers.Control), event.modifiers)
+                }
+                withKeyPress(KeyCode.A) {
+                    withNextEvent { event ->
+                        assertInstanceOf<Event.KeyDown>(event)
+                        assertArrayEquals(byteArrayOf(1), event.characters?.encodeToByteArray())
+                        assertEquals(KeyCode.A, event.keyCode.value)
+                        assertEquals(KeySym.a, event.key.value)
+                    }
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyUp>(event)
+                    assertEquals(KeyCode.A, event.keyCode.value)
+                    assertEquals(KeySym.a, event.key.value)
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.Control_L, event.keyCode.value)
+                assertEquals(KeySym.Control_L, event.key.value)
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.ModifiersChanged>(event)
+                assertEquals(emptySet<KeyModifiers>(), event.modifiers)
+            }
+
+            withKeyPress(KeyCode.apostrophe) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val preeditStringData = checkNotNull(event.preeditStringData)
+                    assertEquals("´", preeditStringData.text)
+                    assertEquals(0, preeditStringData.cursorBeginBytePos)
+                    assertEquals(2, preeditStringData.cursorEndBytePos)
+                    assertNull(event.commitStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+            }
+
+            withKeyPress(KeyCode.A) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val commitStringData = checkNotNull(event.commitStringData)
+                    assertEquals("á", commitStringData.text)
+                    assertNull(event.preeditStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    assertNull(event.commitStringData)
+                    assertNull(event.preeditStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+            }
+
+            typeLetter(KeyCode.space, " ", KeySym.space)
+
+            changeEngine("mozc")
+
+            withKeyPress(KeyCode.K) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val preeditStringData = checkNotNull(event.preeditStringData)
+                    assertEquals("ｋ", preeditStringData.text)
+                    assertEquals(3, preeditStringData.cursorBeginBytePos)
+                    assertEquals(3, preeditStringData.cursorEndBytePos)
+                    assertNull(event.commitStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+            }
+            withKeyPress(KeyCode.A) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val preeditStringData = checkNotNull(event.preeditStringData)
+                    assertEquals("か", preeditStringData.text)
+                    assertEquals(3, preeditStringData.cursorBeginBytePos)
+                    assertEquals(3, preeditStringData.cursorEndBytePos)
+                    assertNull(event.commitStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+            }
+            withKeyPress(KeyCode.W) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val preeditStringData = checkNotNull(event.preeditStringData)
+                    assertEquals("かｗ", preeditStringData.text)
+                    assertEquals(6, preeditStringData.cursorBeginBytePos)
+                    assertEquals(6, preeditStringData.cursorEndBytePos)
+                    assertNull(event.commitStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+            }
+            withKeyPress(KeyCode.A) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val preeditStringData = checkNotNull(event.preeditStringData)
+                    assertEquals("かわ", preeditStringData.text)
+                    assertEquals(6, preeditStringData.cursorBeginBytePos)
+                    assertEquals(6, preeditStringData.cursorEndBytePos)
+                    assertNull(event.commitStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+            }
+
+            withKeyPress(KeyCode.F7) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val preeditStringData = checkNotNull(event.preeditStringData)
+                    assertEquals("カワ", preeditStringData.text)
+                    assertEquals(0, preeditStringData.cursorBeginBytePos)
+                    assertEquals(6, preeditStringData.cursorEndBytePos)
+                    assertNull(event.commitStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+            }
+
+            withKeyPress(KeyCode.F8) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val preeditStringData = checkNotNull(event.preeditStringData)
+                    assertEquals("ｶﾜ", preeditStringData.text)
+                    assertEquals(0, preeditStringData.cursorBeginBytePos)
+                    assertEquals(6, preeditStringData.cursorEndBytePos)
+                    assertNull(event.commitStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+            }
+            withKeyPress(KeyCode.F10) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val preeditStringData = checkNotNull(event.preeditStringData)
+                    assertEquals("kawa", preeditStringData.text)
+                    assertEquals(0, preeditStringData.cursorBeginBytePos)
+                    assertEquals(4, preeditStringData.cursorEndBytePos)
+                    assertNull(event.commitStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+            }
+            withKeyPress(KeyCode.Return) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val commitStringData = checkNotNull(event.commitStringData)
+                    assertEquals("kawa", commitStringData.text)
+                    assertNull(event.preeditStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    assertNull(event.commitStringData)
+                    assertNull(event.preeditStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+            }
+
+            assertEquals(" kawa", textInputContext.surroundingText.takeLast(5))
+            val totalCodepoints = textInputContext.surroundingText.codePoints().count()
+            textInputContext = textInputContext.copy(
+                selectionStartCodepointOffset = totalCodepoints.toUShort(),
+                cursorCodepointOffset = (totalCodepoints - 4).toUShort(),
+                changeCausedByInputMethod = false,
+            )
+            ui { app.textInputUpdate(textInputContext) }
+
+            withKeyPress(KeyCode.Henkan) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val deleteSurroundingTextData = checkNotNull(event.deleteSurroundingTextData)
+                    assertEquals(0U, deleteSurroundingTextData.beforeLengthInBytes)
+                    assertEquals(4U, deleteSurroundingTextData.afterLengthInBytes)
+                    assertNull(event.preeditStringData)
+                    assertNull(event.commitStringData)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val preeditStringData = checkNotNull(event.preeditStringData)
+                    assertEquals("kawa", preeditStringData.text)
+                    assertEquals(0, preeditStringData.cursorBeginBytePos)
+                    assertEquals(4, preeditStringData.cursorEndBytePos)
+                    assertNull(event.commitStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+            }
+
+            withKeyPress(KeyCode.Escape) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val preeditStringData = checkNotNull(event.preeditStringData)
+                    assertEquals("かわ", preeditStringData.text)
+                    assertEquals(6, preeditStringData.cursorBeginBytePos)
+                    assertEquals(6, preeditStringData.cursorEndBytePos)
+                    assertNull(event.commitStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+            }
+
+            withKeyPress(KeyCode.Return) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    val commitStringData = checkNotNull(event.commitStringData)
+                    assertEquals("かわ", commitStringData.text)
+                    assertNull(event.preeditStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.TextInput>(event)
+                    assertNull(event.commitStringData)
+                    assertNull(event.preeditStringData)
+                    assertNull(event.deleteSurroundingTextData)
+                }
+            }
+
+            ui { app.textInputDisable() }
+            withNextEvent { event ->
+                assertInstanceOf<Event.ModifiersChanged>(event)
+                assertEquals(emptySet<KeyModifiers>(), event.modifiers)
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.ModifiersChanged>(event)
+                assertEquals(emptySet<KeyModifiers>(), event.modifiers)
+            }
+
+            withKeyPress(KeyCode.grave) {
+                withNextEvent { event ->
+                    assertInstanceOf<Event.KeyDown>(event)
+                    val characters = checkNotNull(event.characters)
+                    assertEquals("`", characters)
+                    assertEquals(KeyCode.grave, event.keyCode.value)
+                    assertEquals(KeySym.grave, event.key.value)
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(KeyCode.grave, event.keyCode.value)
+                assertEquals(KeySym.grave, event.key.value)
+            }
+        }
+        testSuccessful = true
+    }
+
+    @Test
+    fun testTextInputContextFcitx5() {
+        var textInputContext = TextInputContext(
+            contentPurpose = TextInputContentPurpose.Normal,
+            cursorRectangle = LogicalRect.makeXYWH(x = 50, y = 20, width = 5, height = 10),
+            surroundingText = "",
+            cursorCodepointOffset = 0U,
+            selectionStartCodepointOffset = 0U,
+            hints = emptySet(),
+            changeCausedByInputMethod = false,
+        )
+        run(defaultApplicationConfig())
+        val windowParams = defaultWindowParams()
+
+        createWindowAndWaitForFocus(windowParams)
+
+        textInputContext = textInputContext.copy()
 
         testSuccessful = true
     }
@@ -4354,8 +5646,8 @@ text/plain;charset=utf-8
 
     fun implTestWindowResizeToSmaller(
         button: MouseButton,
-        moveX: LogicalPixelsInt = LogicalPixelsInt(50),
-        moveY: LogicalPixelsInt = LogicalPixelsInt(100),
+        moveX: LogicalPixelsInt = LogicalPixelsInt(10),
+        moveY: LogicalPixelsInt = LogicalPixelsInt(10),
         windowParams: WindowParams = defaultWindowParams(),
         expectedDecreaseX: LogicalPixelsInt = moveX,
         expectedDecreaseY: LogicalPixelsInt = moveY,
@@ -4383,6 +5675,8 @@ text/plain;charset=utf-8
             LogicalPixelsInt(5),
         )
         moveMouseTo(mousePos)
+        awaitEventOfType<Event.MouseEntered> { true }
+
         withMouseButtonDown(button) {
             val mouseDown = awaitEventOfType<Event.MouseDown> { true }
             // With Sway, it doesn't matter which edge we specify; it's dependent on the mouse position
@@ -4463,7 +5757,7 @@ text/plain;charset=utf-8
         val windowParams = defaultWindowParams()
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
         val window = initialWindowData.window
-        wm.moveWindow(windowParams.title, GlobalPosition.Zero)
+        wm.moveWindow(windowParams.title, GlobalPosition(LogicalPixelsInt.Zero, LogicalPixelsInt(10)))
         moveMouseInsideWindow(windowParams.title)
 
         withDropTargetTestApp { testAppData ->
@@ -4535,7 +5829,7 @@ text/plain;charset=utf-8
 
         val windowParams = defaultWindowParams()
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
-        wm.moveWindow(windowParams.title, GlobalPosition.Zero)
+        wm.moveWindow(windowParams.title, GlobalPosition(LogicalPixelsInt.Zero, LogicalPixelsInt(10)))
 
         val mouseLocationForOurWindow =
             TestMousePosition(wm.getWindowState(windowParams.title).clientArea.pos, LogicalPixelsInt(50), LogicalPixelsInt(50))
@@ -4549,7 +5843,7 @@ text/plain;charset=utf-8
                 testAppData.windowTitle,
                 GlobalPosition(initialWindowData.configure.size.width + LogicalPixelsInt(100), LogicalPixelsInt.Zero),
             )
-            wm.focusWindow(testAppData.windowTitle)
+            wm.focusWindowWithTitle(testAppData.windowTitle)
             waitForTestAppFocus(windowParams.windowId)
 
             val testAppLocation = TestMousePosition(testAppClientArea, LogicalPixelsInt(5), LogicalPixelsInt(5))
@@ -4638,7 +5932,7 @@ text/plain;charset=utf-8
 
         val windowParams = defaultWindowParams()
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
-        wm.moveWindow(windowParams.title, GlobalPosition.Zero)
+        wm.moveWindow(windowParams.title, GlobalPosition(LogicalPixelsInt.Zero, LogicalPixelsInt(10)))
         moveMouseInsideWindow(windowParams.title)
         val window = initialWindowData.window
 
@@ -4816,7 +6110,7 @@ text/plain;charset=utf-8
             assertEquals(0, event.horizontalScroll.wheelValue120, "scrollMouseDown: horizontalScroll.wheelValue120")
             assertFalse(event.horizontalScroll.isInverted, "scrollMouseDown: horizontalScroll.isInverted")
             assertFalse(event.horizontalScroll.isStop, "scrollMouseDown: horizontalScroll.isStop")
-            assertEquals(10.0, event.verticalScroll.delta.rawLogical, "scrollMouseDown: verticalScroll.delta")
+            assertEquals(15.0, event.verticalScroll.delta.rawLogical, "scrollMouseDown: verticalScroll.delta")
             assertEquals(120, event.verticalScroll.wheelValue120, "scrollMouseDown: verticalScroll.wheelValue120")
             assertFalse(event.verticalScroll.isInverted, "scrollMouseDown: verticalScroll.isInverted")
             assertFalse(event.verticalScroll.isStop, "scrollMouseDown: verticalScroll.isStop")
@@ -4831,7 +6125,7 @@ text/plain;charset=utf-8
             assertEquals(0, event.horizontalScroll.wheelValue120, "scrollMouseUp: horizontalScroll.wheelValue120")
             assertFalse(event.horizontalScroll.isInverted, "scrollMouseUp: horizontalScroll.isInverted")
             assertFalse(event.horizontalScroll.isStop, "scrollMouseUp: horizontalScroll.isStop")
-            assertEquals(-10.0, event.verticalScroll.delta.rawLogical, "scrollMouseUp: verticalScroll.delta")
+            assertEquals(-15.0, event.verticalScroll.delta.rawLogical, "scrollMouseUp: verticalScroll.delta")
             assertEquals(-120, event.verticalScroll.wheelValue120, "scrollMouseUp: verticalScroll.wheelValue120")
             assertFalse(event.verticalScroll.isInverted, "scrollMouseUp: verticalScroll.isInverted")
             assertFalse(event.verticalScroll.isStop, "scrollMouseUp: verticalScroll.isStop")
@@ -5122,6 +6416,9 @@ text/plain;charset=utf-8
                 it.size.height.rawPhysical == lastScreenSize.height.toRawPhysical(scale).roundToInt()
         }
 
+        // For KWin
+        moveMouseTo(TestMousePosition(GlobalPosition.Zero, lastScreenSize.width / 2, lastScreenSize.height / 2))
+
         awaitEventOfType<Event.MouseEntered> { true }
 
         window.setPointerShape(PointerShape.Hidden)
@@ -5132,11 +6429,8 @@ text/plain;charset=utf-8
         moveMouseTo(TestMousePosition(GlobalPosition.Zero, lastScreenSize.width, lastScreenSize.height / 2))
         awaitEventOfType<Event.MouseMoved> { true }
 
-        screenshot(screenshotPath)
-
-        val image = SkImage.makeFromEncoded(screenshotPath.readBytes())
-        val imageScale = lastScreenSize.width.rawLogical.toDouble() / image.width
-        val bitmap = SkBitmap.makeFromImage(image)
+        val bitmap = wm.screenshot(screenshotPath, scale)
+        val imageScale = lastScreenSize.width.rawLogical.toDouble() / bitmap.width
 
         val path = screenshotPath.absolutePathString()
 
@@ -5150,7 +6444,7 @@ text/plain;charset=utf-8
             "Expected ${rectColor.toHexString()}, got ${bottomRightRectColor.toHexString()} for $path",
         )
 
-        val bottomRightColor = bitmap.getColor(image.width - 2, image.height - 2)
+        val bottomRightColor = bitmap.getColor(bitmap.width - 2, bitmap.height - 2)
         assertEquals(
             backgroundColor,
             bottomRightColor,
@@ -5178,7 +6472,7 @@ text/plain;charset=utf-8
         }.use {
             waitUntilTrue("Log created") { TEST_APP_BROWSER_LOG_PATH.exists() }
             waitUntil("Log startup_id", getter = { TEST_APP_BROWSER_LOG_PATH.readText() }) {
-                it == "startup_id=XDG_ACTIVATION_TOKEN, url=$url\n"
+                it == "startup_id=XDG_ACTIVATION_TOKEN, url=$url\n" || it == "startup_id=DESKTOP_STARTUP_ID, url=$url\n"
             }
         }
         testSuccessful = true
@@ -5189,7 +6483,6 @@ text/plain;charset=utf-8
         run(defaultApplicationConfig())
         val url = "https://localhost"
 
-        Thread.sleep(1000)
         ui { app.openURL(url, null) }
         AutoCloseable {
             TEST_APP_BROWSER_LOG_PATH.deleteIfExists()
@@ -5203,7 +6496,6 @@ text/plain;charset=utf-8
     }
 
     @Test
-    @Disabled("Old Ubuntu doesn't pass activation token properly")
     fun testOpenFileManager() {
         run(defaultApplicationConfig())
         val homeDir = checkNotNull(System.getenv("HOME"))

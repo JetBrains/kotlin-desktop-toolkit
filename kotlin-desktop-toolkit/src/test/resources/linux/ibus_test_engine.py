@@ -118,9 +118,9 @@ class SampleEngine(IBus.Engine):
         self.candidate_pos = -1
         self._update()
 
-    def do_process_key_event(self, keyval: int, key_code: int, state: int) -> bool:
+    def do_process_key_event(self, keyval: int, keycode: int, state: int) -> bool:
         is_press = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
-        logging.debug(f"do_process_key_event: keyval={keyval}, key_code={key_code} (xkb {key_code + 8}), is_press={is_press}, state={state}")
+        logging.debug(f"do_process_key_event: keyval={keyval}, keycode={keycode} (xkb {keycode + 8}), is_press={is_press}, state={state}")
         if not is_press:
             return False
 
@@ -377,14 +377,23 @@ class SampleEngine(IBus.Engine):
             with open(out_file_path, "a") as f:
                 f.write(log_out + "\n")
 
-    def do_set_surrounding_text(self, ibus_text: IBus.Text, cursor_pos: int, anchor_pos: int) -> None:
-        self.surrounding_ibus_text = ibus_text
-        self.surrounding_cursor_pos = cursor_pos
+
+    def do_set_cursor_location_relative(self, x: int, y: int, w: int, h: int) -> None:
+        log_out = f"do_set_cursor_location_relative: x={x}, y={y}, w={w}, h={h}"
+        out_file_path = os.environ.get('TEST_IBUS_ENGINE_CURSOR_LOCATION_OUT_FILE', None)
+        if out_file_path is not None:
+            logging.debug(log_out)
+            with open(out_file_path, "a") as f:
+                f.write(log_out + "\n")
+
+    def do_set_surrounding_text(self, text: IBus.Text, cursor_index: int, anchor_pos: int) -> None:
+        self.surrounding_ibus_text = text
+        self.surrounding_cursor_pos = cursor_index
         self.surrounding_anchor_pos = anchor_pos
-        text_str = ibus_text.get_text()
-        logging.debug(f"do_set_surrounding_text: text={text_str}, cursor_pos={cursor_pos}, anchor_pos={anchor_pos}")
+        text_str = text.get_text()
+        logging.debug(f"do_set_surrounding_text: text={text_str}, cursor_index={cursor_index}, anchor_pos={anchor_pos}")
         # We need to chain this function if we want get_surrounding_text to work
-        IBus.Engine.do_set_surrounding_text(self, ibus_text, cursor_pos, anchor_pos)
+        IBus.Engine.do_set_surrounding_text(self, text, cursor_index, anchor_pos)
 
 class IMApp:
     def __init__(self):
